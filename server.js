@@ -242,8 +242,51 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
     res.json({ token: session.token, expiresAt: new Date(session.expiresAt).toISOString() });
   });
 
+  // ─── 인증 미들웨어 ───
+
+  /** Authorization: Bearer 우선, 없으면 HttpOnly 쿠키. */
+  const extractToken = (req) => {
+    const header = req.get('authorization');
+    if (header) {
+      const [scheme, value] = header.split(' ');
+      // Bearer 접두어가 없는 헤더는 받지 않는다. 형식을 느슨하게 하면 오탐이 생긴다.
+      if (scheme?.toLowerCase() === 'bearer' && value) return value;
+      return undefined;
+    }
+    return req.cookies?.session;
+  };
+
+  /**
+   * 인증 실패 시 여기서 요청을 끝낸다.
+   * 이 미들웨어를 라우트 핸들러보다 먼저 등록하므로, 인증되지 않은 요청은
+   * OpenAI 호출 코드에 구조적으로 도달할 수 없다.
+   */
+  const requireAuth = (req, res, next) => {
+    const token = extractToken(req);
+    const session = sessions.get(token);   // 만료되었으면 내부에서 삭제하고 undefined를 준다
+
+    if (!session || session.authenticated !== true) {
+      throw new ApiError(403, 'FORBIDDEN', '유효하지 않거나 만료된 세션입니다.');
+    }
+
+    // 여기서 touch하지 않는다. 세션 연장은 분석 성공 응답 직전 한 곳에서만 일어난다.
+    req.session = session;
+    next();
+  };
+
+  // ─── 로그아웃 ───
+
+  app.post('/api/auth/logout', (req, res) => {
+    // 멱등적이다. 세션이 없어도 성공으로 응답한다.
+    sessions.destroy(extractToken(req));
+    res.clearCookie('session', {
+      httpOnly: true, sameSite: 'strict', secure: config.isProd, path: '/',
+    });
+    res.json({ success: true, message: '로그아웃되었습니다.' });
+  });
+
   // 테스트가 라우트를 꽂을 수 있는 지점. 반드시 404 핸들러보다 앞이어야 한다.
-  if (extraRoutes) extraRoutes(app, {});
+  if (extraRoutes) extraRoutes(app, { requireAuth, jsonBody });
 
   // ─── 에러 핸들러 (반드시 모든 라우터 뒤) ───
 
