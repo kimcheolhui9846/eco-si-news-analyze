@@ -9,6 +9,7 @@ import pino from 'pino';
 import { z } from 'zod';
 import OpenAI from 'openai';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
+import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 
 // ─── 에러 타입 ───
 
@@ -107,6 +108,17 @@ export function loadConfig(overrides = {}) {
     breakerCooldownMs: num(e.BREAKER_COOLDOWN_MS, 60_000),
 
     corsOrigin: e.CORS_ORIGIN ?? 'http://localhost:3000',
+
+    // 비용 예산. rate limit과 달리 총량을 막는다.
+    budgetFile: e.BUDGET_FILE ?? '.budget.json',
+    dailyAnalysisLimit: num(e.DAILY_ANALYSIS_LIMIT, 50),
+    monthlyCostLimitUsd: num(e.MONTHLY_COST_LIMIT_USD, 5),
+    // 모델 가격은 바뀐다. 코드에 박지 않고 환경변수로 둔다.
+    priceInputPer1M: num(e.PRICE_INPUT_PER_1M, 2.5),
+    priceOutputPer1M: num(e.PRICE_OUTPUT_PER_1M, 10),
+    // 출력 토큰은 호출 전에 알 수 없다. 견적에서 이 값으로 가정한다.
+    assumedOutputTokens: num(e.ASSUMED_OUTPUT_TOKENS, 2_000),
+    confirmTokenTtlMs: num(e.CONFIRM_TOKEN_TTL_MS, 300_000),
   });
 }
 
@@ -737,6 +749,7 @@ export function createTtlCache({ ttlMs, maxEntries, clock }) {
       }
     },
 
+    delete: (key) => entries.delete(key),
     size: () => entries.size,
     clear: () => entries.clear(),
   };
@@ -843,6 +856,119 @@ export function makeSessionLimiter(config) {
       return ipKeyGenerator(req.ip, 56);
     },
   });
+}
+
+// ─── 비용 예산: 추정 · 추적 · 영속화 ───
+
+/**
+ * 토큰 수와 단가로 비용을 계산한다.
+ * 단가는 환경변수로 주입한다 — 모델 가격은 바뀌므로 코드에 박아두지 않는다.
+ */
+export function estimateCostUsd({ inputTokens, outputTokens }, { inputPer1M, outputPer1M }) {
+  return (inputTokens / 1_000_000) * inputPer1M + (outputTokens / 1_000_000) * outputPer1M;
+}
+
+const dayKey = (ms) => new Date(ms).toISOString().slice(0, 10);    // YYYY-MM-DD (UTC)
+const monthKey = (ms) => new Date(ms).toISOString().slice(0, 7);   // YYYY-MM (UTC)
+
+/**
+ * 호출 수와 비용을 추적하는 예산 관리자.
+ *
+ * 목적은 속도 제한이 아니라 **비용 상한**이다. rate limit은 시간 창이 지나면
+ * 리셋되므로 총량을 막지 못한다.
+ *
+ * 상태를 파일에 영속화한다. 메모리에만 두면 서버 재시작이 곧 예산 리셋이 되어
+ * 상한이 무의미해진다.
+ */
+export function createBudgetTracker({
+  clock, filePath, dailyCallLimit, monthlyCostLimitUsd, log,
+}) {
+  let state = { day: dayKey(clock.now()), dailyCalls: 0, month: monthKey(clock.now()), monthlyCostUsd: 0 };
+
+  if (filePath && existsSync(filePath)) {
+    try {
+      const loaded = JSON.parse(readFileSync(filePath, 'utf8'));
+      if (loaded && typeof loaded === 'object') state = { ...state, ...loaded };
+    } catch {
+      // 파일이 깨져 있으면 0에서 시작한다. 여기서 죽으면 서버가 아예 뜨지 않는다.
+      log?.warn('예산 파일을 읽지 못해 0에서 시작합니다');
+    }
+  }
+
+  const persist = () => {
+    if (!filePath) return;
+    try {
+      // 같은 디렉터리에 임시 파일을 쓰고 rename한다. 쓰다가 죽어도 파일이 깨지지 않는다.
+      const tmp = `${filePath}.tmp`;
+      writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
+      renameSync(tmp, filePath);
+    } catch {
+      log?.warn('예산 파일을 저장하지 못했습니다');
+    }
+  };
+
+  /** 날짜·월이 바뀌었으면 해당 카운터를 초기화한다. 조회와 기록 양쪽에서 먼저 부른다. */
+  const roll = () => {
+    const now = clock.now();
+    const d = dayKey(now);
+    const m = monthKey(now);
+    let changed = false;
+
+    if (state.day !== d) { state.day = d; state.dailyCalls = 0; changed = true; }
+    if (state.month !== m) { state.month = m; state.monthlyCostUsd = 0; changed = true; }
+    if (changed) persist();
+  };
+
+  /** 다음 UTC 자정. */
+  const nextDayReset = () => {
+    const d = new Date(clock.now());
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)).toISOString();
+  };
+
+  /** 다음 달 1일 UTC 0시. */
+  const nextMonthReset = () => {
+    const d = new Date(clock.now());
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString();
+  };
+
+  return {
+    snapshot() {
+      roll();
+      return {
+        calls: {
+          used: state.dailyCalls,
+          limit: dailyCallLimit,
+          remaining: Math.max(0, dailyCallLimit - state.dailyCalls),
+          resetsAt: nextDayReset(),
+        },
+        cost: {
+          usedUsd: state.monthlyCostUsd,
+          limitUsd: monthlyCostLimitUsd,
+          remainingUsd: Math.max(0, monthlyCostLimitUsd - state.monthlyCostUsd),
+          resetsAt: nextMonthReset(),
+        },
+      };
+    },
+
+    /** 이 비용을 쓰면 한도를 넘는지 **미리** 판정한다. 넘긴 뒤가 아니라 넘기기 전이다. */
+    canSpend(estimatedCostUsd) {
+      roll();
+      if (state.dailyCalls >= dailyCallLimit) {
+        return { ok: false, reason: 'DAILY_CALL_LIMIT' };
+      }
+      if (state.monthlyCostUsd + estimatedCostUsd > monthlyCostLimitUsd) {
+        return { ok: false, reason: 'COST_LIMIT' };
+      }
+      return { ok: true };
+    },
+
+    record({ costUsd }) {
+      roll();
+      state.dailyCalls += 1;
+      state.monthlyCostUsd += costUsd;
+      persist();
+    },
+  };
 }
 
 // ─── 앱 팩토리 ───
@@ -983,9 +1109,112 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
     });
   });
 
+  // ─── 예산과 호출 확인 ───
+
+  const budget = createBudgetTracker({
+    clock: now,
+    filePath: config.budgetFile,
+    dailyCallLimit: config.dailyAnalysisLimit,
+    monthlyCostLimitUsd: config.monthlyCostLimitUsd,
+    logger,
+  });
+
+  // 확인 토큰: 견적을 본 사용자가 명시적으로 승인했음을 증명한다.
+  // 세션과 요청 내용에 묶여 있고 일회용이다.
+  const confirmTokens = createTtlCache({
+    ttlMs: config.confirmTokenTtlMs, maxEntries: 200, clock: now,
+  });
+
+  app.get('/api/budget', requireAuth, (req, res) => {
+    res.json(budget.snapshot());
+  });
+
   // ─── 분석 엔드포인트 ───
 
   const analyzeSchema = buildAnalyzeSchema(config);
+
+  /**
+   * 검증부터 프롬프트 조립·비용 추정까지, 견적과 실행이 똑같이 밟는 단계.
+   * 두 경로가 같은 계산을 하므로 견적과 실제 요청이 어긋날 수 없다.
+   */
+  const prepare = (req) => {
+    const parsed = analyzeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
+    }
+
+    const { newsList, marketData, analysisPeriod } = parsed.data;
+    const { items, duplicatesRemoved, urlWhitelist } =
+      normalizeNewsList(newsList, { assetName: marketData?.assetName });
+
+    if (items.length === 0) {
+      throw new ApiError(422, 'INSUFFICIENT_DATA', '중복 제거 후 분석할 자료가 남지 않았습니다.');
+    }
+
+    const collectedAt = new Date(now.now()).toISOString();
+    const userPrompt = buildUserPrompt({ items, marketData, collectedAt, analysisPeriod });
+
+    // 프롬프트 길이와 토큰 예산을 LLM 호출 전에 확인한다.
+    const estimatedInputTokens = estimateTokens(SYSTEM_PROMPT) + estimateTokens(userPrompt);
+    if (userPrompt.length > config.maxPromptChars || estimatedInputTokens > config.maxInputTokens) {
+      throw new ApiError(413, 'INPUT_TOO_LARGE', '분석 요청이 너무 큽니다. 기사 수나 본문 길이를 줄여 주세요.');
+    }
+
+    const estimatedCostUsd = estimateCostUsd(
+      { inputTokens: estimatedInputTokens, outputTokens: config.assumedOutputTokens },
+      { inputPer1M: config.priceInputPer1M, outputPer1M: config.priceOutputPer1M },
+    );
+
+    return {
+      items, marketData, analysisPeriod, duplicatesRemoved, urlWhitelist,
+      collectedAt, userPrompt, estimatedInputTokens, estimatedCostUsd,
+      // 캐시 키는 정규화된 자료 기준이다. 순서만 다른 요청도 같은 키가 된다.
+      cacheKey: hashRequest({ items, marketData, analysisPeriod, model: config.openaiModel }),
+    };
+  };
+
+  /**
+   * 견적. LLM을 호출하지 않으므로 비용이 들지 않는다.
+   * 예산이 부족하면 여기서 막아 사용자가 확인 단계로 넘어가지 못하게 한다.
+   */
+  app.post('/api/analyze/estimate', makeAnalyzeLimiter(config), jsonBody, requireAuth, (req, res) => {
+    const prepared = prepare(req);
+    const cached = Boolean(analysisCache.get(prepared.cacheKey));
+
+    // 캐시 히트는 LLM을 부르지 않으므로 예산을 쓰지 않는다.
+    if (!cached) {
+      const verdict = budget.canSpend(prepared.estimatedCostUsd);
+      if (!verdict.ok) {
+        req.log.warn({ reason: verdict.reason }, '예산 한도로 분석을 거부했다');
+        throw new ApiError(429, 'BUDGET_EXCEEDED',
+          verdict.reason === 'DAILY_CALL_LIMIT'
+            ? '오늘 사용할 수 있는 분석 횟수를 모두 썼습니다.'
+            : '이번 달 비용 한도에 도달했습니다.');
+      }
+    }
+
+    const confirmToken = `ct_${randomBytes(24).toString('base64url')}`;
+    confirmTokens.set(confirmToken, {
+      cacheKey: prepared.cacheKey,
+      sessionToken: req.session.token,
+    });
+
+    res.json({
+      estimatedInputTokens: prepared.estimatedInputTokens,
+      assumedOutputTokens: config.assumedOutputTokens,
+      estimatedCostUsd: Number(prepared.estimatedCostUsd.toFixed(6)),
+      sourceCount: prepared.items.length,
+      duplicatesRemoved: prepared.duplicatesRemoved,
+      cached,
+      budget: budget.snapshot(),
+      confirmToken,
+      confirmTokenExpiresAt: new Date(now.now() + config.confirmTokenTtlMs).toISOString(),
+      model: config.openaiModel,
+      note: cached
+        ? '이 요청은 캐시된 결과가 있어 추가 비용이 발생하지 않습니다.'
+        : '실제 비용은 응답 길이에 따라 추정치와 달라질 수 있습니다.',
+    });
+  });
 
   app.post(
     '/api/analyze/news',
@@ -994,45 +1223,45 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
     requireAuth,                  // [3] 인증 — 여기를 통과해야만 LLM 경로에 진입한다
     makeSessionLimiter(config),   // [4] 세션 한도 — req.session이 필요하므로 인증 뒤
     async (req, res) => {
-      const parsed = analyzeSchema.safeParse(req.body);
-      if (!parsed.success) {
-        throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
-      }
-
-      const { newsList, marketData, analysisPeriod } = parsed.data;
-      const { items, duplicatesRemoved, urlWhitelist } =
-        normalizeNewsList(newsList, { assetName: marketData?.assetName });
-
-      if (items.length === 0) {
-        throw new ApiError(422, 'INSUFFICIENT_DATA', '중복 제거 후 분석할 자료가 남지 않았습니다.');
-      }
-
-      const collectedAt = new Date(now.now()).toISOString();
-      const userPrompt = buildUserPrompt({ items, marketData, collectedAt, analysisPeriod });
-
-      // 프롬프트 길이와 토큰 예산을 LLM 호출 전에 확인한다.
-      // 호출 후 확인은 비용을 이미 지출한 뒤라 의미가 없다.
-      const estimatedInputTokens = estimateTokens(SYSTEM_PROMPT) + estimateTokens(userPrompt);
-      if (userPrompt.length > config.maxPromptChars || estimatedInputTokens > config.maxInputTokens) {
-        throw new ApiError(413, 'INPUT_TOO_LARGE', '분석 요청이 너무 큽니다. 기사 수나 본문 길이를 줄여 주세요.');
-      }
-
-      // 캐시 키는 정규화된 자료 기준이다. 순서만 다른 요청도 같은 키가 된다.
-      const cacheKey = hashRequest({ items, marketData, analysisPeriod, model: config.openaiModel });
+      const {
+        items, duplicatesRemoved, urlWhitelist, collectedAt,
+        userPrompt, estimatedInputTokens, estimatedCostUsd, cacheKey,
+      } = prepare(req);
 
       const sources = buildSources(items, collectedAt);
       const baseMeta = { collectedAt, sourceCount: items.length, duplicatesRemoved, estimatedInputTokens };
 
+      // 캐시 히트는 LLM을 부르지 않는다. 비용이 0이므로 확인도 예산 차감도 필요 없다.
       const cached = analysisCache.get(cacheKey);
       if (cached) {
-        // 캐시 히트도 정상적인 사용자 활동이므로 세션을 연장한다.
         sessions.touch(req.session);
         return res.json({
           requestId: req.requestId,
           analysis: cached.analysis,
           sources,
-          meta: { ...baseMeta, ...cached.meta, cached: true },
+          meta: { ...baseMeta, ...cached.meta, cached: true, actualCostUsd: 0, budget: budget.snapshot() },
         });
+      }
+
+      // 여기부터는 실제 비용이 발생한다. 사용자의 명시적 승인을 요구한다.
+      const confirmToken = req.get('x-confirm-token');
+      const grant = confirmToken ? confirmTokens.get(confirmToken) : undefined;
+
+      // 토큰은 이 세션의 것이어야 하고, 견적을 낸 그 요청 내용이어야 한다.
+      // 그렇지 않으면 작은 요청으로 견적을 받고 큰 요청을 실행할 수 있다.
+      if (!grant || grant.sessionToken !== req.session.token || grant.cacheKey !== cacheKey) {
+        throw new ApiError(428, 'CONFIRMATION_REQUIRED',
+          '먼저 /api/analyze/estimate로 예상 비용을 확인한 뒤, 발급된 확인 토큰을 X-Confirm-Token 헤더에 담아 다시 요청해 주세요.');
+      }
+      confirmTokens.delete(confirmToken);   // 일회용
+
+      const verdict = budget.canSpend(estimatedCostUsd);
+      if (!verdict.ok) {
+        req.log.warn({ reason: verdict.reason }, '예산 한도로 분석을 거부했다');
+        throw new ApiError(429, 'BUDGET_EXCEEDED',
+          verdict.reason === 'DAILY_CALL_LIMIT'
+            ? '오늘 사용할 수 있는 분석 횟수를 모두 썼습니다.'
+            : '이번 달 비용 한도에 도달했습니다.');
       }
 
       const release = analysisSemaphore.tryAcquire();
@@ -1050,23 +1279,36 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
             { config, breaker, clock: now, log: req.log },
           );
 
+          let outputTokens = 0;
           // 구조화 출력 2회 시도 → Markdown 폴백 1회.
           for (let attempt = 0; attempt < 2; attempt += 1) {
             const result = await call(true);
+            outputTokens += estimateTokens(result.content);
             const analysis = parseAnalysis(result.content);
-            if (analysis) return { analysis, model: result.model, degraded: false };
+            if (analysis) return { analysis, model: result.model, degraded: false, outputTokens };
             req.log.warn({ attempt: attempt + 1 }, '구조화 응답 파싱 실패');
           }
 
           const fallback = await call(false);
+          outputTokens += estimateTokens(fallback.content);
           if (!fallback.content?.trim()) {
             throw new ApiError(502, 'PARSE_FAILED', '분석 결과를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
           }
-          return { analysis: { report: fallback.content }, model: fallback.model, degraded: true };
+          return {
+            analysis: { report: fallback.content },
+            model: fallback.model, degraded: true, outputTokens,
+          };
         });
       } finally {
         release();
       }
+
+      // 실제 응답 길이로 비용을 다시 계산해 기록한다. 견적은 가정치일 뿐이다.
+      const actualCostUsd = estimateCostUsd(
+        { inputTokens: estimatedInputTokens, outputTokens: produced.outputTokens },
+        { inputPer1M: config.priceInputPer1M, outputPer1M: config.priceOutputPer1M },
+      );
+      budget.record({ costUsd: actualCostUsd });
 
       // LLM이 지어낸 URL을 제거한다. 프롬프트 지시만으로는 보장되지 않는다.
       const { value: analysis, removed: fabricatedUrlsRemoved } =
@@ -1095,6 +1337,8 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
           cached: false,
           degraded: produced.degraded,
           model: produced.model,
+          actualCostUsd: Number(actualCostUsd.toFixed(6)),
+          budget: budget.snapshot(),
         },
       });
     },

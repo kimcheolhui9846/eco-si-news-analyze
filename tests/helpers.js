@@ -28,6 +28,8 @@ export const BASE_ENV = {
   MY_SECRET_PASSWORD: TEST_PASSWORD,
   LLM_MODE: 'mock',
   NODE_ENV: 'test',
+  // 빈 값이면 영속화하지 않는다. 테스트가 실제 .budget.json을 오염시키면 안 된다.
+  BUDGET_FILE: '',
 };
 
 export function bootstrap({ env = {}, clock, llm, extraRoutes } = {}) {

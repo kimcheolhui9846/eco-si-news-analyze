@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# 예산 사용량 기록 — 로컬 상태이며 커밋하지 않는다
+.budget.json
+.budget.json.tmp
+
 # 의존성
 node_modules/
 

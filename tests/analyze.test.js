@@ -47,8 +47,18 @@ const login = async (app) => {
   return res.body.token;
 };
 
-const analyze = (app, token, payload = body()) =>
-  request(app).post('/api/analyze/news').set('Authorization', `Bearer ${token}`).send(payload);
+/**
+ * 견적을 받아 확인 토큰을 붙인 뒤 분석을 요청한다.
+ * 실제 비용이 드는 호출은 사용자의 명시적 승인을 거쳐야 하므로 두 단계다.
+ */
+const analyze = async (app, token, payload = body()) => {
+  const est = await request(app).post('/api/analyze/estimate')
+    .set('Authorization', `Bearer ${token}`).send(payload);
+
+  const call = request(app).post('/api/analyze/news').set('Authorization', `Bearer ${token}`);
+  if (est.body?.confirmToken) call.set('X-Confirm-Token', est.body.confirmToken);
+  return call.send(payload);
+};
 
 const sessionOf = (app, token) =>
   request(app).get('/api/auth/session').set('Authorization', `Bearer ${token}`);
@@ -284,8 +294,7 @@ test('동시 분석 한도를 넘으면 429를 반환한다', async () => {
   const token = await login(app);
 
   // 서로 다른 본문이어야 캐시·병합에 걸리지 않고 동시성 한도에 도달한다.
-  // supertest 요청은 지연 실행이라 .then()을 걸어야 실제로 전송된다.
-  const first = analyze(app, token, body({ newsList: [article({ title: '첫 번째' })] })).then((r) => r);
+  const first = analyze(app, token, body({ newsList: [article({ title: '첫 번째' })] }));
   // 타이머로 추측하지 않고, 첫 요청이 실제로 세마포어를 잡을 때까지 기다린다.
   await firstEntered;
   const second = await analyze(app, token, body({ newsList: [article({ title: '두 번째' })] }));
