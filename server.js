@@ -974,6 +974,132 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
     res.json({ success: true, message: '로그아웃되었습니다.' });
   });
 
+  // 세션 상태 조회. 연장하지 않는다 — 읽기만 한다.
+  app.get('/api/auth/session', requireAuth, (req, res) => {
+    res.json({
+      authenticated: true,
+      expiresAt: new Date(req.session.expiresAt).toISOString(),
+      lastActivityAt: new Date(req.session.lastActivityAt).toISOString(),
+    });
+  });
+
+  // ─── 분석 엔드포인트 ───
+
+  const analyzeSchema = buildAnalyzeSchema(config);
+
+  app.post(
+    '/api/analyze/news',
+    makeAnalyzeLimiter(config),   // [1] IP 한도 — 인증 검사보다 싸다
+    jsonBody,                     // [2] 본문 크기 제한
+    requireAuth,                  // [3] 인증 — 여기를 통과해야만 LLM 경로에 진입한다
+    makeSessionLimiter(config),   // [4] 세션 한도 — req.session이 필요하므로 인증 뒤
+    async (req, res) => {
+      const parsed = analyzeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
+      }
+
+      const { newsList, marketData, analysisPeriod } = parsed.data;
+      const { items, duplicatesRemoved, urlWhitelist } =
+        normalizeNewsList(newsList, { assetName: marketData?.assetName });
+
+      if (items.length === 0) {
+        throw new ApiError(422, 'INSUFFICIENT_DATA', '중복 제거 후 분석할 자료가 남지 않았습니다.');
+      }
+
+      const collectedAt = new Date(now.now()).toISOString();
+      const userPrompt = buildUserPrompt({ items, marketData, collectedAt, analysisPeriod });
+
+      // 프롬프트 길이와 토큰 예산을 LLM 호출 전에 확인한다.
+      // 호출 후 확인은 비용을 이미 지출한 뒤라 의미가 없다.
+      const estimatedInputTokens = estimateTokens(SYSTEM_PROMPT) + estimateTokens(userPrompt);
+      if (userPrompt.length > config.maxPromptChars || estimatedInputTokens > config.maxInputTokens) {
+        throw new ApiError(413, 'INPUT_TOO_LARGE', '분석 요청이 너무 큽니다. 기사 수나 본문 길이를 줄여 주세요.');
+      }
+
+      // 캐시 키는 정규화된 자료 기준이다. 순서만 다른 요청도 같은 키가 된다.
+      const cacheKey = hashRequest({ items, marketData, analysisPeriod, model: config.openaiModel });
+
+      const sources = buildSources(items, collectedAt);
+      const baseMeta = { collectedAt, sourceCount: items.length, duplicatesRemoved, estimatedInputTokens };
+
+      const cached = analysisCache.get(cacheKey);
+      if (cached) {
+        // 캐시 히트도 정상적인 사용자 활동이므로 세션을 연장한다.
+        sessions.touch(req.session);
+        return res.json({
+          requestId: req.requestId,
+          analysis: cached.analysis,
+          sources,
+          meta: { ...baseMeta, ...cached.meta, cached: true },
+        });
+      }
+
+      const release = analysisSemaphore.tryAcquire();
+      if (!release) {
+        throw new ApiError(429, 'TOO_MANY_CONCURRENT', '동시 분석 요청이 많습니다. 잠시 후 다시 시도해 주세요.');
+      }
+
+      let produced;
+      try {
+        // 같은 키로 동시에 들어온 요청은 하나의 LLM 호출을 공유한다.
+        produced = await inflight.run(cacheKey, async () => {
+          const call = (useJsonSchema) => callWithResilience(
+            llmClient,
+            { system: SYSTEM_PROMPT, user: userPrompt, useJsonSchema },
+            { config, breaker, clock: now, log: req.log },
+          );
+
+          // 구조화 출력 2회 시도 → Markdown 폴백 1회.
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            const result = await call(true);
+            const analysis = parseAnalysis(result.content);
+            if (analysis) return { analysis, model: result.model, degraded: false };
+            req.log.warn({ attempt: attempt + 1 }, '구조화 응답 파싱 실패');
+          }
+
+          const fallback = await call(false);
+          if (!fallback.content?.trim()) {
+            throw new ApiError(502, 'PARSE_FAILED', '분석 결과를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+          }
+          return { analysis: { report: fallback.content }, model: fallback.model, degraded: true };
+        });
+      } finally {
+        release();
+      }
+
+      // LLM이 지어낸 URL을 제거한다. 프롬프트 지시만으로는 보장되지 않는다.
+      const { value: analysis, removed: fabricatedUrlsRemoved } =
+        stripFabricatedUrls(produced.analysis, urlWhitelist);
+
+      if (fabricatedUrlsRemoved > 0) {
+        req.log.warn({ fabricatedUrlsRemoved }, '출처에 없는 URL을 제거했다');
+      }
+
+      analysisCache.set(cacheKey, {
+        analysis,
+        meta: { fabricatedUrlsRemoved, degraded: produced.degraded, model: produced.model },
+      });
+
+      // 여기가 세션을 연장하는 유일한 지점이다.
+      // 위의 어떤 실패 경로도 여기에 도달하지 못한다.
+      sessions.touch(req.session);
+
+      return res.json({
+        requestId: req.requestId,
+        analysis,
+        sources,
+        meta: {
+          ...baseMeta,
+          fabricatedUrlsRemoved,
+          cached: false,
+          degraded: produced.degraded,
+          model: produced.model,
+        },
+      });
+    },
+  );
+
   // 테스트가 라우트를 꽂을 수 있는 지점. 반드시 404 핸들러보다 앞이어야 한다.
   if (extraRoutes) extraRoutes(app, { requireAuth, jsonBody });
 
@@ -990,6 +1116,11 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
   });
 
   app.use((err, req, res, next) => {
+    // body-parser의 크기 초과 오류를 우리 형식으로 변환한다.
+    if (err?.type === 'entity.too.large') {
+      err = new ApiError(413, 'PAYLOAD_TOO_LARGE', '요청 본문이 너무 큽니다.');
+    }
+
     const isApiError = err instanceof ApiError;
     const status = isApiError ? err.status : 500;
     const code = isApiError ? err.code : 'INTERNAL';
