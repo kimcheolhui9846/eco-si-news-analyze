@@ -1,0 +1,435 @@
+# API 명세
+
+Phase 1 기준. 모든 응답은 `application/json`이며, 모든 응답에 `X-Request-Id` 헤더가 붙는다.
+
+베이스 URL은 기본적으로 `http://localhost:3000`이다.
+
+---
+
+## 공통 에러 형식
+
+모든 오류는 동일한 형태로 반환된다.
+
+```json
+{
+  "error": {
+    "code": "INVALID_REQUEST",
+    "message": "요청 데이터가 올바르지 않습니다.",
+    "requestId": "0f8b2c1a-..."
+  }
+}
+```
+
+`requestId`는 서버가 발급하며 응답 헤더 `X-Request-Id`와 같은 값이다. 문의 시 이 값을 전달하면 서버 로그에서 해당 요청을 찾을 수 있다. 클라이언트가 보낸 `X-Request-Id` 헤더는 무시된다.
+
+### 에러 코드표
+
+| 코드 | HTTP | 상황 |
+|---|---|---|
+| `INVALID_REQUEST` | 400 | 검증 실패, 형식 오류, 허용되지 않은 필드 |
+| `INVALID_CREDENTIALS` | 403 | 로그인 비밀번호 불일치 |
+| `FORBIDDEN` | 403 | 토큰 없음·무효·만료·로그아웃됨 |
+| `NOT_FOUND` | 404 | 존재하지 않는 경로 |
+| `PAYLOAD_TOO_LARGE` | 413 | 요청 본문이 `MAX_REQUEST_BODY_BYTES` 초과 |
+| `INPUT_TOO_LARGE` | 413 | 조립된 프롬프트 길이 또는 토큰 예산 초과 |
+| `RATE_LIMITED` | 429 | rate limit 초과 (시간 창 기준) |
+| `BUDGET_EXCEEDED` | 429 | 일일 호출 수 또는 월 비용 한도 소진 |
+| `CONFIRMATION_REQUIRED` | 428 | 확인 토큰 없이 비용이 드는 분석을 요청함 |
+| `TOO_MANY_CONCURRENT` | 429 | 동시 분석 한도 초과 |
+| `INSUFFICIENT_DATA` | 422 | 중복 제거 후 유효 자료 0건 |
+| `UPSTREAM_TIMEOUT` | 504 | LLM 응답 지연 |
+| `UPSTREAM_ERROR` | 502 | LLM 호출 실패 |
+| `CIRCUIT_OPEN` | 503 | 연속 실패로 회로 차단기가 열림 |
+| `PARSE_FAILED` | 502 | 구조화 출력과 Markdown 폴백이 모두 실패 |
+| `INTERNAL` | 500 | 그 외 |
+
+에러 응답에는 스택 트레이스, 상류 API의 원본 메시지, 프롬프트 전문, 세션 토큰, API 키가 포함되지 않는다.
+
+---
+
+## `GET /api/health`
+
+인증이 필요 없다. 서버 기동 확인용이다.
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+```json
+{ "status": "ok", "llmMode": "mock", "time": "2026-09-02T07:52:07.748Z" }
+```
+
+---
+
+## `POST /api/auth/login`
+
+### 요청
+
+```json
+{ "password": "설정한 비밀번호" }
+```
+
+`password` 외의 필드를 보내면 `400 INVALID_REQUEST`로 거부된다.
+
+### 응답 `200`
+
+```json
+{
+  "token": "kX3f...43자 이상의 base64url",
+  "expiresAt": "2026-09-02T08:07:07.748Z"
+}
+```
+
+토큰은 응답 본문과 `session` 쿠키로 **동시에** 제공된다. 쿠키 속성은 `HttpOnly; SameSite=Strict; Path=/`이며, `Secure`는 `NODE_ENV=production`일 때만 붙는다.
+
+### 오류
+
+| 상황 | 응답 |
+|---|---|
+| 비밀번호 불일치 | `403 INVALID_CREDENTIALS` |
+| `password` 누락 또는 미허용 필드 | `400 INVALID_REQUEST` |
+| 로그인 시도 과다 | `429 RATE_LIMITED` |
+
+rate limit은 검증보다 먼저 적용된다.
+
+### 예시
+
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"password":"your-password"}'
+```
+
+---
+
+## `POST /api/auth/logout`
+
+인증 토큰을 `Authorization: Bearer` 헤더나 `session` 쿠키로 보낸다.
+
+**멱등적이다.** 세션이 없거나 토큰을 보내지 않아도 항상 `200`을 반환한다.
+
+```json
+{ "success": true, "message": "로그아웃되었습니다." }
+```
+
+로그아웃 후 같은 토큰으로 보호된 엔드포인트를 호출하면 반드시 `403 FORBIDDEN`이 반환된다.
+
+```bash
+curl -X POST http://localhost:3000/api/auth/logout \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/auth/session`
+
+현재 세션 상태를 조회한다. **이 호출은 세션을 연장하지 않는다.** 읽기 전용이다.
+
+### 응답 `200`
+
+```json
+{
+  "authenticated": true,
+  "expiresAt": "2026-09-02T08:07:07.748Z",
+  "lastActivityAt": "2026-09-02T07:52:07.748Z"
+}
+```
+
+인증 실패 시 `403 FORBIDDEN`.
+
+---
+
+## 비용이 드는 호출은 2단계다
+
+`/api/analyze/news`는 실제 LLM을 호출하므로 돈이 든다. 그래서 **견적 → 승인 → 실행** 순서를 강제한다.
+
+```
+1) POST /api/analyze/estimate   ← LLM 미호출. 예상 비용·남은 예산·확인 토큰 반환
+2) POST /api/analyze/news       ← X-Confirm-Token 헤더 필수. 실제 호출 + 예산 차감
+```
+
+확인 토큰 없이 2번을 호출하면 `428 CONFIRMATION_REQUIRED`가 반환되고 LLM은 호출되지 않는다.
+
+**예외**: 캐시된 결과가 있으면 LLM을 부르지 않으므로 확인 토큰 없이 통과하고 예산도 차감하지 않는다.
+
+---
+
+## `POST /api/analyze/estimate`
+
+인증이 필요하다. 요청 본문은 `/api/analyze/news`와 **완전히 동일**하다. 두 엔드포인트가 같은 검증·정규화·프롬프트 조립 코드를 공유하므로 견적과 실제 요청이 어긋날 수 없다.
+
+**이 엔드포인트는 LLM을 호출하지 않는다.** 비용이 들지 않는다.
+
+### 응답 `200`
+
+```json
+{
+  "estimatedInputTokens": 492,
+  "assumedOutputTokens": 2000,
+  "estimatedCostUsd": 0.02127,
+  "sourceCount": 1,
+  "duplicatesRemoved": 0,
+  "cached": false,
+  "budget": {
+    "calls": { "used": 0, "limit": 50, "remaining": 50, "resetsAt": "2026-09-03T00:00:00.000Z" },
+    "cost":  { "usedUsd": 0, "limitUsd": 5, "remainingUsd": 5, "resetsAt": "2026-10-01T00:00:00.000Z" }
+  },
+  "confirmToken": "ct_...",
+  "confirmTokenExpiresAt": "2026-09-02T08:02:07.748Z",
+  "model": "gpt-4o",
+  "note": "실제 비용은 응답 길이에 따라 추정치와 달라질 수 있습니다."
+}
+```
+
+`estimatedCostUsd`는 **추정치**다. 출력 토큰 수는 호출 전에 알 수 없어 `ASSUMED_OUTPUT_TOKENS`로 가정한다. 실제 비용은 응답 후 다시 계산되어 `meta.actualCostUsd`로 반환되며, 예산에는 실제 비용이 기록된다.
+
+### 확인 토큰의 성질
+
+| 성질 | 이유 |
+|---|---|
+| **일회용** | 한 번 승인은 한 번 호출이다. 소비 후 즉시 폐기된다 |
+| **세션에 묶임** | 다른 사용자가 남의 승인을 쓸 수 없다 |
+| **요청 내용에 묶임** | 기사 1개로 견적을 받고 20개로 실행하는 것을 막는다 |
+| **TTL 있음** | `CONFIRM_TOKEN_TTL_MS`(기본 5분) 후 만료된다 |
+
+셋 중 하나라도 어긋나면 `428 CONFIRMATION_REQUIRED`다.
+
+### 오류
+
+| 상황 | 응답 |
+|---|---|
+| 예산 소진 | `429 BUDGET_EXCEEDED` |
+| 검증 실패 | `400 INVALID_REQUEST` |
+| 인증 실패 | `403 FORBIDDEN` |
+
+예산이 소진되면 견적 단계에서 막히므로 확인 토큰 자체가 발급되지 않는다.
+
+---
+
+## `GET /api/budget`
+
+인증이 필요하다. 현재 예산 사용량을 조회한다.
+
+```json
+{
+  "calls": { "used": 3, "limit": 50, "remaining": 47, "resetsAt": "2026-09-03T00:00:00.000Z" },
+  "cost":  { "usedUsd": 0.0104, "limitUsd": 5, "remainingUsd": 4.9896, "resetsAt": "2026-10-01T00:00:00.000Z" }
+}
+```
+
+호출 수는 UTC 자정에, 비용은 UTC 기준 매월 1일에 초기화된다. **사용량은 파일에 기록되므로 서버를 재시작해도 유지된다.**
+
+---
+
+## `POST /api/analyze/news`
+
+인증과 **확인 토큰**이 필요하다. Phase 1에서 이 엔드포인트는 **클라이언트가 제공한 자료를 분석하는 순수 엔진**이다. 서버가 외부에서 뉴스를 수집하지 않는다. 수집은 Phase 2에서 추가된다.
+
+### 요청
+
+```json
+{
+  "newsList": [
+    {
+      "title": "엔비디아 3분기 실적 발표",
+      "content": "데이터센터 부문 매출이 전년 대비 증가했다고 발표했다.",
+      "source": "연합뉴스",
+      "url": "https://example.com/article/1",
+      "publishedAt": "2026-08-30T09:00:00Z"
+    }
+  ],
+  "marketData": {
+    "assetName": "엔비디아",
+    "currentPrice": "182.50",
+    "priceChange": "+2.3%",
+    "chartTrend": "20일 이동평균 상회"
+  },
+  "analysisPeriod": "최근 3개월"
+}
+```
+
+### 필드별 제약
+
+| 필드 | 필수 | 타입 | 제약 (기본값) |
+|---|---|---|---|
+| `newsList` | ✅ | 배열 | 1개 이상 `MAX_NEWS_ITEMS`(20) 이하 |
+| `newsList[].title` | ✅ | 문자열 | 1~`MAX_TITLE_CHARS`(300)자, 공백만은 불가 |
+| `newsList[].content` | ✅ | 문자열 | 1~`MAX_CONTENT_CHARS`(8000)자 |
+| `newsList[].source` | ✅ | 문자열 | 1~200자 |
+| `newsList[].url` | ✅ | 문자열 | **`http`/`https`만 허용**, 2048자 이하 |
+| `newsList[].publishedAt` | ✅ | 문자열 | `Date.parse` 가능한 날짜 |
+| `marketData` | ❌ | 객체 | 있으면 아래 4개 필드 모두 필요 |
+| `marketData.assetName` | 조건부 | 문자열 | 1~200자 |
+| `marketData.currentPrice` | 조건부 | 문자열 \| 숫자 | 문자열이면 64자 이하 |
+| `marketData.priceChange` | 조건부 | 문자열 \| 숫자 | 문자열이면 64자 이하 |
+| `marketData.chartTrend` | 조건부 | 문자열 | 1~`MAX_TREND_CHARS`(1000)자 |
+| `analysisPeriod` | ❌ | 문자열 | 200자 이하 |
+
+**위 목록에 없는 필드는 거부된다.** `systemPrompt`, `messages`, `model`, `temperature` 같은 필드를 보내면 `400 INVALID_REQUEST`가 반환된다. 사용자가 LLM 호출 파라미터를 조작할 수 있는 경로는 없다.
+
+`javascript:`, `file:`, `ftp:` 스킴의 URL도 거부된다.
+
+### 응답 `200`
+
+```json
+{
+  "requestId": "0f8b2c1a-...",
+  "analysis": {
+    "summary": "...",
+    "newsBriefing": [
+      {
+        "sourceId": "S1",
+        "title": "...",
+        "source": "...",
+        "publishedAt": "2026-08-30T09:00:00.000Z",
+        "keyPoints": "...",
+        "marketImplication": "...",
+        "needsVerification": "..."
+      }
+    ],
+    "trendAnalysis": "...",
+    "scenarios": [
+      {
+        "type": "기본 시나리오",
+        "premise": "...",
+        "indicatorsToWatch": "...",
+        "possibleDirection": "...",
+        "invalidationCondition": "...",
+        "cautions": "..."
+      }
+    ],
+    "risks": ["..."],
+    "monitoringIndicators": ["..."],
+    "disclaimer": "본 분석은 ... 투자 권유가 아닙니다."
+  },
+  "sources": [
+    {
+      "sourceId": "S1",
+      "title": "엔비디아 3분기 실적 발표",
+      "source": "연합뉴스",
+      "url": "https://example.com/article/1",
+      "publishedAt": "2026-08-30T09:00:00.000Z",
+      "collectedAt": "2026-09-02T07:52:07.748Z",
+      "type": "news",
+      "relevance": 3
+    }
+  ],
+  "meta": {
+    "collectedAt": "2026-09-02T07:52:07.748Z",
+    "sourceCount": 1,
+    "duplicatesRemoved": 0,
+    "estimatedInputTokens": 842,
+    "fabricatedUrlsRemoved": 0,
+    "cached": false,
+    "degraded": false,
+    "model": "gpt-4o"
+  }
+}
+```
+
+### `meta` 필드의 의미
+
+| 필드 | 의미 |
+|---|---|
+| `collectedAt` | 서버가 이 요청을 처리한 기준 시각 |
+| `sourceCount` | 중복 제거 **후** 실제 분석에 쓰인 자료 수 |
+| `duplicatesRemoved` | 제목 또는 URL 중복으로 제외된 기사 수 |
+| `estimatedInputTokens` | 문자수 기반 **근사치**. 정확한 토큰 수가 아니다 |
+| `fabricatedUrlsRemoved` | LLM이 만들어낸, 입력에 없던 URL을 제거한 건수 |
+| `cached` | `true`면 이전 동일 요청의 결과를 재사용한 것 (LLM 미호출) |
+| `degraded` | `true`면 구조화 출력이 실패해 Markdown 폴백으로 응답한 것 |
+| `model` | 실제 사용된 모델명 |
+| `actualCostUsd` | 실제 응답 길이로 다시 계산한 비용. 캐시 히트면 `0` |
+| `budget` | 이 호출 반영 후의 예산 상태 (`GET /api/budget`과 같은 형태) |
+
+### `degraded: true`일 때의 응답 형태
+
+구조화 출력이 두 번 실패하면 `analysis`의 모양이 바뀐다.
+
+```json
+{
+  "analysis": { "report": "# 분석 보고서\n\n..." },
+  "meta": { "degraded": true, "...": "..." }
+}
+```
+
+클라이언트는 `meta.degraded`를 확인해 두 형태를 모두 처리해야 한다.
+
+### 출처 무결성 보장
+
+- `sources` 배열은 **서버가 입력 자료에서 직접 생성한다.** LLM 응답 스키마에 `sources`가 없으므로 모델이 출처를 지어낼 경로가 없다.
+- 보고서 본문에서 입력에 없던 URL은 `[출처 미확인]`으로 치환되고 `meta.fabricatedUrlsRemoved`에 집계된다.
+- LLM에게는 URL 대신 `[S1]` 형식의 출처 ID로만 인용하도록 지시한다.
+
+### 세션 연장
+
+이 엔드포인트가 `200`을 반환할 때만 세션이 `SESSION_TTL_MINUTES`만큼 연장된다. 캐시 히트도 정상적인 사용자 활동으로 보아 연장한다.
+
+**연장되지 않는 경우**: 인증 미들웨어 통과만 한 경우, 검증 실패, rate limit 초과, 토큰 예산 초과, LLM 실패·타임아웃, 파싱 실패.
+
+### 오류
+
+| 상황 | 응답 |
+|---|---|
+| 인증 실패·만료·로그아웃 | `403 FORBIDDEN` (LLM 미호출) |
+| 검증 실패 | `400 INVALID_REQUEST` |
+| 본문 크기 초과 | `413 PAYLOAD_TOO_LARGE` |
+| 프롬프트·토큰 예산 초과 | `413 INPUT_TOO_LARGE` (LLM 미호출) |
+| 확인 토큰 없음·불일치·만료 | `428 CONFIRMATION_REQUIRED` (LLM 미호출) |
+| 예산 소진 | `429 BUDGET_EXCEEDED` (LLM 미호출) |
+| 요청 과다 | `429 RATE_LIMITED` |
+| 동시 분석 과다 | `429 TOO_MANY_CONCURRENT` |
+| 중복 제거 후 자료 0건 | `422 INSUFFICIENT_DATA` |
+| LLM 타임아웃 | `504 UPSTREAM_TIMEOUT` |
+| LLM 오류 | `502 UPSTREAM_ERROR` |
+| 회로 차단기 열림 | `503 CIRCUIT_OPEN` |
+| 구조화·폴백 모두 실패 | `502 PARSE_FAILED` |
+
+### 예시
+
+```bash
+# 1) 로그인
+TOKEN=$(curl -sS -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"password":"your-password"}' | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
+
+curl -X POST http://localhost:3000/api/analyze/news \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "newsList": [{
+      "title": "엔비디아 3분기 실적 발표",
+      "content": "데이터센터 부문 매출이 전년 대비 증가했다고 발표했다.",
+      "source": "연합뉴스",
+      "url": "https://example.com/article/1",
+      "publishedAt": "2026-08-30T09:00:00Z"
+    }],
+    "marketData": {
+      "assetName": "엔비디아",
+      "currentPrice": "182.50",
+      "priceChange": "+2.3%",
+      "chartTrend": "20일 이동평균 상회"
+    }
+}
+```
+
+</details>
+
+전체 시나리오는 `scripts/verify.sh`가 자동으로 검증한다.
+
+---
+
+## 예산은 2차 방어선이다
+
+이 API의 예산 한도는 **이 애플리케이션의 호출만** 막는다. OpenAI 계정의 자동 충전 자체를 막으려면 OpenAI 대시보드에서 직접 설정해야 한다.
+
+- Billing → auto-recharge 해제
+- Limits → monthly budget 설정
+
+계정 설정이 1차 방어선이고, 이 API의 예산은 2차 방어선이다.
+
+---
+
+## 면책
+
+이 API가 생성하는 분석은 제공된 자료를 기반으로 한 정보 제공 목적의 분석이며, 특정 금융상품의 매수·매도 또는 투자 수익을 보장하는 투자 권유가 아니다.
