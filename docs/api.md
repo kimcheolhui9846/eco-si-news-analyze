@@ -32,7 +32,9 @@ Phase 1 기준. 모든 응답은 `application/json`이며, 모든 응답에 `X-R
 | `NOT_FOUND` | 404 | 존재하지 않는 경로 |
 | `PAYLOAD_TOO_LARGE` | 413 | 요청 본문이 `MAX_REQUEST_BODY_BYTES` 초과 |
 | `INPUT_TOO_LARGE` | 413 | 조립된 프롬프트 길이 또는 토큰 예산 초과 |
-| `RATE_LIMITED` | 429 | rate limit 초과 |
+| `RATE_LIMITED` | 429 | rate limit 초과 (시간 창 기준) |
+| `BUDGET_EXCEEDED` | 429 | 일일 호출 수 또는 월 비용 한도 소진 |
+| `CONFIRMATION_REQUIRED` | 428 | 확인 토큰 없이 비용이 드는 분석을 요청함 |
 | `TOO_MANY_CONCURRENT` | 429 | 동시 분석 한도 초과 |
 | `INSUFFICIENT_DATA` | 422 | 중복 제거 후 유효 자료 0건 |
 | `UPSTREAM_TIMEOUT` | 504 | LLM 응답 지연 |
@@ -137,9 +139,91 @@ curl -X POST http://localhost:3000/api/auth/logout \
 
 ---
 
+## 비용이 드는 호출은 2단계다
+
+`/api/analyze/news`는 실제 LLM을 호출하므로 돈이 든다. 그래서 **견적 → 승인 → 실행** 순서를 강제한다.
+
+```
+1) POST /api/analyze/estimate   ← LLM 미호출. 예상 비용·남은 예산·확인 토큰 반환
+2) POST /api/analyze/news       ← X-Confirm-Token 헤더 필수. 실제 호출 + 예산 차감
+```
+
+확인 토큰 없이 2번을 호출하면 `428 CONFIRMATION_REQUIRED`가 반환되고 LLM은 호출되지 않는다.
+
+**예외**: 캐시된 결과가 있으면 LLM을 부르지 않으므로 확인 토큰 없이 통과하고 예산도 차감하지 않는다.
+
+---
+
+## `POST /api/analyze/estimate`
+
+인증이 필요하다. 요청 본문은 `/api/analyze/news`와 **완전히 동일**하다. 두 엔드포인트가 같은 검증·정규화·프롬프트 조립 코드를 공유하므로 견적과 실제 요청이 어긋날 수 없다.
+
+**이 엔드포인트는 LLM을 호출하지 않는다.** 비용이 들지 않는다.
+
+### 응답 `200`
+
+```json
+{
+  "estimatedInputTokens": 492,
+  "assumedOutputTokens": 2000,
+  "estimatedCostUsd": 0.02127,
+  "sourceCount": 1,
+  "duplicatesRemoved": 0,
+  "cached": false,
+  "budget": {
+    "calls": { "used": 0, "limit": 50, "remaining": 50, "resetsAt": "2026-09-03T00:00:00.000Z" },
+    "cost":  { "usedUsd": 0, "limitUsd": 5, "remainingUsd": 5, "resetsAt": "2026-10-01T00:00:00.000Z" }
+  },
+  "confirmToken": "ct_...",
+  "confirmTokenExpiresAt": "2026-09-02T08:02:07.748Z",
+  "model": "gpt-4o",
+  "note": "실제 비용은 응답 길이에 따라 추정치와 달라질 수 있습니다."
+}
+```
+
+`estimatedCostUsd`는 **추정치**다. 출력 토큰 수는 호출 전에 알 수 없어 `ASSUMED_OUTPUT_TOKENS`로 가정한다. 실제 비용은 응답 후 다시 계산되어 `meta.actualCostUsd`로 반환되며, 예산에는 실제 비용이 기록된다.
+
+### 확인 토큰의 성질
+
+| 성질 | 이유 |
+|---|---|
+| **일회용** | 한 번 승인은 한 번 호출이다. 소비 후 즉시 폐기된다 |
+| **세션에 묶임** | 다른 사용자가 남의 승인을 쓸 수 없다 |
+| **요청 내용에 묶임** | 기사 1개로 견적을 받고 20개로 실행하는 것을 막는다 |
+| **TTL 있음** | `CONFIRM_TOKEN_TTL_MS`(기본 5분) 후 만료된다 |
+
+셋 중 하나라도 어긋나면 `428 CONFIRMATION_REQUIRED`다.
+
+### 오류
+
+| 상황 | 응답 |
+|---|---|
+| 예산 소진 | `429 BUDGET_EXCEEDED` |
+| 검증 실패 | `400 INVALID_REQUEST` |
+| 인증 실패 | `403 FORBIDDEN` |
+
+예산이 소진되면 견적 단계에서 막히므로 확인 토큰 자체가 발급되지 않는다.
+
+---
+
+## `GET /api/budget`
+
+인증이 필요하다. 현재 예산 사용량을 조회한다.
+
+```json
+{
+  "calls": { "used": 3, "limit": 50, "remaining": 47, "resetsAt": "2026-09-03T00:00:00.000Z" },
+  "cost":  { "usedUsd": 0.0104, "limitUsd": 5, "remainingUsd": 4.9896, "resetsAt": "2026-10-01T00:00:00.000Z" }
+}
+```
+
+호출 수는 UTC 자정에, 비용은 UTC 기준 매월 1일에 초기화된다. **사용량은 파일에 기록되므로 서버를 재시작해도 유지된다.**
+
+---
+
 ## `POST /api/analyze/news`
 
-인증이 필요하다. Phase 1에서 이 엔드포인트는 **클라이언트가 제공한 자료를 분석하는 순수 엔진**이다. 서버가 외부에서 뉴스를 수집하지 않는다. 수집은 Phase 2에서 추가된다.
+인증과 **확인 토큰**이 필요하다. Phase 1에서 이 엔드포인트는 **클라이언트가 제공한 자료를 분석하는 순수 엔진**이다. 서버가 외부에서 뉴스를 수집하지 않는다. 수집은 Phase 2에서 추가된다.
 
 ### 요청
 
@@ -255,6 +339,8 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | `cached` | `true`면 이전 동일 요청의 결과를 재사용한 것 (LLM 미호출) |
 | `degraded` | `true`면 구조화 출력이 실패해 Markdown 폴백으로 응답한 것 |
 | `model` | 실제 사용된 모델명 |
+| `actualCostUsd` | 실제 응답 길이로 다시 계산한 비용. 캐시 히트면 `0` |
+| `budget` | 이 호출 반영 후의 예산 상태 (`GET /api/budget`과 같은 형태) |
 
 ### `degraded: true`일 때의 응답 형태
 
@@ -289,6 +375,8 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | 검증 실패 | `400 INVALID_REQUEST` |
 | 본문 크기 초과 | `413 PAYLOAD_TOO_LARGE` |
 | 프롬프트·토큰 예산 초과 | `413 INPUT_TOO_LARGE` (LLM 미호출) |
+| 확인 토큰 없음·불일치·만료 | `428 CONFIRMATION_REQUIRED` (LLM 미호출) |
+| 예산 소진 | `429 BUDGET_EXCEEDED` (LLM 미호출) |
 | 요청 과다 | `429 RATE_LIMITED` |
 | 동시 분석 과다 | `429 TOO_MANY_CONCURRENT` |
 | 중복 제거 후 자료 0건 | `422 INSUFFICIENT_DATA` |
@@ -300,6 +388,7 @@ curl -X POST http://localhost:3000/api/auth/logout \
 ### 예시
 
 ```bash
+# 1) 로그인
 TOKEN=$(curl -sS -X POST http://localhost:3000/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"password":"your-password"}' | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
@@ -321,10 +410,23 @@ curl -X POST http://localhost:3000/api/analyze/news \
       "priceChange": "+2.3%",
       "chartTrend": "20일 이동평균 상회"
     }
-  }'
+}
 ```
 
+</details>
+
 전체 시나리오는 `scripts/verify.sh`가 자동으로 검증한다.
+
+---
+
+## 예산은 2차 방어선이다
+
+이 API의 예산 한도는 **이 애플리케이션의 호출만** 막는다. OpenAI 계정의 자동 충전 자체를 막으려면 OpenAI 대시보드에서 직접 설정해야 한다.
+
+- Billing → auto-recharge 해제
+- Limits → monthly budget 설정
+
+계정 설정이 1차 방어선이고, 이 API의 예산은 2차 방어선이다.
 
 ---
 
