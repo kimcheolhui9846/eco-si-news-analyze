@@ -1,0 +1,89 @@
+# 세션 핸드오프
+
+> 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
+> **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
+
+- **최종 갱신**: 2026-09-02
+- **현재 브랜치**: `main` (구현은 `feature/backend-api`에서 시작 예정)
+- **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
+
+---
+
+## 1. 지금 어디까지 왔나
+
+| 단계 | 상태 |
+|---|---|
+| 요구사항 브레인스토밍 | ✅ 완료 |
+| Phase 1 설계 spec 작성·승인 | ✅ 완료 |
+| GitHub 비공개 저장소 생성·연동 | ✅ 완료 |
+| Phase 1 구현 계획 작성 | ✅ 완료 (12개 태스크, 138개 테스트 설계) |
+| Phase 1 구현 | ⬜ 미착수 |
+| Phase 2 (데이터 커넥터) | ⬜ 미착수 |
+| Phase 3 (프론트엔드) | ⬜ 미착수 |
+
+## 2. 다음에 할 일
+
+1. 사용자에게 실행 방식 선택 요청 (서브에이전트 주도 vs 인라인 실행)
+2. `feature/backend-api` 브랜치를 만들고 Task 1부터 순서대로 구현
+3. 각 태스크는 실패 테스트 → 구현 → 통과 확인 → 커밋 순서다. 커밋에 이 핸드오프 갱신을 포함시킨다
+
+**계획서 태스크 순서**: 1 설정로더 → 2 요청ID·에러 → 3 세션·로그인 → 4 인증·로그아웃
+→ 5 입력검증 → 6 정규화·중복제거 → 7 프롬프트 → 8 LLM·회로차단기 → 9 후처리·URL무결성
+→ 10 캐시·세마포어·rate limit → 11 분석 엔드포인트 통합 → 12 문서·검증·PR
+
+## 3. 핵심 문서
+
+| 문서 | 내용 |
+|---|---|
+| `docs/superpowers/specs/2026-09-02-phase1-core-backend-design.md` | Phase 1 설계 (승인됨) |
+| `docs/superpowers/plans/2026-09-02-phase1-core-backend.md` | Phase 1 구현 계획 — 12개 태스크, 각 단계에 실제 코드 포함 |
+| `~/Desktop/claude-code-integrated-prompt.md` | 사용자 원본 요구사항 |
+
+## 4. 반드시 지켜야 할 결정사항
+
+이유가 있어서 정한 것들이다. 바꾸기 전에 spec을 먼저 읽을 것.
+
+- **3단계 분할**: Phase 1은 코어 백엔드만. 외부 데이터 커넥터·프론트엔드는 범위 밖
+- **`/api/analyze/news`는 순수 분석 엔진**: 클라이언트가 `newsList`를 보낸다. 서버가 수집하지 않는다 (수집은 Phase 2)
+- **`sources` 배열은 서버가 생성한다**: LLM 응답 스키마에 `sources`가 없다. 출처 위조를 구조적으로 차단하기 위함
+- **URL 화이트리스트 후처리**: LLM 응답에서 입력에 없던 URL은 제거하고 `meta.fabricatedUrlsRemoved`에 카운트
+- **세션 연장은 200 응답 직전 한 곳에서만**: 미들웨어 통과·검증 실패·LLM 실패로는 연장하지 않는다. 캐시 히트는 연장한다
+- **인증 실패는 403** (401 아님 — 원본 요구사항 명시)
+- **시계·LLM 주입**: 세션 만료를 15분 기다리지 않고, 실제 API 키 없이 테스트하기 위한 유일한 방법
+- **커밋에 AI 귀속 트레일러 금지** (사용자 전역 규칙)
+- **`main`에 직접 구현 커밋 금지**
+
+## 5. 사용자 승인 이력
+
+| 시점 | 승인 내용 |
+|---|---|
+| 2026-09-02 | 3단계 분할 진행 |
+| 2026-09-02 | OpenAI 키 보유 — 최종 검증에 실제 호출 1회 포함 |
+| 2026-09-02 | 비공개 GitHub 저장소 생성 |
+| 2026-09-02 | `/api/analyze/news`를 §11대로 클라이언트 제공 방식으로 |
+| 2026-09-02 | Phase 1 설계 spec 승인 (3개 판단 사항 포함) |
+
+## 6. 환경 정보
+
+- 작업 디렉터리: `C:\Users\00\Desktop\eco_si_news_analyze`
+- Node v24.18.0 / npm 11.16.0 / Windows 11, PowerShell + Git Bash
+- git 신원: `kim cheol hui <144594976+kimcheolhui9846@users.noreply.github.com>`
+- `gh` CLI 인증됨 (`kimcheolhui9846`)
+
+## 7. 계획 단계에서 확인한 라이브러리 사실
+
+기억에 의존하면 틀리는 것들이다. 구현 중 바꾸지 말 것.
+
+- **Zod 4**: 미허용 필드 거부는 `z.strictObject({...})`. `.strict()`는 deprecated
+- **express-rate-limit 8**: 커스텀 `keyGenerator`에서 IP 폴백 시 반드시 `ipKeyGenerator(req.ip, 56)`.
+  생 `req.ip`를 쓰면 IPv6 우회가 가능하고 라이브러리가 `ERR_ERL_KEY_GEN_IPV6`로 거부한다
+- **OpenAI strict json_schema**: `strict: true`면 **모든** 속성이 `required`에 있어야 하고
+  모든 객체에 `additionalProperties: false`가 있어야 한다. 하나만 어겨도 400을 돌려받는다
+- **Express 5**: async 핸들러의 rejection을 자동으로 에러 핸들러에 전달한다. `try/catch` 래퍼 불필요
+- **`setInterval(...).unref()`**: sweeper에 반드시 필요. 없으면 프로세스가 종료되지 않아 테스트가 멈춘다
+
+## 8. 아직 해결되지 않은 것
+
+- `.env` 파일은 아직 없다. 사용자가 `OPENAI_API_KEY`와 `MY_SECRET_PASSWORD`를 직접 넣어야 실호출 검증이 가능하다
+- `gpt-4o`는 2026년 기준 구형 모델. 원본 요구사항대로 기본값 유지하되 `OPENAI_MODEL` 교체만으로 바꿀 수 있게 구현
+- 토큰 추정은 문자수/4 근사치 — 한국어에서 부정확. 보수적 마진 적용 예정
