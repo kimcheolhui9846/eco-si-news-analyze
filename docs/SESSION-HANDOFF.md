@@ -3,8 +3,8 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-02
-- **현재 브랜치**: `main` (구현은 `feature/backend-api`에서 시작 예정)
+- **최종 갱신**: 2026-09-02 (Phase 1 병합 완료)
+- **현재 브랜치**: `main` (Phase 2 시작 시 `feature/data-connectors` 분기 예정)
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
@@ -17,24 +17,23 @@
 | Phase 1 설계 spec 작성·승인 | ✅ 완료 |
 | GitHub 비공개 저장소 생성·연동 | ✅ 완료 |
 | Phase 1 구현 계획 작성 | ✅ 완료 (12개 태스크, 138개 테스트 설계) |
-| Phase 1 구현 | ✅ 완료 (164개 테스트 통과, 실호출 검증만 남음) |
-| Phase 2 (데이터 커넥터) | ⬜ 미착수 — 다음 단계 |
+| Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
+| Phase 2 (데이터 커넥터) | 🔄 착수 — 브레인스토밍부터 |
 | Phase 3 (프론트엔드) | ⬜ 미착수 |
 
 ## 2. 다음에 할 일
 
-1. **실제 OpenAI 호출 검증** — 사용자가 `.env`에 `OPENAI_API_KEY`를 넣은 뒤
-   `LLM_MODE=live`로 `./scripts/verify.sh`를 1회 실행. 비용은 수 센트 수준.
-   `meta.degraded=false`이고 `meta.model`이 실제 모델명이어야 한다.
-2. **PR 생성** — `feature/backend-api` → `main`
-3. Phase 2 브레인스토밍 (데이터 커넥터 5종)
+**Phase 2 — 실 데이터 커넥터**를 브레인스토밍부터 시작한다.
+범위: NewsProvider / FinancialDataProvider / ResearchPaperProvider /
+ExperimentDataProvider / MarketChartProvider + `/api/research` 오케스트레이션.
 
-각 태스크는 실패 테스트 → 실패 확인 → 구현 → 통과 확인 → 커밋 순서다.
-커밋에 이 핸드오프 갱신을 포함시킨다.
-
-**계획서 태스크 순서**: 1 설정로더 → 2 요청ID·에러 → 3 세션·로그인 → 4 인증·로그아웃
-→ 5 입력검증 → 6 정규화·중복제거 → 7 프롬프트 → 8 LLM·회로차단기 → 9 후처리·URL무결성
-→ 10 캐시·세마포어·rate limit → 11 분석 엔드포인트 통합 → 12 문서·검증·PR
+Phase 2에서 **반드시** 다뤄야 할 것 (Phase 1 문서에 과제로 남김):
+- **SSRF 방어** — provider가 외부 URL을 fetch하는 순간 필수.
+  도메인 허용목록, 사설 IP 대역 차단(127/8, 10/8, 172.16/12, 192.168/16, 169.254/16,
+  IPv6 링크로컬), 리다이렉트 홉마다 재검사
+- provider별 독립 회로 차단기 (현재는 LLM용 하나뿐)
+- 외부 응답 크기 제한
+- provider 호출도 비용 예산에 반영할지 판단 (외부 API도 유료일 수 있다)
 
 ## 3. 핵심 문서
 
@@ -102,6 +101,9 @@
 
 ## 8. 아직 해결되지 않은 것
 
-- `.env` 파일은 아직 없다. 사용자가 `OPENAI_API_KEY`와 `MY_SECRET_PASSWORD`를 직접 넣어야 실호출 검증이 가능하다
+- **실제 OpenAI 호출 검증이 아직 0회다.** mock 모드로만 검증하고 병합했다
+  (2026-09-02 사용자가 "나중에 맞춰가고 머지하자"고 결정). `.env`에 실제 키를 넣고
+  `LLM_MODE=live ./scripts/verify.sh`를 1회 돌려야 구조화 출력이 실모델에서
+  동작하는지 확인된다. `meta.degraded=false`여야 정상
 - `gpt-4o`는 2026년 기준 구형 모델. 원본 요구사항대로 기본값 유지하되 `OPENAI_MODEL` 교체만으로 바꿀 수 있게 구현
 - 토큰 추정은 문자수/4 근사치 — 한국어에서 부정확. 보수적 마진 적용 예정
