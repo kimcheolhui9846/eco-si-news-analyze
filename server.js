@@ -1,11 +1,12 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import pino from 'pino';
+import { z } from 'zod';
 
 // ─── 에러 타입 ───
 
@@ -107,6 +108,71 @@ export function loadConfig(overrides = {}) {
   });
 }
 
+// ─── 세션 저장소 ───
+
+export function createSessionStore({ clock, ttlMs }) {
+  const sessions = new Map();
+  const isExpired = (s) => clock.now() >= s.expiresAt;
+
+  return {
+    create() {
+      const now = clock.now();
+      const session = {
+        // 256비트. base64url이라 쿠키·헤더에 그대로 실을 수 있다.
+        token: randomBytes(32).toString('base64url'),
+        authenticated: true,
+        createdAt: now,
+        expiresAt: now + ttlMs,
+        lastActivityAt: now,
+      };
+      sessions.set(session.token, session);
+      return session;
+    },
+
+    get(token) {
+      if (!token) return undefined;
+      const session = sessions.get(token);
+      if (!session) return undefined;
+      // 만료된 세션은 조회 시점에 즉시 제거한다.
+      if (isExpired(session)) {
+        sessions.delete(token);
+        return undefined;
+      }
+      return session;
+    },
+
+    destroy(token) {
+      return token ? sessions.delete(token) : false;
+    },
+
+    touch(session) {
+      const now = clock.now();
+      session.expiresAt = now + ttlMs;
+      session.lastActivityAt = now;
+    },
+
+    sweep() {
+      let removed = 0;
+      for (const [token, session] of sessions) {
+        if (isExpired(session)) { sessions.delete(token); removed += 1; }
+      }
+      return removed;
+    },
+
+    size: () => sessions.size,
+  };
+}
+
+/**
+ * 길이가 달라도 예외를 던지지 않는 상수시간 비교.
+ * timingSafeEqual은 버퍼 길이가 다르면 throw하므로, 양쪽을 SHA-256으로 32바이트에 고정한다.
+ */
+function safeCompare(a, b) {
+  const ha = createHash('sha256').update(String(a)).digest();
+  const hb = createHash('sha256').update(String(b)).digest();
+  return timingSafeEqual(ha, hb);
+}
+
 // ─── 앱 팩토리 ───
 
 export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
@@ -138,6 +204,44 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
     });
   });
 
+  // ─── 세션과 인증 ───
+
+  const sessions = createSessionStore({ clock: now, ttlMs: config.sessionTtlMs });
+
+  // 만료 세션 주기 청소. unref()가 없으면 프로세스가 종료되지 않아 테스트가 멈춘다.
+  const sweeper = setInterval(() => sessions.sweep(), 60_000);
+  sweeper.unref();
+
+  const jsonBody = express.json({ limit: config.maxRequestBodyBytes });
+  const loginSchema = z.strictObject({ password: z.string().min(1).max(200) });
+
+  const setSessionCookie = (res, session) => {
+    res.cookie('session', session.token, {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: config.isProd,   // 로컬 HTTP에서 Secure를 붙이면 쿠키가 전송되지 않는다
+      path: '/',
+      maxAge: config.sessionTtlMs,
+    });
+  };
+
+  app.post('/api/auth/login', jsonBody, (req, res) => {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ApiError(400, 'INVALID_REQUEST', '요청 데이터가 올바르지 않습니다.');
+    }
+
+    if (!safeCompare(parsed.data.password, config.secretPassword)) {
+      req.log.warn('로그인 실패');   // 비밀번호 값은 어떤 형태로도 남기지 않는다
+      throw new ApiError(403, 'INVALID_CREDENTIALS', '인증에 실패했습니다.');
+    }
+
+    const session = sessions.create();
+    setSessionCookie(res, session);
+    req.log.info('로그인 성공');     // 토큰은 로그에 남기지 않는다
+    res.json({ token: session.token, expiresAt: new Date(session.expiresAt).toISOString() });
+  });
+
   // 테스트가 라우트를 꽂을 수 있는 지점. 반드시 404 핸들러보다 앞이어야 한다.
   if (extraRoutes) extraRoutes(app, {});
 
@@ -166,7 +270,7 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
     res.status(status).json({ error: { code, message, requestId: req.requestId } });
   });
 
-  return { app, config, clock: now, llm, logger };
+  return { app, config, clock: now, llm, sessions, logger };
 }
 
 // ─── 직접 실행될 때만 포트를 연다 ───
