@@ -298,6 +298,11 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       }));
 
       const marketData = market?.marketData;
+      // 차트용 시계열. 분석 프롬프트에는 넣지 않는다 — 토큰만 늘고
+      // cacheKey가 바뀌면 확인 토큰 흐름이 깨진다.
+      const marketSeries = market
+        ? { ...market.series, indicators: market.indicators }
+        : undefined;
 
       // 견적을 내려면 분석과 똑같이 정규화·조립해야 한다.
       // cacheKey가 일치해야 확인 토큰이 통하기 때문이다.
@@ -323,6 +328,7 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
         requestId: req.requestId,
         newsList,
         marketData,
+        marketSeries,
         collected: {
           collectedAt,
           resolvedSymbol: resolved.symbol,

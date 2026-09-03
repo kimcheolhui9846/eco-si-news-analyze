@@ -20,11 +20,11 @@
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
 | Phase 2a (뉴스·시장 커넥터) | ✅ 완료 — 289개 테스트, 실네트워크 검증 통과 |
 | Phase 2b (재무·논문·실험) | ⬜ 미착수 — 다음 단계 |
-| Phase 3 (프론트엔드) | 🔄 구현 중 (Task 1/8 완료 — 툴체인·순수함수) |
+| Phase 3 (프론트엔드) | 🔄 구현 중 (Task 2/8 완료 — marketSeries) |
 
 ## 2. 다음에 할 일
 
-**Phase 3 구현** — Task 2 (marketSeries 백엔드)부터 이어서 진행한다.
+**Phase 3 구현** — Task 3 (API 클라이언트)부터 이어서 진행한다.
 계획서: `docs/superpowers/plans/2026-09-03-phase3-frontend.md`
 
 태스크 순서: 1 툴체인·순수함수 → 2 marketSeries(백엔드) → 3 API클라이언트

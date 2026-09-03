@@ -246,3 +246,52 @@ test('연속 실패 후 회로가 열리면 호출하지 않는다', async () =>
   await p.fetch({ symbol: 'SYM9', assetType: 'stock', range: '1mo' });
   assert.equal(http.calls.length, before, '회로가 열렸는데 계속 호출했다');
 });
+
+// ─── 가격 시계열 (Phase 3) ───
+
+test('주식 조회가 시계열을 함께 반환한다', async () => {
+  const r = await provider(makeHttp(YAHOO)).fetch({ symbol: 'NVDA', assetType: 'stock', range: '1mo' });
+
+  assert.ok(r.series, 'series가 없다');
+  assert.equal(r.series.symbol, 'NVDA');
+  assert.equal(r.series.currency, 'USD');
+  assert.ok(r.series.points.length > 1);
+});
+
+test('시계열 각 점이 시각과 종가를 갖는다', async () => {
+  const r = await provider(makeHttp(YAHOO)).fetch({ symbol: 'NVDA', assetType: 'stock', range: '1mo' });
+  const p = r.series.points[0];
+
+  assert.match(p.t, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(typeof p.c, 'number');
+  assert.ok(Number.isFinite(p.c));
+});
+
+test('시계열 점 수가 지표의 점 수와 같다', async () => {
+  // 둘이 다르면 차트와 이동평균이 어긋난다.
+  const r = await provider(makeHttp(YAHOO)).fetch({ symbol: 'NVDA', assetType: 'stock', range: '1mo' });
+  assert.equal(r.series.points.length, r.indicators.points);
+});
+
+test('종가가 null인 지점은 시계열에서 빠진다', async () => {
+  const withGaps = JSON.stringify({
+    chart: { result: [{
+      meta: { symbol: 'X', currency: 'USD', regularMarketPrice: 110 },
+      timestamp: [1756000000, 1756086400, 1756172800],
+      indicators: { quote: [{ close: [100, null, 110], volume: [10, null, 20] }] },
+    }] },
+  });
+  const r = await provider(makeHttp({ 'query1.finance.yahoo.com/v8': withGaps }))
+    .fetch({ symbol: 'X', assetType: 'stock', range: '1mo' });
+
+  assert.equal(r.series.points.length, 2);
+  assert.deepEqual(r.series.points.map((p) => p.c), [100, 110]);
+});
+
+test('코인 조회도 시계열을 반환한다', async () => {
+  const r = await provider(makeHttp(CRYPTO)).fetch({ symbol: 'bitcoin', assetType: 'crypto', range: '1mo' });
+
+  assert.equal(r.series.symbol, 'bitcoin');
+  assert.equal(r.series.currency, 'USD');
+  assert.ok(r.series.points.length > 1);
+});
