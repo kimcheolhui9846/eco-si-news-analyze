@@ -3,8 +3,8 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-03 (Phase 3 구현 완료)
-- **현재 브랜치**: `feature/frontend-ui`
+- **최종 갱신**: 2026-09-03 (Phase 2b spec 확정 — KCI·언어 가드 반영)
+- **현재 브랜치**: `feature/research-connectors`
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
@@ -19,17 +19,28 @@
 | Phase 1 구현 계획 작성 | ✅ 완료 (12개 태스크, 138개 테스트 설계) |
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
 | Phase 2a (뉴스·시장 커넥터) | ✅ 완료 — 289개 테스트, 실네트워크 검증 통과 |
-| Phase 2b (재무·논문·실험) | ⬜ 미착수 — 다음 단계 |
+| Phase 2b (재무·논문·실험) | 🟡 spec 작성·커밋 완료 (`ae47efe`) — 사용자 검토 대기 |
 | Phase 3 (프론트엔드) | ✅ 완료 — 379개 테스트, 실브라우저 전 과정 확인 |
 
 ## 2. 다음에 할 일
 
-1. Phase 3 PR 검토·병합
-2. **Phase 2b** 브레인스토밍 — 재무지표·논문·실험 provider.
-   프롬프트 구획·응답 스키마·출처 타입을 모두 확장해야 하고,
-   프론트엔드에 `FinancialMetrics`·`ResearchList`·`ExperimentStatus` 3개 컴포넌트를 추가해야 한다.
-   후보 소스: DART(한국 재무), arXiv·Semantic Scholar(논문), ClinicalTrials.gov(임상)
-3. **실제 OpenAI 호출 검증** — 아직 0회다 (§8 참조)
+1. **사용자가 Phase 2b spec을 검토한다** → 승인되면 `writing-plans`로 구현 계획 작성
+2. **KCI API 키 발급** — 사용자가 open.kci.go.kr에서 직접 받는다 (무료).
+   `.env`의 `KCI_API_KEY`에 넣는다. **키가 없어도 구현은 진행 가능하다** —
+   한국어 질의의 논문만 '자료 부족'으로 나가고 나머지는 전부 동작한다
+3. Phase 2b 구현 → PR
+4. **실제 OpenAI 호출 검증** — 아직 0회다 (§8 참조)
+
+### Phase 2b 구현 계획의 첫 태스크가 정해져 있다
+
+KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 수 없었다
+(spec §2.2.2). 키를 받는 즉시 아래 4단계를 돌리고, 그 결과에 따라 이후
+태스크 내용이 달라진다.
+
+1. `title=battery` (ASCII) — API 자체가 도는지
+2. `title=배터리` UTF-8 퍼센트 인코딩 — 되면 그대로 간다
+3. 0건이면 EUC-KR 퍼센트 인코딩(`%B9%E8%C5%CD%B8%AE`)
+4. 둘 다 실패하면 한계로 문서화하고 언어 가드에서 KCI도 제외
 
 ## 3. 핵심 문서
 
@@ -39,6 +50,8 @@
 | `docs/superpowers/plans/2026-09-02-phase1-core-backend.md` | Phase 1 구현 계획 (완료) |
 | `docs/superpowers/specs/2026-09-02-phase2a-data-connectors-design.md` | Phase 2a 설계 (승인됨) |
 | `docs/superpowers/plans/2026-09-03-phase2a-data-connectors.md` | Phase 2a 구현 계획 — 9개 태스크 |
+| `docs/superpowers/specs/2026-09-03-phase3-frontend-design.md` | Phase 3 설계 (완료) |
+| `docs/superpowers/specs/2026-09-03-phase2b-research-connectors-design.md` | **Phase 2b 설계 — 검토 대기** |
 | `~/Desktop/claude-code-integrated-prompt.md` | 사용자 원본 요구사항 |
 
 ## 4. 반드시 지켜야 할 결정사항
@@ -121,9 +134,35 @@
 
 ## 8. 아직 해결되지 않은 것
 
+- **KCI가 한국어 질의를 받는지 확인되지 않았다.** 키 발급 후 §2의 4단계로
+  검증한다. 되는 것으로 가정하고 구현하면 안 된다
+
 - **실제 OpenAI 호출 검증이 아직 0회다.** mock 모드로만 검증하고 병합했다
   (2026-09-02 사용자가 "나중에 맞춰가고 머지하자"고 결정). `.env`에 실제 키를 넣고
   `LLM_MODE=live ./scripts/verify.sh`를 1회 돌려야 구조화 출력이 실모델에서
   동작하는지 확인된다. `meta.degraded=false`여야 정상
 - `gpt-4o`는 2026년 기준 구형 모델. 원본 요구사항대로 기본값 유지하되 `OPENAI_MODEL` 교체만으로 바꿀 수 있게 구현
 - 토큰 추정은 문자수/4 근사치 — 한국어에서 부정확. 보수적 마진 적용 예정
+
+---
+
+## 9. Phase 2b spec에서 실측으로 뒤집힌 것들
+
+조사가 설계를 바꾼 지점이다. 다시 조사하지 않도록 남긴다.
+
+| 처음 가정 | 실측 결과 |
+|---|---|
+| Yahoo로 재무를 받는다 | `401 Invalid Crumb` — 쿠키+crumb 인증 필요. SEC EDGAR로 선회 |
+| SEC `companyfacts`를 쓴다 | **4MB** — 응답 상한 2MB 초과. `companyconcept`(42KB)로 변경 |
+| Crossref로 논문을 받는다 | 초록이 5건 중 **0건**. Europe PMC + arXiv로 대체 |
+| Semantic Scholar 병용 | 키 없이 `429`. 탈락 |
+| 한국어 질의는 0건이 나온다 | **무관한 실존 논문이 돌아온다.** 기존 방어를 전부 통과하는 오염. 언어 가드 필수 |
+| RISS·DBpia에서 국내 논문 | RISS 공개 API 없음(404), DBpia 구독 기반. KCI OpenAPI가 유일한 정당 경로 |
+| DART는 키가 필요해서 탈락 | KCI 키를 쓰기로 한 이상 무효한 사유. 범위 문제라 **Phase 2c 후보**로 남김 |
+
+### 잊으면 다시 당하는 두 가지
+
+- **오류를 HTTP 상태코드로 판정하면 안 된다.** KISTI ScienceON은 `HTTP 200`에
+  본문 `statusCode 400`을 싣는다. KCI도 본문 `<resultMsg>`로 판정한다
+- **`cacheKey`에 새 자료를 넣지 않으면 확인 토큰이 뚫린다** (spec §4.5).
+  뉴스만으로 견적받고 논문 20건을 실어 실행하는 우회가 성립한다
