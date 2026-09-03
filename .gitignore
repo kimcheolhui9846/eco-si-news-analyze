@@ -30,3 +30,6 @@ Thumbs.db
 # 임시
 *.tmp
 .cache/
+
+# 브레인스토밍 시각 도구 세션 파일
+.superpowers/
