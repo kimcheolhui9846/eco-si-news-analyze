@@ -18,13 +18,13 @@
 | GitHub 비공개 저장소 생성·연동 | ✅ 완료 |
 | Phase 1 구현 계획 작성 | ✅ 완료 (12개 태스크, 138개 테스트 설계) |
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
-| Phase 2a (뉴스·시장 커넥터) | 🔄 구현 중 (Task 2/9 완료 — http 클라이언트) |
+| Phase 2a (뉴스·시장 커넥터) | 🔄 구현 중 (Task 3/9 완료 — RSS 파싱) |
 | Phase 2b (재무·논문·실험) | ⬜ 미착수 |
 | Phase 3 (프론트엔드) | ⬜ 미착수 |
 
 ## 2. 다음에 할 일
 
-**Phase 2a 구현** — Task 3 (RSS 파싱)부터 이어서 진행한다.
+**Phase 2a 구현** — Task 4 (뉴스 provider)부터 이어서 진행한다.
 계획서: `docs/superpowers/plans/2026-09-03-phase2a-data-connectors.md`
 
 태스크 순서: 1 lib분리 → 2 http클라이언트 → 3 RSS파싱 → 4 뉴스provider
@@ -93,6 +93,10 @@
 - **`fast-xml-parser`는 CDATA를 자동으로 벗기고 외부 엔티티(XXE)를 거부한다** — XXE 방어를 따로 짤 필요가 없다
 - **Google News RSS의 description에는 본문이 없다** — 제목 반복 앵커뿐. 검색은 되지만 본문이 없다
 - **Yahoo 티커 검색은 한글 질의에 400을 반환한다** — 한글 회사명은 별칭 사전으로만 해석 가능
+- **소스에 리터럴 제어문자를 넣지 않는다** — `` 형식 이스케이프를 쓴다. 리터럴 NUL이 들어가면
+  git이 파일을 바이너리로 취급해 diff가 망가진다 (Phase 1에서 겪음)
+- **bash heredoc은 `\`를 `\`로 축약한다** — python 스크립트에서 백슬래시 이스케이프를 쓰려면
+  `chr(92)`로 조립해야 한다 (Task 3에서 겪음)
 - **supertest 요청은 지연 실행이다** — `.then()`을 걸어야 실제로 전송된다 (Phase 1에서 겪음)
 - **테스트 실행 스크립트**: `node --test tests/`는 Node 24/Windows에서 `tests`를 모듈 경로로
   해석해 `MODULE_NOT_FOUND`가 난다. `node --test "tests/**/*.test.js"` 글롭을 써야 한다.

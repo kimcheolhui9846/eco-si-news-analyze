@@ -44,6 +44,8 @@ export {
 } from './lib/cost-defense.js';
 export { createBudgetTracker, estimateCostUsd } from './lib/budget.js';
 export { createHttpClient } from './lib/http.js';
+export { parseRssFeed } from './lib/providers/rss.js';
+export { FEEDS, tickerFeed, buildFeedUrl, feedsFor } from './lib/providers/feeds.js';
 
 // ─── 앱 팩토리 ───
 
