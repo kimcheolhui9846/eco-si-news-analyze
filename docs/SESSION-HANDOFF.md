@@ -20,11 +20,11 @@
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
 | Phase 2a (뉴스·시장 커넥터) | ✅ 완료 — 289개 테스트, 실네트워크 검증 통과 |
 | Phase 2b (재무·논문·실험) | ⬜ 미착수 — 다음 단계 |
-| Phase 3 (프론트엔드) | 🔄 구현 중 (Task 4/8 완료 — 차트 좌표) |
+| Phase 3 (프론트엔드) | 🔄 구현 중 (Task 5/8 완료 — 표시 컴포넌트) |
 
 ## 2. 다음에 할 일
 
-**Phase 3 구현** — Task 5 (표시 컴포넌트)부터 이어서 진행한다.
+**Phase 3 구현** — Task 6 (화면·상태기계)부터 이어서 진행한다.
 계획서: `docs/superpowers/plans/2026-09-03-phase3-frontend.md`
 
 태스크 순서: 1 툴체인·순수함수 → 2 marketSeries(백엔드) → 3 API클라이언트
@@ -102,6 +102,10 @@
 - **jsdom은 `^29`로 고정한다** — `global-jsdom@29`의 peer가 `>=29 <30`이라 `jsdom@30`을 넣으면 ERESOLVE로 설치 실패
 - **JSX 테스트에는 `tsx` 로더가 필요하다** — `node --import tsx --test`. 루트 `tsconfig.json`에
   `"jsx": "react-jsx"`가 없으면 classic 런타임으로 변환돼 `React is not defined`
+- **JSX를 쓰는 테스트 파일은 `.test.jsx`여야 한다** — tsx는 `.jsx`만 변환한다. `.test.js`에 JSX를
+  넣으면 `SyntaxError: Unexpected token '<'`. 글롭도 `"tests/**/*.test.{js,jsx}"`로 확장했다
+- **`@testing-library`의 자동 cleanup이 node:test에는 붙지 않는다** — `afterEach(cleanup)`을
+  직접 등록해야 한다. 없으면 이전 렌더가 DOM에 쌓여 `getByText`가 중복으로 실패한다
 - **정적 서빙 경로는 `fileURLToPath`를 쓴다** — `URL.pathname`은 Windows에서 `/C:/...`가 되어 fs가 못 읽는다
 - **supertest 요청은 지연 실행이다** — `.then()`을 걸어야 실제로 전송된다 (Phase 1에서 겪음)
 - **테스트 실행 스크립트**: `node --test tests/`는 Node 24/Windows에서 `tests`를 모듈 경로로
