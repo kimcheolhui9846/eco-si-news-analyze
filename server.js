@@ -1,5 +1,7 @@
 import 'dotenv/config';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { randomUUID, randomBytes } from 'node:crypto';
 import express from 'express';
 import helmet from 'helmet';
@@ -568,6 +570,18 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
 
   // 테스트가 라우트를 꽂을 수 있는 지점. 반드시 404 핸들러보다 앞이어야 한다.
   if (extraRoutes) extraRoutes(app, { requireAuth, jsonBody });
+
+  // ─── 빌드된 프론트엔드 서빙 ───
+  // API 라우트가 모두 등록된 뒤에 둔다. fileURLToPath를 써야 한다 —
+  // URL.pathname은 Windows에서 '/C:/...'가 되어 existsSync가 실패한다.
+  const clientDir = fileURLToPath(new URL('./client/dist/', import.meta.url));
+  if (existsSync(join(clientDir, 'index.html'))) {
+    app.use(express.static(clientDir));
+    // SPA 폴백. /api/* 는 위에서 이미 처리됐으므로 여기 오면 안 된다.
+    app.get(/^(?!\/api\/).*/, (req, res) => {
+      res.sendFile(join(clientDir, 'index.html'));
+    });
+  }
 
   // ─── 에러 핸들러 (반드시 모든 라우터 뒤) ───
 

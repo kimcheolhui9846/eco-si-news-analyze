@@ -3,7 +3,7 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-03 (Phase 3 계획 작성 완료)
+- **최종 갱신**: 2026-09-03 (Phase 3 구현 완료)
 - **현재 브랜치**: `feature/frontend-ui`
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
@@ -20,15 +20,16 @@
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
 | Phase 2a (뉴스·시장 커넥터) | ✅ 완료 — 289개 테스트, 실네트워크 검증 통과 |
 | Phase 2b (재무·논문·실험) | ⬜ 미착수 — 다음 단계 |
-| Phase 3 (프론트엔드) | 🔄 구현 중 (Task 7/8 완료 — 스타일) |
+| Phase 3 (프론트엔드) | ✅ 완료 — 379개 테스트, 실브라우저 전 과정 확인 |
 
 ## 2. 다음에 할 일
 
-**Phase 3 구현** — Task 8 (정적 서빙·문서·PR)부터 이어서 진행한다.
-계획서: `docs/superpowers/plans/2026-09-03-phase3-frontend.md`
-
-태스크 순서: 1 툴체인·순수함수 → 2 marketSeries(백엔드) → 3 API클라이언트
-→ 4 차트좌표 → 5 컴포넌트 → 6 화면·상태기계 → 7 스타일 → 8 정적서빙·문서·PR
+1. Phase 3 PR 검토·병합
+2. **Phase 2b** 브레인스토밍 — 재무지표·논문·실험 provider.
+   프롬프트 구획·응답 스키마·출처 타입을 모두 확장해야 하고,
+   프론트엔드에 `FinancialMetrics`·`ResearchList`·`ExperimentStatus` 3개 컴포넌트를 추가해야 한다.
+   후보 소스: DART(한국 재무), arXiv·Semantic Scholar(논문), ClinicalTrials.gov(임상)
+3. **실제 OpenAI 호출 검증** — 아직 0회다 (§8 참조)
 
 ## 3. 핵심 문서
 

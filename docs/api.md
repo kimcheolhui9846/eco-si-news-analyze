@@ -198,6 +198,17 @@ curl -X POST http://localhost:3000/api/auth/logout \
     "priceChange": "5.23%",
     "chartTrend": "해당 기간(22개 거래일) 종가는 5.23% 상승했습니다. ..."
   },
+  "marketSeries": {
+    "symbol": "NVDA",
+    "currency": "USD",
+    "points": [
+      { "t": "2026-08-04T13:30:00.000Z", "c": 206.64, "v": 12345600 }
+    ],
+    "indicators": {
+      "ma5": 218.68, "ma20": 219.03, "high": 227.98, "low": 206.64,
+      "changePct": 5.23, "volatilityPct": 2.80, "points": 22
+    }
+  },
   "collected": {
     "collectedAt": "2026-09-03T01:20:00.000Z",
     "resolvedSymbol": "NVDA",
@@ -229,6 +240,21 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | `newsCount` | 중복 제거 후 실제 자료 수 |
 | `headlineOnlyCount` | **제목만 확보된 자료 수.** 분석 깊이의 한계를 나타낸다 |
 | `degraded` | 실패했거나 빠진 provider와 사유 |
+
+### `marketSeries` — 차트용 시계열
+
+프론트엔드가 차트를 그리는 데 쓴다. 시장 데이터를 못 가져왔으면 `marketData`와 함께 `undefined`다.
+
+| 필드 | 의미 |
+|---|---|
+| `points[].t` | ISO 8601 시각 |
+| `points[].c` | 종가. 값이 없는 거래일은 배열에서 빠진다 |
+| `points[].v` | 거래량. 없으면 `null` |
+| `indicators` | 이동평균·최고·최저·등락률·변동성. 계산 불가한 값은 `null` |
+
+`points.length`는 `indicators.points`와 항상 같다 — 차트와 이동평균이 어긋나지 않게 하기 위함이다.
+
+**`marketSeries`는 분석 프롬프트에 포함되지 않는다.** 숫자 수십 쌍은 토큰만 늘리고 `chartTrend` 문장이 이미 그 내용을 요약한다. `cacheKey`에도 영향을 주지 않으므로 확인 토큰 흐름이 그대로 유지된다.
 
 ### 부분 실패
 

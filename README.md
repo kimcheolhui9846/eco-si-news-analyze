@@ -16,11 +16,22 @@
 |---|---|---|
 | **Phase 1** | 인증·세션, API 비용 방어, 분석 엔진, 예산 통제 | ✅ 완료 |
 | **Phase 2a** | 뉴스·시장 데이터 커넥터, `/api/research/collect`, SSRF 방어 | ✅ 완료 |
+| **Phase 3** | React 프론트엔드 — 로그인·검색·검토·보고서 4화면 | ✅ 완료 |
 | Phase 2b | 재무지표·논문·실험 provider | 미착수 |
-| Phase 3 | React 프론트엔드 12개 컴포넌트 | 미착수 |
 
-**검색어 하나로 뉴스와 시장 데이터를 모아 분석까지 갈 수 있다.**
+**브라우저에서 검색어 하나로 뉴스와 시장 데이터를 모아 분석 보고서까지 볼 수 있다.**
 `/api/analyze/news`는 여전히 클라이언트가 자료를 직접 넣는 경로도 지원한다.
+
+### 화면 흐름
+
+```
+로그인 → 검색 → (수집 중) → 검토 → (분석 중) → 보고서
+                              │                    │
+                    비용 승인 지점            차트 + 분석 + 출처
+```
+
+**검토 화면이 돈을 쓸지 정하는 유일한 지점이다.** 하단 고정 바에 예상 비용, 남은 예산,
+그리고 제목만 확보된 자료 수가 함께 표시된다. 승인 전에는 LLM이 호출되지 않는다.
 
 ---
 
@@ -112,7 +123,7 @@ OPENAI_API_KEY=sk-...
 | `PRICE_INPUT_PER_1M` / `PRICE_OUTPUT_PER_1M` | `2.5` / `10` | 모델 단가($/100만 토큰) |
 | `ASSUMED_OUTPUT_TOKENS` | `2000` | 견적 시 가정하는 출력 토큰 수 |
 | `CONFIRM_TOKEN_TTL_MS` | `300000` | 확인 토큰 유효 시간 |
-| `CORS_ORIGIN` | `http://localhost:3000` | Phase 3에서 사용 |
+| `CORS_ORIGIN` | `http://localhost:3000` | **현재 미사용** — 동일 출처라 CORS 미들웨어를 붙이지 않았다 |
 | `EXTERNAL_TIMEOUT_MS` | `10000` | 외부 API 타임아웃 |
 | `MAX_EXTERNAL_RESPONSE_BYTES` | `2000000` | 외부 응답 크기 상한 |
 | `EXTERNAL_ALLOWLIST` | (6개 호스트) | **허용목록. 여기 없는 호스트로는 요청이 나가지 않는다** |
@@ -128,10 +139,22 @@ OPENAI_API_KEY=sk-...
 ## 실행
 
 ```bash
-npm start        # 서버 기동
-npm run dev      # 파일 변경 시 자동 재시작
-npm test         # 테스트 (API 키 불필요)
+npm run build:client   # 프론트엔드 빌드 (최초 1회, 또는 UI 변경 후)
+npm start              # 서버 기동 → http://localhost:3000
+npm test               # 테스트 (API 키·네트워크 불필요)
 ```
+
+빌드하면 Express가 프론트엔드를 함께 서빙한다. **동일 출처라 CORS 설정이 필요 없다.**
+
+프론트엔드 개발 중에는 Vite dev 서버를 따로 띄운다.
+
+```bash
+npm start        # 터미널 1 — 백엔드 (3000)
+npm run dev:client   # 터미널 2 — Vite (5173, /api를 3000으로 프록시)
+```
+
+> **`client` 디렉터리에서 직접 `npm install`하지 말 것.** npm workspace로 묶여 있어
+> 루트에서 설치해야 한다. client에 React 사본이 생기면 훅이 깨진다.
 
 **API 키 없이 전체 동작을 보고 싶다면:**
 
@@ -372,7 +395,7 @@ rate limit 3종(IP·세션·로그인), 동시 실행 세마포어, TTL+LRU 캐�
 npm test
 ```
 
-**289개 테스트가 실제 API 키와 외부 네트워크 없이 전부 통과한다.** `LLM_MODE=mock`, 주입된 시계, 주입된 http 클라이언트와 `tests/fixtures/`의 실제 API 응답을 쓴다.
+**379개 테스트가 실제 API 키와 외부 네트워크 없이 전부 통과한다.** `LLM_MODE=mock`, 주입된 시계, 주입된 http 클라이언트와 `tests/fixtures/`의 실제 API 응답을 쓴다.
 
 | 파일 | 범위 |
 |---|---|
@@ -392,6 +415,14 @@ npm test
 | `tests/indicators.test.js` | 차트 지표 계산, 추세 문장 |
 | `tests/market-provider.test.js` | 시세 조회, 심볼 해석, 별칭 사전 |
 | `tests/research.test.js` | 수집 엔드포인트 통합 |
+| `tests/static.test.js` | 정적 서빙, SPA 폴백이 API를 삼키지 않는지 |
+| `tests/client/errors.test.js` | 에러 코드 → 메시지·다음 화면 매핑 |
+| `tests/client/format.test.js` | 날짜·통화·비용 표기 |
+| `tests/client/chart.test.js` | 차트 좌표 계산, 이동평균 |
+| `tests/client/api-client.test.js` | fetch 래퍼, 토큰 미저장 |
+| `tests/client/components.test.jsx` | 컴포넌트 렌더링, **XSS 방어** |
+| `tests/client/pages.test.jsx` | 화면별 동작 |
+| `tests/client/app-flow.test.jsx` | 전체 흐름과 오류 복구 |
 
 실행 중인 서버에 대한 종단 검증:
 
