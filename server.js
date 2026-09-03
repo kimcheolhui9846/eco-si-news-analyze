@@ -43,6 +43,7 @@ export {
   createTtlCache, createSemaphore, createInflightMap, hashRequest,
 } from './lib/cost-defense.js';
 export { createBudgetTracker, estimateCostUsd } from './lib/budget.js';
+export { createHttpClient } from './lib/http.js';
 
 // ─── 앱 팩토리 ───
 
