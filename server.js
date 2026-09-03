@@ -11,7 +11,7 @@ import { ApiError } from './lib/errors.js';
 import { loadConfig } from './lib/config.js';
 import { createLogger } from './lib/logger.js';
 import { createSessionStore, safeCompare } from './lib/session.js';
-import { buildAnalyzeSchema, formatZodError } from './lib/validation.js';
+import { buildAnalyzeSchema, buildResearchSchema, formatZodError } from './lib/validation.js';
 import { normalizeNewsList } from './lib/normalize.js';
 import { SYSTEM_PROMPT, buildUserPrompt, estimateTokens } from './lib/prompt.js';
 import {
@@ -20,9 +20,12 @@ import {
 import { stripFabricatedUrls, parseAnalysis, buildSources } from './lib/postprocess.js';
 import {
   createTtlCache, createSemaphore, createInflightMap, hashRequest,
-  makeLoginLimiter, makeAnalyzeLimiter, makeSessionLimiter,
+  makeLoginLimiter, makeAnalyzeLimiter, makeSessionLimiter, makeResearchLimiter,
 } from './lib/cost-defense.js';
 import { createBudgetTracker, estimateCostUsd } from './lib/budget.js';
+import { createHttpClient } from './lib/http.js';
+import { createRssNewsProvider } from './lib/providers/news.js';
+import { createMarketProvider } from './lib/providers/market.js';
 
 // 기존 테스트가 '../server.js'에서 import하던 심볼을 그대로 유지한다.
 export { ApiError } from './lib/errors.js';
@@ -54,7 +57,7 @@ export { createMarketProvider } from './lib/providers/market.js';
 
 // ─── 앱 팩토리 ───
 
-export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
+export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
   const config = loadConfig(env);
   const now = clock ?? { now: () => Date.now() };
 
@@ -209,6 +212,138 @@ export function createApp({ env = {}, clock, llm, extraRoutes } = {}) {
   app.get('/api/budget', requireAuth, (req, res) => {
     res.json(budget.snapshot());
   });
+
+
+  // ─── 데이터 커넥터 ───
+
+  const httpClient = http ?? createHttpClient({
+    allowlist: config.externalAllowlist,
+    timeoutMs: config.externalTimeoutMs,
+    maxBytes: config.maxExternalResponseBytes,
+  });
+
+  const makeProviderBreaker = () => createCircuitBreaker({
+    threshold: config.providerBreakerThreshold,
+    cooldownMs: config.providerBreakerCooldownMs,
+    clock: now,
+  });
+
+  const newsProvider = createRssNewsProvider({
+    http: httpClient,
+    cache: createTtlCache({ ttlMs: config.newsCacheTtlMs, maxEntries: 100, clock: now }),
+    clock: now,
+    makeBreaker: makeProviderBreaker,
+  });
+
+  const marketProvider = createMarketProvider({
+    http: httpClient,
+    cache: createTtlCache({ ttlMs: config.marketCacheTtlMs, maxEntries: 100, clock: now }),
+    clock: now,
+    makeBreaker: makeProviderBreaker,
+  });
+
+  // ─── 수집 엔드포인트 ───
+
+  const researchSchema = buildResearchSchema(config);
+
+  app.post(
+    '/api/research/collect',
+    makeResearchLimiter(config),
+    jsonBody,
+    requireAuth,
+    async (req, res) => {
+      const parsed = researchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
+      }
+
+      const { query, symbol, assetType, lang = 'ko', range = '1mo', maxNews = 10 } = parsed.data;
+
+      const resolved = await marketProvider.resolveSymbol({ query, symbol, assetType });
+
+      // 뉴스와 시장 데이터를 병렬로 가져온다. 하나가 느려도 다른 하나를 기다리게 하지 않는다.
+      const [news, market] = await Promise.all([
+        newsProvider.search({ query, lang, limit: maxNews, symbol: resolved.symbol }),
+        marketProvider.fetch({ symbol: resolved.symbol, assetType: resolved.assetType, range }),
+      ]);
+
+      // 뉴스가 없으면 분석이 성립하지 않는다.
+      if (news.items.length === 0) {
+        // 실패 원인을 로그에 남긴다. 남기지 않으면 왜 비었는지 알 수 없다.
+        req.log.warn(
+          { degraded: news.degraded, feedsUsed: news.feedsUsed, lang, symbol: resolved.symbol },
+          '뉴스 수집 결과가 비었다',
+        );
+        throw new ApiError(502, 'COLLECTION_FAILED', '분석할 뉴스를 수집하지 못했습니다. 검색어를 바꿔 다시 시도해 주세요.');
+      }
+
+      const degraded = news.degraded.map((d) => ({ provider: 'news', ...d }));
+      if (!market) {
+        degraded.push({
+          provider: 'market',
+          reason: resolved.symbol
+            ? '시장 데이터를 가져오지 못했습니다.'
+            : '심볼을 해석하지 못했습니다.',
+        });
+      }
+
+      // 분석 엔진에 넘길 형태로 맞춘다. sourceId는 분석 단계에서 부여된다.
+      const newsList = news.items.map((i) => ({
+        title: i.title,
+        content: i.content,
+        source: i.source,
+        url: i.url,
+        publishedAt: i.publishedAt,
+        contentKind: i.contentKind,
+      }));
+
+      const marketData = market?.marketData;
+
+      // 견적을 내려면 분석과 똑같이 정규화·조립해야 한다.
+      // cacheKey가 일치해야 확인 토큰이 통하기 때문이다.
+      const { items, duplicatesRemoved } =
+        normalizeNewsList(newsList, { assetName: marketData?.assetName });
+      const collectedAt = new Date(now.now()).toISOString();
+      const userPrompt = buildUserPrompt({ items, marketData, collectedAt });
+
+      const estimatedInputTokens = estimateTokens(SYSTEM_PROMPT) + estimateTokens(userPrompt);
+      const estimatedCostUsd = estimateCostUsd(
+        { inputTokens: estimatedInputTokens, outputTokens: config.assumedOutputTokens },
+        { inputPer1M: config.priceInputPer1M, outputPer1M: config.priceOutputPer1M },
+      );
+
+      const cacheKey = hashRequest({
+        items, marketData, analysisPeriod: undefined, model: config.openaiModel,
+      });
+
+      const confirmToken = `ct_${randomBytes(24).toString('base64url')}`;
+      confirmTokens.set(confirmToken, { cacheKey, sessionToken: req.session.token });
+
+      res.json({
+        requestId: req.requestId,
+        newsList,
+        marketData,
+        collected: {
+          collectedAt,
+          resolvedSymbol: resolved.symbol,
+          symbolSource: resolved.source,
+          feedsUsed: news.feedsUsed,
+          newsCount: items.length,
+          duplicatesRemoved,
+          headlineOnlyCount: items.filter((i) => i.contentKind === 'headline').length,
+          degraded,
+        },
+        estimate: {
+          estimatedInputTokens,
+          assumedOutputTokens: config.assumedOutputTokens,
+          estimatedCostUsd: Number(estimatedCostUsd.toFixed(6)),
+          budget: budget.snapshot(),
+        },
+        confirmToken,
+        confirmTokenExpiresAt: new Date(now.now() + config.confirmTokenTtlMs).toISOString(),
+      });
+    },
+  );
 
   // ─── 분석 엔드포인트 ───
 

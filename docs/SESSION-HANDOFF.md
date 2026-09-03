@@ -18,13 +18,13 @@
 | GitHub 비공개 저장소 생성·연동 | ✅ 완료 |
 | Phase 1 구현 계획 작성 | ✅ 완료 (12개 태스크, 138개 테스트 설계) |
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
-| Phase 2a (뉴스·시장 커넥터) | 🔄 구현 중 (Task 7/9 완료 — contentKind 연결) |
+| Phase 2a (뉴스·시장 커넥터) | 🔄 구현 중 (Task 8/9 완료 — collect 엔드포인트, 실네트워크 검증됨) |
 | Phase 2b (재무·논문·실험) | ⬜ 미착수 |
 | Phase 3 (프론트엔드) | ⬜ 미착수 |
 
 ## 2. 다음에 할 일
 
-**Phase 2a 구현** — Task 8 (collect 엔드포인트)부터 이어서 진행한다.
+**Phase 2a 구현** — Task 9 (문서·검증 스크립트·PR)부터 이어서 진행한다.
 계획서: `docs/superpowers/plans/2026-09-03-phase2a-data-connectors.md`
 
 태스크 순서: 1 lib분리 → 2 http클라이언트 → 3 RSS파싱 → 4 뉴스provider
@@ -97,6 +97,8 @@
   git이 파일을 바이너리로 취급해 diff가 망가진다 (Phase 1에서 겪음)
 - **bash heredoc은 `\`를 `\`로 축약한다** — python 스크립트에서 백슬래시 이스케이프를 쓰려면
   `chr(92)`로 조립해야 한다 (Task 3에서 겪음)
+- **Git Bash에서 curl에 한글을 직접 넣지 말 것** — 콘솔 인코딩(CP949)에서 깨져 전달된다.
+  UTF-8 파일로 써서 `--data-binary @file`로 보내야 한다 (Task 8에서 오진의 원인이었다)
 - **supertest 요청은 지연 실행이다** — `.then()`을 걸어야 실제로 전송된다 (Phase 1에서 겪음)
 - **테스트 실행 스크립트**: `node --test tests/`는 Node 24/Windows에서 `tests`를 모듈 경로로
   해석해 `MODULE_NOT_FOUND`가 난다. `node --test "tests/**/*.test.js"` 글롭을 써야 한다.

@@ -112,3 +112,26 @@ test('추세 문장에 확정적 예측 표현을 넣지 않는다', () => {
     assert.ok(!s.includes(banned), `확정적 표현이 들어갔다: ${banned}`);
   }
 });
+
+test('장중가가 마지막 종가와 다르면 그 사실을 밝힌다', () => {
+  // 둘을 나란히 두면 모순처럼 보인다. 왜 다른지 설명해야 한다.
+  const ind = computeIndicators([100, 110], [1, 1]);
+  const s = buildChartTrend(ind, { currency: 'USD', livePrice: 115 });
+
+  assert.ok(s.includes('115'), '장중가가 언급되지 않았다');
+  assert.ok(s.includes('마감된 일봉'), '차이의 이유가 설명되지 않았다');
+});
+
+test('장중가가 마지막 종가와 같으면 중복 설명하지 않는다', () => {
+  const ind = computeIndicators([100, 110], [1, 1]);
+  const s = buildChartTrend(ind, { currency: 'USD', livePrice: 110 });
+
+  assert.ok(!s.includes('마감된 일봉'), '같은 값인데 불필요한 설명이 붙었다');
+});
+
+test('장중가를 주지 않으면 해당 문장이 없다', () => {
+  const ind = computeIndicators([100, 110], [1, 1]);
+  const s = buildChartTrend(ind, { currency: 'USD' });
+
+  assert.ok(!s.includes('현재 호가'));
+});

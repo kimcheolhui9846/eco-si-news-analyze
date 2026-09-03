@@ -214,3 +214,28 @@ test('레지스트리의 모든 호스트가 기본 허용목록에 있다', () 
     assert.ok(allow.has(host), `${f.id}의 호스트 ${host}가 허용목록에 없다`);
   }
 });
+
+test('한글 매체명 접미사도 제목에서 떼어낸다', () => {
+  // 도메인 형태만 처리하면 "매일경제 마켓" 같은 이름이 제목에 남는다.
+  const xml = `<?xml version="1.0"?><rss><channel>
+    <item><title>삼성전자 실적 발표 - 매일경제 마켓</title>
+    <link>https://a.com/1</link><pubDate>Tue, 01 Sep 2026 06:00:00 GMT</pubDate>
+    <source url="https://mk.co.kr">매일경제 마켓</source></item>
+  </channel></rss>`;
+
+  const items = parseRssFeed(xml, googleFeed);
+  assert.equal(items[0].title, '삼성전자 실적 발표');
+  assert.equal(items[0].source, '매일경제 마켓');
+});
+
+test('매체명이 제목 중간에 있으면 떼어내지 않는다', () => {
+  // "A - B" 형태를 무조건 자르면 정당한 제목이 잘린다.
+  const xml = `<?xml version="1.0"?><rss><channel>
+    <item><title>네이트 - 삼성전자 협력 발표</title>
+    <link>https://a.com/1</link><pubDate>Tue, 01 Sep 2026 06:00:00 GMT</pubDate>
+    <source url="https://nate.com">네이트</source></item>
+  </channel></rss>`;
+
+  const items = parseRssFeed(xml, googleFeed);
+  assert.equal(items[0].title, '네이트 - 삼성전자 협력 발표');
+});
