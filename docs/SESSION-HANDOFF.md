@@ -3,8 +3,8 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-02 (Phase 1 병합 완료)
-- **현재 브랜치**: `main` (Phase 2 시작 시 `feature/data-connectors` 분기 예정)
+- **최종 갱신**: 2026-09-03 (Phase 2a 구현 완료)
+- **현재 브랜치**: `feature/data-connectors`
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
@@ -18,29 +18,26 @@
 | GitHub 비공개 저장소 생성·연동 | ✅ 완료 |
 | Phase 1 구현 계획 작성 | ✅ 완료 (12개 태스크, 138개 테스트 설계) |
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
-| Phase 2 (데이터 커넥터) | 🔄 착수 — 브레인스토밍부터 |
+| Phase 2a (뉴스·시장 커넥터) | ✅ 완료 — 289개 테스트, 실네트워크 검증 통과 |
+| Phase 2b (재무·논문·실험) | ⬜ 미착수 — 다음 단계 |
 | Phase 3 (프론트엔드) | ⬜ 미착수 |
 
 ## 2. 다음에 할 일
 
-**Phase 2 — 실 데이터 커넥터**를 브레인스토밍부터 시작한다.
-범위: NewsProvider / FinancialDataProvider / ResearchPaperProvider /
-ExperimentDataProvider / MarketChartProvider + `/api/research` 오케스트레이션.
-
-Phase 2에서 **반드시** 다뤄야 할 것 (Phase 1 문서에 과제로 남김):
-- **SSRF 방어** — provider가 외부 URL을 fetch하는 순간 필수.
-  도메인 허용목록, 사설 IP 대역 차단(127/8, 10/8, 172.16/12, 192.168/16, 169.254/16,
-  IPv6 링크로컬), 리다이렉트 홉마다 재검사
-- provider별 독립 회로 차단기 (현재는 LLM용 하나뿐)
-- 외부 응답 크기 제한
-- provider 호출도 비용 예산에 반영할지 판단 (외부 API도 유료일 수 있다)
+1. Phase 2a PR 검토·병합
+2. **Phase 2b** 브레인스토밍 — 재무지표·논문·실험 provider.
+   프롬프트 구획·응답 스키마·출처 타입을 모두 확장해야 하므로 성격이 다르다.
+   후보 소스: DART(한국 재무), arXiv·Semantic Scholar(논문), ClinicalTrials.gov(임상)
+3. Phase 3 — React 프론트엔드. **XSS 방어와 CORS 설정이 필수** (docs/security.md 참조)
 
 ## 3. 핵심 문서
 
 | 문서 | 내용 |
 |---|---|
 | `docs/superpowers/specs/2026-09-02-phase1-core-backend-design.md` | Phase 1 설계 (승인됨) |
-| `docs/superpowers/plans/2026-09-02-phase1-core-backend.md` | Phase 1 구현 계획 — 12개 태스크, 각 단계에 실제 코드 포함 |
+| `docs/superpowers/plans/2026-09-02-phase1-core-backend.md` | Phase 1 구현 계획 (완료) |
+| `docs/superpowers/specs/2026-09-02-phase2a-data-connectors-design.md` | Phase 2a 설계 (승인됨) |
+| `docs/superpowers/plans/2026-09-03-phase2a-data-connectors.md` | Phase 2a 구현 계획 — 9개 태스크 |
 | `~/Desktop/claude-code-integrated-prompt.md` | 사용자 원본 요구사항 |
 
 ## 4. 반드시 지켜야 할 결정사항
@@ -93,6 +90,16 @@ Phase 2에서 **반드시** 다뤄야 할 것 (Phase 1 문서에 과제로 남�
   모든 객체에 `additionalProperties: false`가 있어야 한다. 하나만 어겨도 400을 돌려받는다
 - **Express 5**: async 핸들러의 rejection을 자동으로 에러 핸들러에 전달한다. `try/catch` 래퍼 불필요
 - **`setInterval(...).unref()`**: sweeper에 반드시 필요. 없으면 프로세스가 종료되지 않아 테스트가 멈춘다
+- **`fast-xml-parser`는 CDATA를 자동으로 벗기고 외부 엔티티(XXE)를 거부한다** — XXE 방어를 따로 짤 필요가 없다
+- **Google News RSS의 description에는 본문이 없다** — 제목 반복 앵커뿐. 검색은 되지만 본문이 없다
+- **Yahoo 티커 검색은 한글 질의에 400을 반환한다** — 한글 회사명은 별칭 사전으로만 해석 가능
+- **소스에 리터럴 제어문자를 넣지 않는다** — `` 형식 이스케이프를 쓴다. 리터럴 NUL이 들어가면
+  git이 파일을 바이너리로 취급해 diff가 망가진다 (Phase 1에서 겪음)
+- **bash heredoc은 `\`를 `\`로 축약한다** — python 스크립트에서 백슬래시 이스케이프를 쓰려면
+  `chr(92)`로 조립해야 한다 (Task 3에서 겪음)
+- **Git Bash에서 curl에 한글을 직접 넣지 말 것** — 콘솔 인코딩(CP949)에서 깨져 전달된다.
+  UTF-8 파일로 써서 `--data-binary @file`로 보내야 한다 (Task 8에서 오진의 원인이었다)
+- **supertest 요청은 지연 실행이다** — `.then()`을 걸어야 실제로 전송된다 (Phase 1에서 겪음)
 - **테스트 실행 스크립트**: `node --test tests/`는 Node 24/Windows에서 `tests`를 모듈 경로로
   해석해 `MODULE_NOT_FOUND`가 난다. `node --test "tests/**/*.test.js"` 글롭을 써야 한다.
   (Task 1에서 실제로 겪고 수정함)

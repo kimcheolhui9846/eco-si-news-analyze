@@ -14,19 +14,26 @@
 
 | 단계 | 범위 | 상태 |
 |---|---|---|
-| **Phase 1** | 인증·세션, API 비용 방어, 분석 엔진, 예산 통제, 테스트, 문서 | ✅ 완료 |
-| Phase 2 | 데이터 커넥터 5종 + `/api/research` 오케스트레이션 | 미착수 |
+| **Phase 1** | 인증·세션, API 비용 방어, 분석 엔진, 예산 통제 | ✅ 완료 |
+| **Phase 2a** | 뉴스·시장 데이터 커넥터, `/api/research/collect`, SSRF 방어 | ✅ 완료 |
+| Phase 2b | 재무지표·논문·실험 provider | 미착수 |
 | Phase 3 | React 프론트엔드 12개 컴포넌트 | 미착수 |
 
-Phase 1의 `/api/analyze/news`는 **클라이언트가 제공한 자료를 분석하는 순수 엔진**이다.
-서버가 외부에서 뉴스를 수집하는 기능은 Phase 2에서 이 엔진 앞단에 붙는다.
+**검색어 하나로 뉴스와 시장 데이터를 모아 분석까지 갈 수 있다.**
+`/api/analyze/news`는 여전히 클라이언트가 자료를 직접 넣는 경로도 지원한다.
 
 ---
 
 ## 시스템 구성
 
 ```
-요청
+POST /api/research/collect  (무료 — LLM 미호출)
+ ↓ 심볼 해석: 명시 → 별칭 사전 → Yahoo 검색(영문만) → 미해석
+ ↓ 뉴스 RSS + 시장 차트 병렬 수집 (허용목록·회로차단기·캐시)
+ ↓ 차트 지표를 코드가 계산 → chartTrend 문장
+ ↓ 정규화 → 견적 → 확인 토큰 발급
+   ↓
+POST /api/analyze/news  (X-Confirm-Token 필수 — 여기서 비용 발생)
  ↓ helmet · compression · cookieParser
  ↓ requestId 발급 + 자식 로거 바인딩
  ↓ IP rate limit → 본문 크기 제한 → 인증 → 세션 rate limit
@@ -106,6 +113,13 @@ OPENAI_API_KEY=sk-...
 | `ASSUMED_OUTPUT_TOKENS` | `2000` | 견적 시 가정하는 출력 토큰 수 |
 | `CONFIRM_TOKEN_TTL_MS` | `300000` | 확인 토큰 유효 시간 |
 | `CORS_ORIGIN` | `http://localhost:3000` | Phase 3에서 사용 |
+| `EXTERNAL_TIMEOUT_MS` | `10000` | 외부 API 타임아웃 |
+| `MAX_EXTERNAL_RESPONSE_BYTES` | `2000000` | 외부 응답 크기 상한 |
+| `EXTERNAL_ALLOWLIST` | (6개 호스트) | **허용목록. 여기 없는 호스트로는 요청이 나가지 않는다** |
+| `PROVIDER_BREAKER_THRESHOLD` / `_COOLDOWN_MS` | `3` / `60000` | provider별 회로 차단기 |
+| `NEWS_CACHE_TTL_MS` | `300000` | 뉴스 피드 캐시 |
+| `MARKET_CACHE_TTL_MS` | `60000` | 시장 차트 캐시 |
+| `RESEARCH_RATE_WINDOW_MS` / `_MAX` | `900000` / `60` | 수집 rate limit |
 
 </details>
 
@@ -133,6 +147,39 @@ MY_SECRET_PASSWORD=test-pw LLM_MODE=mock npm start
 ## API 사용 예시
 
 전체 명세는 [`docs/api.md`](docs/api.md)에 있다.
+
+### 검색으로 시작하기 (Phase 2a)
+
+```bash
+TOKEN=$(curl -sS -X POST http://localhost:3000/api/auth/login   -H 'Content-Type: application/json'   -d '{"password":"your-password"}'   | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
+
+# 1) 수집 — 무료. 무엇이 모였는지 보고 분석 여부를 정한다.
+#    한글이 깨지지 않도록 요청 본문은 파일로 만든다.
+node -e "require('fs').writeFileSync('/tmp/req.json', JSON.stringify({
+  query: '엔비디아 AI 반도체', symbol: 'NVDA', lang: 'ko', maxNews: 8
+}), 'utf8')"
+
+curl -sS -X POST http://localhost:3000/api/research/collect   -H 'Content-Type: application/json; charset=utf-8'   -H "Authorization: Bearer $TOKEN"   --data-binary @/tmp/req.json > /tmp/collected.json
+
+# 2) 수집 결과로 분석 — 여기서 비용이 발생한다.
+CONFIRM=$(node -pe "require('/tmp/collected.json').confirmToken")
+node -e "
+  const c = require('/tmp/collected.json');
+  const body = { newsList: c.newsList };
+  if (c.marketData) body.marketData = c.marketData;
+  require('fs').writeFileSync('/tmp/analyze.json', JSON.stringify(body), 'utf8');
+"
+
+curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: application/json; charset=utf-8'   -H "Authorization: Bearer $TOKEN"   -H "X-Confirm-Token: $CONFIRM"   --data-binary @/tmp/analyze.json
+```
+
+자동 검증:
+
+```bash
+MY_SECRET_PASSWORD=your-password ./scripts/verify-research.sh
+```
+
+### 자료를 직접 넣기 (Phase 1 경로)
 
 ```bash
 # 1) 로그인
@@ -253,17 +300,57 @@ rate limit 3종(IP·세션·로그인), 동시 실행 세마포어, TTL+LRU 캐�
 
 ## 데이터 provider 설정 방법
 
-**Phase 1에는 provider가 없다.** 자료는 클라이언트가 요청 본문으로 제공한다.
+**Phase 2a의 provider는 전부 API 키가 필요 없다.**
 
-Phase 2에서 다음 provider가 추가되며, 각각 API 키를 환경변수로 관리한다.
+| provider | 소스 | 키 |
+|---|---|---|
+| 뉴스 (검색) | Google News RSS (한국어·영어) | 불필요 |
+| 뉴스 (주제) | 연합뉴스·전자신문 RSS, Yahoo Finance 티커 RSS | 불필요 |
+| 주식 시세 | Yahoo Finance chart | 불필요 |
+| 코인 시세 | CoinGecko | 불필요 |
 
+### 피드 추가·변경
+
+`lib/providers/feeds.js`의 `FEEDS` 배열에 항목을 추가한다.
+
+```js
+{
+  id: 'my-feed',
+  name: '표시할 매체명',
+  kind: 'topic',            // 'search'면 urlTemplate에 {query}를 넣는다
+  lang: 'ko',
+  contentKind: 'summary',   // description에 본문이 있으면 summary, 없으면 headline
+  url: 'https://example.com/rss.xml',
+}
 ```
-NewsProvider · FinancialDataProvider · ResearchPaperProvider
-ExperimentDataProvider · MarketChartProvider
+
+**새 호스트는 `EXTERNAL_ALLOWLIST`에도 추가해야 한다.** 허용목록에 없으면 요청 자체가 나가지 않는다.
+
+### 심볼 별칭 추가
+
+한글 회사명은 API로 티커를 찾을 수 없어(Yahoo 검색이 `400` 반환) 사전에 의존한다.
+`lib/providers/aliases.js`의 `SYMBOL_ALIASES`에 추가한다.
+
+```js
+'회사이름': { symbol: '123456.KS', assetType: 'stock', name: '회사이름' },
 ```
 
-키가 없는 provider는 mock 또는 "미설정" 상태로 명확히 표시하며,
-**mock 데이터를 실제 최신 데이터인 것처럼 표시하지 않는다.**
+사전에 없으면 요청에 `symbol`을 직접 넣으면 된다.
+
+> **Yahoo Finance는 비공식 엔드포인트다.** 문서화된 공개 API가 아니라 예고 없이
+> 바뀌거나 차단될 수 있다. 개인 리서치 용도의 저빈도 호출을 전제로 하며,
+> 상용 서비스로 전환한다면 정식 시장 데이터 API로 교체해야 한다.
+
+### 뉴스 본문의 한계
+
+**분석은 기사 전문이 아니라 제목 또는 리드 문단에 근거한다.**
+
+검색이 되는 소스(Google News RSS)에는 본문이 없고, 본문이 있는 언론사 RSS는 검색이 안 된다.
+전문을 얻으려면 언론사 페이지를 크롤링해야 하는데, SSRF 표면·사이트별 파싱·약관 문제가
+한꺼번에 딸려와 하지 않는다.
+
+각 자료에 `contentKind`(`headline`/`summary`/`full`)를 붙여 LLM이 제목만 보고 본문을
+추론하지 못하게 막고, 응답의 `headlineOnlyCount`로 사용자도 한계를 미리 안다.
 
 ---
 
@@ -285,7 +372,7 @@ ExperimentDataProvider · MarketChartProvider
 npm test
 ```
 
-**164개 테스트가 실제 API 키 없이 전부 통과한다.** `LLM_MODE=mock`과 주입된 시계를 쓴다.
+**289개 테스트가 실제 API 키와 외부 네트워크 없이 전부 통과한다.** `LLM_MODE=mock`, 주입된 시계, 주입된 http 클라이언트와 `tests/fixtures/`의 실제 API 응답을 쓴다.
 
 | 파일 | 범위 |
 |---|---|
@@ -299,6 +386,12 @@ npm test
 | `tests/costdefense.test.js` | 캐시·세마포어·요청 병합·rate limit |
 | `tests/analyze.test.js` | 분석 파이프라인 통합 |
 | `tests/budget.test.js` | 비용 예산, 호출 확인 |
+| `tests/http.test.js` | 외부 호출 방어 (허용목록·리다이렉트·크기·타임아웃) |
+| `tests/rss.test.js` | RSS 파싱, 피드 레지스트리, XXE |
+| `tests/news-provider.test.js` | 뉴스 수집, 부분 실패, 캐시·회로차단기 |
+| `tests/indicators.test.js` | 차트 지표 계산, 추세 문장 |
+| `tests/market-provider.test.js` | 시세 조회, 심볼 해석, 별칭 사전 |
+| `tests/research.test.js` | 수집 엔드포인트 통합 |
 
 실행 중인 서버에 대한 종단 검증:
 
@@ -327,6 +420,8 @@ MY_SECRET_PASSWORD=your-password ./scripts/verify.sh
 4. **메모리 rate limit은 인스턴스별로 계산된다.** N대 배포 시 실질 한도가 N배다.
 5. **`BUDGET_FILE`이 영속 볼륨에 있어야 한다.** 컨테이너 재생성마다 사라지면 예산 상한이 무의미하다.
 6. **OpenAI 계정의 자동 충전을 꺼둘 것.**
+7. **Yahoo Finance 의존을 재검토할 것.** 비공식 엔드포인트라 예고 없이 바뀔 수 있다.
+8. **RSS 피드는 죽는다.** 검증 중 매일경제 RSS가 이미 `403`이었다. `degraded` 필드를 모니터링할 것.
 
 Redis 전환 방법, 캐시 키 설계, 장애 시 fallback 전략은 [`docs/architecture.md`](docs/architecture.md)에 있다.
 
