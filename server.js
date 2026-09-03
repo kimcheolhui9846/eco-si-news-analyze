@@ -48,6 +48,8 @@ export { parseRssFeed } from './lib/providers/rss.js';
 export { FEEDS, tickerFeed, buildFeedUrl, feedsFor } from './lib/providers/feeds.js';
 export { createRssNewsProvider, matchesQuery } from './lib/providers/news.js';
 export { computeIndicators, buildChartTrend } from './lib/providers/indicators.js';
+export { SYMBOL_ALIASES, lookupAlias } from './lib/providers/aliases.js';
+export { createMarketProvider } from './lib/providers/market.js';
 
 // ─── 앱 팩토리 ───
 
