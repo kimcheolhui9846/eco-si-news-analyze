@@ -32,7 +32,8 @@ export { createSessionStore } from './lib/session.js';
 export { buildAnalyzeSchema, formatZodError } from './lib/validation.js';
 export { normalizeNewsList, stripControlChars } from './lib/normalize.js';
 export {
-  SYSTEM_PROMPT, buildUserPrompt, escapeDelimiters, estimateTokens, DATA_BEGIN, DATA_END,
+  SYSTEM_PROMPT, buildUserPrompt, escapeDelimiters, estimateTokens,
+  DATA_BEGIN, DATA_END, CONTENT_KIND_LABEL,
 } from './lib/prompt.js';
 export {
   createLlmClient, createMockLlmClient, callWithResilience,

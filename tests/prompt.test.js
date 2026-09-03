@@ -131,3 +131,40 @@ test('토큰 추정은 문자수에 비례한다', () => {
   assert.ok(estimateTokens('ㄱ'.repeat(4000)) >= 1000);
   assert.ok(estimateTokens('ㄱ'.repeat(8000)) > estimateTokens('ㄱ'.repeat(4000)));
 });
+
+// ─── contentKind 표기 (Phase 2a) ───
+
+test('시스템 프롬프트가 제목만 있는 자료를 다루는 규칙을 담는다', () => {
+  assert.ok(SYSTEM_PROMPT.includes('headline'), 'contentKind 규칙이 없다');
+  assert.ok(SYSTEM_PROMPT.includes('추론'), '추론 금지 표현이 없다');
+});
+
+test('사용자 프롬프트에 자료 범위를 표시한다', () => {
+  const withKind = normalizeNewsList([{
+    title: '제목만 있는 기사',
+    content: '제목만 있는 기사',
+    contentKind: 'headline',
+    source: '연합뉴스',
+    url: 'https://example.com/a',
+    publishedAt: '2026-08-30T09:00:00Z',
+  }], {}).items;
+
+  const prompt = buildUserPrompt({ items: withKind, collectedAt: '2026-09-03T00:00:00.000Z' });
+
+  assert.ok(prompt.includes('자료 범위'), '자료 범위 줄이 없다');
+  assert.ok(prompt.includes('제목만'), 'headline이 사람이 읽을 표현으로 바뀌지 않았다');
+});
+
+test('본문이 있는 자료는 전문 여부를 구분해 표시한다', () => {
+  const items = normalizeNewsList([{
+    title: '요약이 있는 기사',
+    content: '리드 문단이 들어 있는 본문입니다.',
+    contentKind: 'summary',
+    source: '연합뉴스',
+    url: 'https://example.com/b',
+    publishedAt: '2026-08-30T09:00:00Z',
+  }], {}).items;
+
+  const prompt = buildUserPrompt({ items, collectedAt: '2026-09-03T00:00:00.000Z' });
+  assert.ok(prompt.includes('요약'), 'summary 표기가 없다');
+});
