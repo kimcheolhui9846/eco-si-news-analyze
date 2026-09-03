@@ -46,6 +46,7 @@ export { createBudgetTracker, estimateCostUsd } from './lib/budget.js';
 export { createHttpClient } from './lib/http.js';
 export { parseRssFeed } from './lib/providers/rss.js';
 export { FEEDS, tickerFeed, buildFeedUrl, feedsFor } from './lib/providers/feeds.js';
+export { createRssNewsProvider, matchesQuery } from './lib/providers/news.js';
 
 // ─── 앱 팩토리 ───
 

@@ -18,13 +18,13 @@
 | GitHub 비공개 저장소 생성·연동 | ✅ 완료 |
 | Phase 1 구현 계획 작성 | ✅ 완료 (12개 태스크, 138개 테스트 설계) |
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
-| Phase 2a (뉴스·시장 커넥터) | 🔄 구현 중 (Task 3/9 완료 — RSS 파싱) |
+| Phase 2a (뉴스·시장 커넥터) | 🔄 구현 중 (Task 4/9 완료 — 뉴스 provider) |
 | Phase 2b (재무·논문·실험) | ⬜ 미착수 |
 | Phase 3 (프론트엔드) | ⬜ 미착수 |
 
 ## 2. 다음에 할 일
 
-**Phase 2a 구현** — Task 4 (뉴스 provider)부터 이어서 진행한다.
+**Phase 2a 구현** — Task 5 (차트 지표)부터 이어서 진행한다.
 계획서: `docs/superpowers/plans/2026-09-03-phase2a-data-connectors.md`
 
 태스크 순서: 1 lib분리 → 2 http클라이언트 → 3 RSS파싱 → 4 뉴스provider
