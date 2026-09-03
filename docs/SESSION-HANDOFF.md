@@ -3,8 +3,8 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-03 (Phase 2a 구현 완료)
-- **현재 브랜치**: `feature/data-connectors`
+- **최종 갱신**: 2026-09-03 (Phase 3 계획 작성 완료)
+- **현재 브랜치**: `feature/frontend-ui`
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
@@ -20,15 +20,15 @@
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
 | Phase 2a (뉴스·시장 커넥터) | ✅ 완료 — 289개 테스트, 실네트워크 검증 통과 |
 | Phase 2b (재무·논문·실험) | ⬜ 미착수 — 다음 단계 |
-| Phase 3 (프론트엔드) | ⬜ 미착수 |
+| Phase 3 (프론트엔드) | 🔄 설계·계획 완료, 구현 대기 (8태스크 / 375 테스트) |
 
 ## 2. 다음에 할 일
 
-1. Phase 2a PR 검토·병합
-2. **Phase 2b** 브레인스토밍 — 재무지표·논문·실험 provider.
-   프롬프트 구획·응답 스키마·출처 타입을 모두 확장해야 하므로 성격이 다르다.
-   후보 소스: DART(한국 재무), arXiv·Semantic Scholar(논문), ClinicalTrials.gov(임상)
-3. Phase 3 — React 프론트엔드. **XSS 방어와 CORS 설정이 필수** (docs/security.md 참조)
+**Phase 3 구현**을 Task 1부터 순서대로 진행한다.
+계획서: `docs/superpowers/plans/2026-09-03-phase3-frontend.md`
+
+태스크 순서: 1 툴체인·순수함수 → 2 marketSeries(백엔드) → 3 API클라이언트
+→ 4 차트좌표 → 5 컴포넌트 → 6 화면·상태기계 → 7 스타일 → 8 정적서빙·문서·PR
 
 ## 3. 핵심 문서
 
@@ -99,6 +99,10 @@
   `chr(92)`로 조립해야 한다 (Task 3에서 겪음)
 - **Git Bash에서 curl에 한글을 직접 넣지 말 것** — 콘솔 인코딩(CP949)에서 깨져 전달된다.
   UTF-8 파일로 써서 `--data-binary @file`로 보내야 한다 (Task 8에서 오진의 원인이었다)
+- **jsdom은 `^29`로 고정한다** — `global-jsdom@29`의 peer가 `>=29 <30`이라 `jsdom@30`을 넣으면 ERESOLVE로 설치 실패
+- **JSX 테스트에는 `tsx` 로더가 필요하다** — `node --import tsx --test`. 루트 `tsconfig.json`에
+  `"jsx": "react-jsx"`가 없으면 classic 런타임으로 변환돼 `React is not defined`
+- **정적 서빙 경로는 `fileURLToPath`를 쓴다** — `URL.pathname`은 Windows에서 `/C:/...`가 되어 fs가 못 읽는다
 - **supertest 요청은 지연 실행이다** — `.then()`을 걸어야 실제로 전송된다 (Phase 1에서 겪음)
 - **테스트 실행 스크립트**: `node --test tests/`는 Node 24/Windows에서 `tests`를 모듈 경로로
   해석해 `MODULE_NOT_FOUND`가 난다. `node --test "tests/**/*.test.js"` 글롭을 써야 한다.
