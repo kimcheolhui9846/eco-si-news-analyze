@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"  xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/">
+	<channel>
+		<title><![CDATA[연합뉴스 경제 최신기사]]></title>
+		<link>https://www.yna.co.kr/economy/all</link>
+		<atom:link href="https://www.yna.co.kr/rss/economy.xml" rel="self" type="application/rss+xml" />
+		<description><![CDATA[연합뉴스 실시간 경제 최신뉴스입니다]]></description>
+		<language>ko-KR</language>
+		<copyright><![CDATA[저작권자(c) 연합뉴스, 무단 전재-재배포, AI 학습 및 활용 금지]]></copyright>
+		<sy:updatePeriod>hourly</sy:updatePeriod>
+		<sy:updateFrequency>1</sy:updateFrequency>
+		<lastBuildDate>Thu, 3 Sep 2026 10:02:58 +0900</lastBuildDate>
+		<pubDate>Thu, 3 Sep 2026 10:02:58 +0900</pubDate>
+		<item>
+			<title><![CDATA[신한은행 9월 대출모집인 모집 한도 이틀 만에 소진]]></title>
+			<link>https://www.yna.co.kr/view/AKR20260903056200002</link>
+			<guid isPermaLink="true">https://www.yna.co.kr/view/AKR20260903056200002</guid>
+			<pubDate>Thu, 3 Sep 2026 10:02:58 +0900</pubDate>
+			<dc:creator>한지훈</dc:creator>
+			<description><![CDATA[(서울=연합뉴스) 한지훈 기자 = 신한은행이 대출모집인을 통한 가계대출 접수를 이틀 만에 다시 중단한 것으로 전해졌다.]]></description>
+			<media:content url="https://img.yna.co.kr/photo/cms/2026/07/13/31/PCM20260713000131002_P2.jpg" type="image/jpeg">
+			</media:content>
+		</item>
+<item>
+			<title><![CDATA[삼성웰스토리, 양식 식자재 확대…"5조6천억 시장 공략"]]></title>
+			<link>https://www.yna.co.kr/view/AKR20260903032500030</link>
+			<guid isPermaLink="true">https://www.yna.co.kr/view/AKR20260903032500030</guid>
+			<pubDate>Thu, 3 Sep 2026 10:02:04 +0900</pubDate>
+			<dc:creator>김세린</dc:creator>
+			<description><![CDATA[(서울=연합뉴스) 김세린 기자 = 삼성웰스토리는 국내 수입가공식품 시장에서 양식 식자재 비중이 커지는 데 맞춰 관련 식자재 상품 경쟁력을 강화한...]]></description>
+			<media:content url="https://img.yna.co.kr/etc/inner/KR/2026/09/03/AKR20260903032500030_01_i_P2.jpg" type="image/jpeg">
+			</media:content>
+		</item>
+<item>
+			<title><![CDATA[휴온스엔, 춘천공장 생산능력 3배 확대…PSM 승인]]></title>
+			<link>https://www.yna.co.kr/view/AKR20260903055700017</link>
+			<guid isPermaLink="true">https://www.yna.co.kr/view/AKR20260903055700017</guid>
+			<pubDate>Thu, 3 Sep 2026 10:01:40 +0900</pubDate>
+			<dc:creator>신선미</dc:creator>
+			<description><![CDATA[(서울=연합뉴스) 신선미 기자 = 휴온스그룹 휴온스엔은 식품·건강기능식품 원료 생산 거점인 춘천공장이 공정안전관리(PSM) 사업장 승인을 받았다...]]></description>
+			<media:content url="https://img.yna.co.kr/etc/inner/KR/2026/09/03/AKR20260903055700017_01_i_P2.jpg" type="image/jpeg">
+			</media:content>
+		</item>
+<item>
+			<title><![CDATA[서울시, 모아타운 후보지 도로 5년간 토지거래허가구역 지정]]></title>
+			<link>https://www.yna.co.kr/view/AKR20260902153600004</link>
+			<guid isPermaLink="true">https://www.yna.co.kr/view/AKR20260902153600004</guid>
+			<pubDate>Thu, 3 Sep 2026 10:00:06 +0900</pubDate>
+			<dc:creator>김동규</dc:creator>
+			<description><![CDATA[(서울=연합뉴스) 김동규 기자 = 서울시는 지난 2일 제14차 도시계획위원회를 열고 모아타운 후보지로 선정될 지역의 도로를 토지거래허가구역으로 ...]]></description>
+			<media:content url="https://img.yna.co.kr/etc/inner/KR/2026/09/02/AKR20260902153600004_01_i_P2.jpg" type="image/jpeg">
+			</media:content>
+		</item>
+</channel></rss>
