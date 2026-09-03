@@ -1,0 +1,85 @@
+export class ApiCallError extends Error {
+  constructor({ code, message, requestId, status }) {
+    super(message);
+    this.name = 'ApiCallError';
+    this.code = code;
+    this.requestId = requestId;
+    this.status = status;
+  }
+}
+
+/**
+ * 백엔드 호출을 감싼다.
+ *
+ * fetch를 주입받는 이유는 네트워크 없이 테스트하기 위해서다.
+ * Phase 1의 clock·llm, Phase 2a의 http 주입과 같은 방식이다.
+ */
+export function createApiClient({ fetchImpl = fetch } = {}) {
+  const call = async (path, { method = 'GET', body, headers = {} } = {}) => {
+    let res;
+    try {
+      res = await fetchImpl(path, {
+        method,
+        // HttpOnly 쿠키가 실려야 인증이 유지된다. 토큰을 헤더에 넣지 않는다.
+        credentials: 'same-origin',
+        headers: body ? { 'Content-Type': 'application/json', ...headers } : headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      throw new ApiCallError({
+        code: 'NETWORK_ERROR',
+        message: '서버에 연결하지 못했습니다.',
+        status: 0,
+      });
+    }
+
+    let payload;
+    try {
+      payload = await res.json();
+    } catch {
+      payload = null;
+    }
+
+    if (!res.ok) {
+      const e = payload?.error ?? {};
+      throw new ApiCallError({
+        code: e.code ?? 'INTERNAL',
+        message: e.message ?? '오류가 발생했습니다.',
+        requestId: e.requestId,
+        status: res.status,
+      });
+    }
+
+    return payload;
+  };
+
+  return {
+    login: (password) => call('/api/auth/login', { method: 'POST', body: { password } }),
+    logout: () => call('/api/auth/logout', { method: 'POST' }),
+    session: () => call('/api/auth/session'),
+    budget: () => call('/api/budget'),
+
+    collect: ({ query, symbol, assetType, lang, range, maxNews }) => {
+      // 빈 문자열을 보내면 zod의 min(1)에서 400이 난다. 아예 뺀다.
+      const body = { query };
+      if (symbol) body.symbol = symbol;
+      if (assetType) body.assetType = assetType;
+      if (lang) body.lang = lang;
+      if (range) body.range = range;
+      if (typeof maxNews === 'number') body.maxNews = maxNews;
+      return call('/api/research/collect', { method: 'POST', body });
+    },
+
+    analyze: ({ newsList, marketData, confirmToken }) => {
+      // newsList를 그대로 넘긴다. 한 글자만 바뀌어도 cacheKey가 달라져
+      // 확인 토큰이 428로 거부된다.
+      const body = { newsList };
+      if (marketData) body.marketData = marketData;
+      return call('/api/analyze/news', {
+        method: 'POST',
+        body,
+        headers: { 'X-Confirm-Token': confirmToken },
+      });
+    },
+  };
+}
