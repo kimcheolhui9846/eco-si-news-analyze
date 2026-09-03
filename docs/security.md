@@ -65,7 +65,7 @@
 
 | 점검 항목 | 상태 | 구현 위치 | 검증 |
 |---|---|---|---|
-| CORS가 제한되어 있는가 | ⚠️ | `CORS_ORIGIN` 설정값은 있으나 **Phase 1에는 CORS 미들웨어를 붙이지 않았다.** 프론트엔드가 없어 교차 출처 요청이 발생하지 않기 때문이다. Phase 3에서 `cors` 패키지로 이 값을 적용해야 한다 | Phase 3 과제 |
+| CORS가 제한되어 있는가 | ✅ Phase 3에서 해결 | 동일 출처가 되어 CORS 미들웨어 자체가 불필요해졌다. §10 참조 | `static.test.js` |
 | Helmet 또는 동등한 보안 헤더가 적용되는가 | ✅ | `app.use(helmet())` + `app.disable('x-powered-by')` | — |
 | 에러 응답에 내부 정보가 노출되지 않는가 | ✅ | 에러 핸들러가 `ApiError`가 아닌 예외는 고정 메시지로 바꾼다. 상류 원본 메시지도 `classifyLlmError`가 감싼다 | `errors.test.js` — "예상치 못한 예외는 내부 정보를 노출하지 않는다" (스택·내부 문자열 부재 확인) |
 | 요청 ID를 클라이언트가 위조할 수 없는가 | ✅ | 항상 서버가 `randomUUID()`로 발급하고 클라이언트 헤더는 무시 | `errors.test.js` — "클라이언트가 보낸 X-Request-Id를 신뢰하지 않고 새로 발급한다" |
@@ -78,7 +78,7 @@
 | 외부 URL fetch가 SSRF 취약점을 만들지 않는가 | ✅ Phase 2a에서 구현 | §9 참조 |
 | 허용되지 않은 도메인 접근을 막는가 | ✅ Phase 2a에서 구현 | §9 참조 |
 | 외부 응답 HTML의 스크립트를 실행하지 않는가 | ✅ | 서버는 HTML을 파싱하거나 실행하지 않는다. 입력은 JSON 문자열로만 다룬다 |
-| LLM 응답을 HTML로 렌더링할 때 XSS를 방지하는가 | ⚠️ 해당 없음 | Phase 1은 JSON만 반환한다. **Phase 3에서 필수**: `dangerouslySetInnerHTML` 없이 렌더링하거나 sanitizer를 거칠 것. 특히 `meta.degraded=true`인 Markdown 폴백 경로가 위험하다 |
+| LLM 응답을 HTML로 렌더링할 때 XSS를 방지하는가 | ✅ Phase 3에서 구현 | §10 참조 |
 | 단일 서버 메모리 세션의 한계를 문서화했는가 | ✅ | `docs/architecture.md` §2 — 장점·한계·Redis 전환 방법·전환 시점 |
 
 ---
@@ -98,6 +98,20 @@
 | provider 장애가 서비스 전체를 멈추지 않는가 | ✅ | provider별 독립 회로 차단기 + 부분 실패 허용 | `news-provider.test.js` — "일부 피드가 실패해도 나머지로 진행한다" |
 | 상류 오류 메시지가 노출되지 않는가 | ✅ | `degraded.reason`은 고정 문구. 원본을 담지 않는다 | `news-provider.test.js` — "degraded 사유에 상류 원본 메시지를 담지 않는다" |
 | 수집이 예산을 우회하지 않는가 | ✅ | `/api/research/collect`는 LLM을 호출하지 않으므로 비용이 0이다. 실제 분석은 여전히 확인 토큰과 예산을 거친다 | `research.test.js` — "수집은 LLM을 호출하지 않는다", "수집은 예산을 차감하지 않는다" |
+
+---
+
+## 10. 프론트엔드 (Phase 3)
+
+| 점검 항목 | 상태 | 구현 위치 | 검증 |
+|---|---|---|---|
+| LLM 응답을 HTML로 렌더링할 때 XSS를 방지하는가 | ✅ | `dangerouslySetInnerHTML`을 쓰지 않는다. React 기본 이스케이프에 의존 | `components.test.jsx` — "LLM 응답에 script가 들어와도 DOM에 태그가 생기지 않는다", "img onerror도 실행되지 않는다" |
+| Markdown 폴백이 XSS 표면을 만들지 않는가 | ✅ | 렌더러 없이 `<pre>`로 표시. 렌더러는 HTML을 생성하고 그 순간 표면이 생긴다 | `components.test.jsx` — "degraded면 Markdown 폴백을 pre로 표시한다" |
+| CORS가 제한되어 있는가 | ✅ | 동일 출처라 CORS 미들웨어가 불필요하다. Express가 프론트를 서빙한다. `CORS_ORIGIN` 설정값은 남아 있으나 **현재 미사용**이다 | `static.test.js` |
+| 토큰이 JS에서 접근 가능한가 | ✅ 아니다 | HttpOnly 쿠키만 쓴다. `localStorage`·헤더를 쓰지 않으므로 XSS가 나도 탈취되지 않는다 | `api-client.test.js` — "토큰을 저장하거나 헤더에 넣지 않는다" |
+| 외부 링크가 opener를 노출하는가 | ✅ 아니다 | 모든 외부 링크에 `rel="noopener noreferrer"` | `components.test.jsx` — "외부 링크에 noopener noreferrer를 붙인다" · 실브라우저에서 링크 10개 전부 확인 |
+| API 경로가 SPA 폴백에 삼켜지는가 | ✅ 아니다 | 정적 서빙을 API 라우트 뒤에 등록하고 폴백 정규식에서 `/api/`를 제외 | `static.test.js` — "없는 API 경로는 여전히 JSON 404를 준다" |
+| API 키가 프론트엔드 번들에 포함되는가 | ✅ 아니다 | 모든 외부 호출은 서버가 한다. `client/`에 `.env`가 없다 | 빌드 산출물에 키 패턴 없음 |
 
 ---
 

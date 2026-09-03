@@ -298,3 +298,56 @@ test('같은 수집 요청을 두 번 하면 외부 호출이 늘지 않는다',
 
   assert.equal(http.calls.length, before);
 });
+
+// ─── marketSeries (Phase 3) ───
+
+test('collect 응답에 marketSeries가 포함된다', async () => {
+  const { app } = setup();
+  const token = await login(app);
+  const res = await collect(app, token);
+
+  assert.ok(res.body.marketSeries, 'marketSeries가 없다');
+  assert.ok(res.body.marketSeries.points.length > 1);
+  assert.equal(typeof res.body.marketSeries.indicators.changePct, 'number');
+});
+
+test('시장 데이터를 못 가져오면 marketSeries도 없다', async () => {
+  const { 'query1.finance.yahoo.com/v8': _removed, ...rest } = ROUTES;
+  const http = makeHttp({ ...rest, 'query1.finance.yahoo.com': new Error('다운') });
+  const { app } = setup({ http });
+  const token = await login(app);
+  const res = await collect(app, token);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.marketSeries, undefined);
+});
+
+test('marketSeries가 분석 프롬프트에 들어가지 않는다', async () => {
+  // 숫자 수십 쌍을 넣으면 토큰만 늘고, chartTrend 문장이 이미 요약하고 있다.
+  const { app, llm } = setup();
+  const token = await login(app);
+  const c = await collect(app, token);
+
+  await request(app).post('/api/analyze/news')
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Confirm-Token', c.body.confirmToken)
+    .send({ newsList: c.body.newsList, marketData: c.body.marketData });
+
+  const firstPoint = c.body.marketSeries.points[0];
+  assert.equal(llm.calls[0].user.includes(String(firstPoint.c)), false,
+    '시계열 값이 프롬프트에 들어갔다');
+});
+
+test('marketSeries 추가가 확인 토큰을 깨지 않는다', async () => {
+  // cacheKey에 영향을 주면 collect가 발급한 토큰이 analyze에서 거부된다.
+  const { app } = setup();
+  const token = await login(app);
+  const c = await collect(app, token);
+
+  const res = await request(app).post('/api/analyze/news')
+    .set('Authorization', `Bearer ${token}`)
+    .set('X-Confirm-Token', c.body.confirmToken)
+    .send({ newsList: c.body.newsList, marketData: c.body.marketData });
+
+  assert.equal(res.status, 200, JSON.stringify(res.body.error));
+});
