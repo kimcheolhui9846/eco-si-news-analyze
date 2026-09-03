@@ -35,6 +35,7 @@ Phase 1 기준. 모든 응답은 `application/json`이며, 모든 응답에 `X-R
 | `RATE_LIMITED` | 429 | rate limit 초과 (시간 창 기준) |
 | `BUDGET_EXCEEDED` | 429 | 일일 호출 수 또는 월 비용 한도 소진 |
 | `CONFIRMATION_REQUIRED` | 428 | 확인 토큰 없이 비용이 드는 분석을 요청함 |
+| `COLLECTION_FAILED` | 502 | 모든 뉴스 피드에서 자료를 수집하지 못함 |
 | `TOO_MANY_CONCURRENT` | 429 | 동시 분석 한도 초과 |
 | `INSUFFICIENT_DATA` | 422 | 중복 제거 후 유효 자료 0건 |
 | `UPSTREAM_TIMEOUT` | 504 | LLM 응답 지연 |
@@ -139,11 +140,129 @@ curl -X POST http://localhost:3000/api/auth/logout \
 
 ---
 
+## `POST /api/research/collect`
+
+인증이 필요하다. 검색어로 뉴스와 시장 데이터를 수집해 **분석 엔진이 그대로 받을 수 있는 형태**로 반환한다.
+
+**이 엔드포인트는 LLM을 호출하지 않는다.** 비용이 들지 않고 예산을 차감하지 않는다.
+
+### 요청
+
+```json
+{
+  "query": "엔비디아 AI 반도체",
+  "symbol": "NVDA",
+  "assetType": "stock",
+  "lang": "ko",
+  "range": "1mo",
+  "maxNews": 8
+}
+```
+
+| 필드 | 필수 | 제약 |
+|---|---|---|
+| `query` | ✅ | 1~200자. 뉴스 검색어이자 심볼 해석의 근거 |
+| `symbol` | ❌ | 1~32자. 없으면 자동 해석을 시도한다 |
+| `assetType` | ❌ | `stock` \| `crypto`. 기본 `stock` |
+| `lang` | ❌ | `ko` \| `en`. 기본 `ko`. 어느 피드를 쓸지 결정한다 |
+| `range` | ❌ | `5d` \| `1mo` \| `3mo` \| `6mo` \| `1y`. 기본 `1mo` |
+| `maxNews` | ❌ | 1~`MAX_NEWS_ITEMS`(20). 기본 10 |
+
+목록에 없는 필드는 `400 INVALID_REQUEST`로 거부된다.
+
+### 심볼 해석 4단계
+
+1. `symbol`이 있으면 그대로 쓴다 (`symbolSource: "explicit"`)
+2. 없으면 내장 별칭 사전을 본다 (`"alias"`) — **한글 회사명은 이 경로로만 해석된다**
+3. 별칭에 없고 질의가 ASCII면 Yahoo 검색을 시도한다 (`"search"`)
+4. 모두 실패하면 뉴스만 수집한다 (`"unresolved"`) — 오류가 아니다
+
+### 응답 `200`
+
+```json
+{
+  "requestId": "...",
+  "newsList": [
+    {
+      "title": "엔비디아, 미디어텍에 35억달러 투자",
+      "content": "...",
+      "source": "IT조선",
+      "url": "https://news.google.com/rss/articles/...",
+      "publishedAt": "2026-09-03T01:02:03.000Z",
+      "contentKind": "headline"
+    }
+  ],
+  "marketData": {
+    "assetName": "NVDA",
+    "currentPrice": "224.41 USD",
+    "priceChange": "5.23%",
+    "chartTrend": "해당 기간(22개 거래일) 종가는 5.23% 상승했습니다. ..."
+  },
+  "collected": {
+    "collectedAt": "2026-09-03T01:20:00.000Z",
+    "resolvedSymbol": "NVDA",
+    "symbolSource": "explicit",
+    "feedsUsed": ["google-news-ko", "yonhap-economy", "etnews", "yahoo-headline-NVDA"],
+    "newsCount": 8,
+    "duplicatesRemoved": 0,
+    "headlineOnlyCount": 1,
+    "degraded": []
+  },
+  "estimate": {
+    "estimatedInputTokens": 1292,
+    "assumedOutputTokens": 2000,
+    "estimatedCostUsd": 0.02323,
+    "budget": { "calls": {}, "cost": {} }
+  },
+  "confirmToken": "ct_...",
+  "confirmTokenExpiresAt": "..."
+}
+```
+
+### `collected` 필드의 의미
+
+| 필드 | 의미 |
+|---|---|
+| `resolvedSymbol` | 실제로 쓰인 티커. 해석 실패 시 `null` |
+| `symbolSource` | `explicit` \| `alias` \| `search` \| `unresolved` |
+| `feedsUsed` | 자료를 **하나 이상 준** 피드의 id |
+| `newsCount` | 중복 제거 후 실제 자료 수 |
+| `headlineOnlyCount` | **제목만 확보된 자료 수.** 분석 깊이의 한계를 나타낸다 |
+| `degraded` | 실패했거나 빠진 provider와 사유 |
+
+### 부분 실패
+
+| 상황 | 처리 |
+|---|---|
+| 일부 피드 실패 | 나머지로 진행. `degraded`에 기록 |
+| **모든 뉴스 피드 실패** | `502 COLLECTION_FAILED` — 뉴스가 없으면 분석이 성립하지 않는다 |
+| 시장 데이터 실패 | `marketData` 없이 `200`. `degraded`에 기록 |
+| 심볼 해석 실패 | 위와 같음 |
+
+### 수집한 자료로 분석하기
+
+`confirmToken`을 `X-Confirm-Token` 헤더에 담아 `/api/analyze/news`를 호출한다. 별도의 `estimate` 호출이 필요 없다.
+
+```bash
+curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: application/json'   -H "Authorization: Bearer $TOKEN"   -H "X-Confirm-Token: $CONFIRM"   -d '{"newsList": [...], "marketData": {...}}'
+```
+
+**`newsList`를 수정하면 확인 토큰이 통하지 않는다** (`428`). 작은 자료로 견적을 받고 큰 자료로 실행하는 것을 막기 위한 의도된 동작이다.
+
+전체 시나리오는 `scripts/verify-research.sh`가 자동 검증한다.
+
+---
+
 ## 비용이 드는 호출은 2단계다
 
 `/api/analyze/news`는 실제 LLM을 호출하므로 돈이 든다. 그래서 **견적 → 승인 → 실행** 순서를 강제한다.
 
 ```
+경로 A — 검색으로 시작할 때
+1) POST /api/research/collect   ← 외부 수집만. LLM 미호출. 견적·확인 토큰 포함
+2) POST /api/analyze/news       ← X-Confirm-Token 헤더 필수
+
+경로 B — 자료를 직접 넣을 때
 1) POST /api/analyze/estimate   ← LLM 미호출. 예상 비용·남은 예산·확인 토큰 반환
 2) POST /api/analyze/news       ← X-Confirm-Token 헤더 필수. 실제 호출 + 예산 차감
 ```
@@ -263,6 +382,7 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | `marketData.currentPrice` | 조건부 | 문자열 \| 숫자 | 문자열이면 64자 이하 |
 | `marketData.priceChange` | 조건부 | 문자열 \| 숫자 | 문자열이면 64자 이하 |
 | `marketData.chartTrend` | 조건부 | 문자열 | 1~`MAX_TREND_CHARS`(1000)자 |
+| `newsList[].contentKind` | ❌ | 문자열 | `headline` \| `summary` \| `full`. 없으면 `full`로 간주 |
 | `analysisPeriod` | ❌ | 문자열 | 200자 이하 |
 
 **위 목록에 없는 필드는 거부된다.** `systemPrompt`, `messages`, `model`, `temperature` 같은 필드를 보내면 `400 INVALID_REQUEST`가 반환된다. 사용자가 LLM 호출 파라미터를 조작할 수 있는 경로는 없다.
