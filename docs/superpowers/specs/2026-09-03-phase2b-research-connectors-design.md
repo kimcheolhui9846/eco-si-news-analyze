@@ -19,6 +19,9 @@
 | 논문 | Europe PMC `ebi.ac.uk/europepmc/webservices/rest/search` | `HTTP 200`, 키 불필요. DOI·연도 제공, 초록은 자료에 따라 있고 없음 |
 | 논문 | arXiv `export.arxiv.org/api/query` | `HTTP 200` (**https 필수**, http는 301). 초록이 항상 있고 날짜가 깨끗함. STEM 프리프린트 |
 | 실험 | ClinicalTrials.gov v2 `clinicaltrials.gov/api/v2/studies` | `HTTP 200`, 키 불필요. 구조화가 가장 좋다 |
+| 논문(국내) | KCI `open.kci.go.kr/po/openapi/openApiSearch.kci` | API 활성 확인. **키 필요**(무료). 파라미터 계약은 에코로 확정, 한국어 동작은 §2.2.2에서 검증 |
+
+위 네 소스는 키가 필요 없다. KCI만 키를 쓰며, 없어도 서버는 정상 기동한다.
 
 ### 1.2 탈락과 이유
 
@@ -27,7 +30,12 @@
 | Yahoo `quoteSummary` | `401 Invalid Crumb` — 쿠키+crumb 인증이 필요하다. 키 불필요 원칙과 맞지 않는다 |
 | Crossref | 초록이 5건 중 0건. 날짜 정밀도가 제각각(`[2015]`, `[2009,7]`, `[2021,11,29]`)이고 `[null]`인 경우도 있다. 검색 관련도도 낮았다(`obesity drug trial` → 백과사전 항목, 주간지) |
 | Semantic Scholar | 키 없이 `429 Too Many Requests`. 신뢰할 수 없다 |
-| DART (한국 재무) | 무료지만 회원가입·키 발급이 필요하다. 사용자가 "키 불필요 유지"를 선택했다 |
+| RISS | 공개 API 없음 (`/openapi/` → `404`). 검색 페이지는 HTML뿐이고 스크래핑은 이용약관 위반이다 |
+| DBpia | 공개 API 없음. 구독 결제 기반이라 로그인 없이는 초록도 나오지 않는다 |
+| KISTI ScienceON | API는 살아 있으나(`E4002`) KCI와 역할이 겹친다. 국내 논문 소스를 둘 둘 이유가 없어 KCI 하나로 간다 |
+| DART (한국 재무) | 이번 범위에서 제외한다. 아래 주석 참고 |
+
+**DART에 대한 기록.** 처음에는 "키 발급이 필요하다"는 이유로 탈락시켰다. 이제 KCI 키를 쓰기로 했으므로 그 이유는 더 이상 유효하지 않다. 그럼에도 이번 범위에서 빼는 이유는 다르다 — DART는 한계 1번(한국 기업 재무 부재)을 푸는 별개의 작업이고, 재무제표 XBRL 파싱은 논문 커넥터와 성격이 다르다. **Phase 2c 후보로 남긴다.** 이번 Phase의 범위를 지키기 위한 결정이지 기술적 탈락이 아니다.
 
 ### 1.3 SEC 관련 두 가지 발견
 
@@ -48,6 +56,30 @@
 | 연구 대상 | `conditionsModule.conditions` | `["People Who Are Overweight or Obesity"]` |
 | 발표일 | `statusModule.startDateStruct.date` | `"2008-09"` |
 | 상태 | `statusModule.overallStatus` | `"COMPLETED"` |
+
+---
+
+### 1.5 한국어 질의는 조용히 오염된다 — 설계를 바꾼 발견
+
+영어 소스에 한국어 검색어를 넣으면 0건이 나올 것으로 예상했다. 실측 결과는 달랐다.
+
+| 질의 | hitCount | 1위 결과 |
+|---|---|---|
+| `비만 치료제` | 106 | Some novel concepts of interval-valued q-rung orthopair fuzzy sets |
+| `배터리 재활용` | 4 | The Activity of Plant Crude Extracts against *Schistosoma* |
+| `obesity drug` (대조) | 449,475 | Shifting the goalposts in obesity drug development. |
+
+한글 토큰이 무시되고 **무관한 실존 논문**이 돌아온다. arXiv와 ClinicalTrials.gov는 0건이라 오히려 안전하다.
+
+이것이 위험한 이유는 기존 방어를 전부 통과하기 때문이다.
+
+- URL이 실제 존재하므로 `stripFabricatedUrls`에 걸리지 않는다
+- 논문이 실존하므로 `available: '자료 부족'`이 붙지 않는다
+- 결과적으로 LLM은 "비만 치료제 관련 연구"라며 퍼지집합 논문을 근거로 제시한다
+
+**환각 없이 환각과 같은 결과가 나온다.** 원본 요구사항 §12가 금지하는 상태다.
+
+따라서 **언어 가드를 필수로 넣는다.** 선택 사항이 아니라 정확성 결함의 수정이다.
 
 ---
 
@@ -103,13 +135,67 @@ ResearchItem = {
   publishedAt,          // ISO 8601. 연도만 있으면 YYYY-01-01
   datePrecision,        // 'day' | 'month' | 'year' — 연도만 있는 것을 일자처럼 쓰지 않기 위함
   peerReviewed,         // 'peer-reviewed' | 'preprint' | 'unknown'
-  sourceName,           // 'Europe PMC' | 'arXiv'
+  sourceName,           // 'Europe PMC' | 'arXiv' | 'KCI'
+  language,             // 'ko' | 'en' — 표시와 필터 양쪽에 쓴다
 }
 ```
 
 `peerReviewed`가 중요하다. **arXiv는 프리프린트라 동료 심사를 거치지 않았다.** 원본 요구사항 §12의 11번 원칙이 "전문가 검증 여부"를 구분하라고 요구한다.
 
 `datePrecision`도 중요하다. Europe PMC는 `pubYear`만 주는 경우가 많은데, 이를 `2026-01-01`로 저장하고 정밀도를 표시하지 않으면 "1월 발표"로 오독된다.
+
+#### 2.2.1 언어 가드
+
+검색어에 한글이 있으면 영어 전용 소스를 **호출하지 않는다**. 호출한 뒤 걸러내는 것이 아니라 요청 자체를 보내지 않는다. 돌아온 결과가 무관한지 판별할 신뢰할 만한 기준이 없기 때문이다.
+
+```
+hasHangul(query) = /[가-힣]/.test(query)
+
+hasHangul  → KCI만 호출
+!hasHangul → Europe PMC + arXiv + ClinicalTrials.gov 호출
+```
+
+판정 근거를 `collected.languageRoute`로 내려보내 화면에 이유를 적는다. 결과가 비었을 때 사용자가 이유를 알아야 한다.
+
+실험(ClinicalTrials.gov)도 같은 규칙을 적용한다. 한국어 질의에는 국내 대체 소스를 찾지 못했으므로 `available: '자료 부족'`으로 나가고 사유를 함께 싣는다.
+
+#### 2.2.2 KCI — 국내 등재 학술지
+
+RISS는 공개 API가 없고(`/openapi/` → 404), DBpia는 구독 기반이라 초록조차 로그인을 요구한다. 두 곳 모두 HTML 스크래핑은 이용약관 위반이며 얻을 것도 없다. 국내 논문의 정당한 경로는 한국연구재단 KCI OpenAPI다.
+
+```
+GET https://open.kci.go.kr/po/openapi/openApiSearch.kci
+  ?apiCode=articleSearch&key=<KCI_API_KEY>&title=<질의>&displayCount=10&page=1
+```
+
+키 없이 파라미터 에코로 확정한 계약이다.
+
+| 항목 | 확정된 값 |
+|---|---|
+| 허용 파라미터 | `apiCode` `key` `title` `author` `journal` `keyword` `year` `page` `displayCount` |
+| **미지원** | `abstract` — 에코에서 탈락한다. **초록 검색 불가**, 제목·키워드로만 검색한다 |
+| `displayCount` | 하한 10, 상한 100 (5→10, 200→100으로 보정됨) |
+| 응답 형식 | XML. 기존 `fast-xml-parser`를 그대로 쓴다 |
+| 오류 표현 | `<resultMsg>`가 **여러 개** 누적된다. 배열로 받아야 한다 |
+
+**오류 판정은 HTTP 상태코드가 아니라 본문으로 한다.** 같은 계열인 KISTI ScienceON은 `HTTP 200`에 본문 `statusCode 400`을 실어 보낸다. 상태코드만 보면 오류를 성공으로 처리한다.
+
+##### 키 발급 후 최초로 검증할 것
+
+`key=test`로 받은 에코에서 `title=배터리`가 `U+FFFD` 연속으로 깨져 돌아왔다. UTF-8로 보내든 EUC-KR로 보내든 **바이트 단위로 동일하게 깨졌다**. 서로 다른 입력이 같은 결과를 냈으므로 이는 인코딩 단서가 아니라 에코 필드 자체의 결함이다. 키가 없어 실제 검색이 실행되지 않으니 여기서는 판별할 수 없다.
+
+**따라서 한국어 질의가 KCI에서 동작한다고 가정하지 않는다.** 키 발급 직후 다음 순서로 확인하고 결과에 맞춰 구현을 확정한다.
+
+1. `title=battery` (ASCII)로 결과가 오는지 — API 자체의 동작 확인
+2. `title=배터리`를 UTF-8 퍼센트 인코딩으로 — 결과가 오면 그대로 간다
+3. 0건이면 EUC-KR 퍼센트 인코딩(`%B9%E8%C5%CD%B8%AE`)으로 재시도
+4. 둘 다 실패하면 한계로 문서화하고 언어 가드에서 KCI도 제외한다
+
+이 검증은 구현 계획의 첫 태스크다. 결과에 따라 이후 태스크의 내용이 달라진다.
+
+##### 키가 없을 때
+
+`KCI_API_KEY`가 비어 있으면 KCI를 호출하지 않는다. 한국어 질의의 논문 결과는 `available: '자료 부족'`이 되고 사유로 "국내 논문 검색에는 KCI API 키가 필요합니다"를 싣는다. **키 없이도 서버는 정상 기동하고 뉴스·차트·재무는 그대로 동작한다.**
 
 ### 2.3 실험 — 검색어 기반
 
@@ -394,6 +480,18 @@ hashRequest({
 
 검토·보고서 양쪽에 세 섹션을 추가한다. 원본 §16의 11개 섹션이 완성된다.
 
+**비어 있을 때 이유를 반드시 적는다.** 자료가 없는 것과 못 가져온 것은 사용자에게 완전히 다른 정보다. `languageRoute`와 `degraded`를 근거로 다음을 구분해 표시한다.
+
+| 상황 | 화면 문구 |
+|---|---|
+| 한국어 질의 + KCI 키 없음 | 국내 논문 검색에는 KCI API 키가 필요합니다 |
+| 한국어 질의 + 실험 | 임상시험 자료는 영어 검색어에서만 제공됩니다 |
+| 한국어 질의 + 영어 소스 생략 | 해외 논문 DB는 영어 검색어에서만 동작합니다 |
+| 검색은 됐으나 0건 | 검색 결과가 없습니다 |
+| 호출 실패 | 일시적으로 가져오지 못했습니다 |
+
+빈 섹션을 근거 없이 감추지 않는다. 감추면 사용자는 그 자료가 존재하지 않는다고 오해한다.
+
 ---
 
 ## 7. 오류 처리
@@ -423,6 +521,8 @@ hashRequest({
 - `europepmc-battery.json` — Europe PMC 검색 결과
 - `arxiv-battery.xml` — arXiv Atom 응답
 - `clinicaltrials-obesity.json` — ClinicalTrials.gov v2 (2건)
+- `kci-error-nokey.xml` — KCI 오류 응답. `<resultMsg>` 다중 누적 (저장 완료)
+- `kci-articles.xml` — KCI 정상 검색 결과. **키 발급 후 저장한다.** 그전까지 이 픽스처를 쓰는 테스트는 `skip`
 
 ### 재무 provider
 
@@ -441,6 +541,25 @@ hashRequest({
 - **연도만 있으면 `datePrecision: 'year'`**
 - 두 소스 병합 후 중복 제거(DOI 기준)
 - 한 소스 실패 시 나머지로 진행
+
+### 언어 가드 (§2.2.1)
+
+fetch 스텁으로 **나간 요청 URL을 기록해** 검증한다. 결과를 거르는 게 아니라 호출 자체를 막는 설계이므로, 호출 여부가 곧 테스트 대상이다.
+
+- `'배터리 재활용'` → `ebi.ac.uk`·`arxiv.org`·`clinicaltrials.gov`로 요청이 **0건**
+- `'battery recycling'` → 세 호스트로 요청이 나간다
+- `'삼성 battery'` (혼합) → 한글이 있으므로 영어 소스를 막는다
+- `collected.languageRoute`가 판정 근거를 담는다
+- 한국어 질의에서 실험이 `available: '자료 부족'`이고 사유 문자열이 붙는다
+
+### KCI provider (§2.2.2)
+
+- 오류 픽스처에서 `<resultMsg>` **여러 개를 배열로** 읽는다
+- `resultMsg`에 오류가 있으면 **HTTP 200이어도 실패로 판정한다**
+- `KCI_API_KEY`가 비면 호출하지 않고 사유가 담긴 `자료 부족`을 돌려준다
+- 키가 비어도 `loadConfig`가 통과하고 서버가 기동한다
+- `displayCount`를 10~100으로 강제한다
+- API 키가 로그에 남지 않는다 (`redact` 확인)
 
 ### 실험 provider
 
@@ -491,6 +610,9 @@ EXPERIMENT_CACHE_TTL_MS=3600000
 # 수집 개수 상한
 MAX_RESEARCH_ITEMS=5
 MAX_EXPERIMENT_ITEMS=5
+
+# 국내 논문 (선택). 비우면 한국어 질의의 논문이 '자료 부족'으로 나간다
+KCI_API_KEY=
 ```
 
 재무 캐시가 24시간인 이유: 분기 실적은 하루에 여러 번 바뀌지 않는다. 논문·실험은 1시간.
@@ -498,7 +620,7 @@ MAX_EXPERIMENT_ITEMS=5
 허용목록에 호스트 3개를 추가한다.
 
 ```
-data.sec.gov, www.ebi.ac.uk, export.arxiv.org, clinicaltrials.gov
+data.sec.gov, www.ebi.ac.uk, export.arxiv.org, clinicaltrials.gov, open.kci.go.kr
 ```
 
 ---
@@ -510,7 +632,10 @@ data.sec.gov, www.ebi.ac.uk, export.arxiv.org, clinicaltrials.gov
 3. **CIK를 별칭 사전에 수동으로 넣는다.** 사전에 없는 미국 기업은 재무가 나오지 않는다. 티커 매핑 파일은 연락처 UA를 요구해 쓰지 않는다
 4. **arXiv는 프리프린트다.** 동료 심사를 거치지 않았다. `peerReviewed` 필드로 구분하지만 자료 자체의 성격은 바뀌지 않는다
 5. **Europe PMC 초록이 일관되지 않다.** 뉴스성 기사(Nature·BMJ 논평 등)는 초록이 없다
-6. **자료를 늘리면 비용이 오른다.** 체크박스로 고르게 했고 예상 비용이 승인 전에 보이지만, 전부 켜면 프롬프트가 기존의 두세 배가 된다
+6. **KCI는 초록으로 검색할 수 없다.** 허용 파라미터에 `abstract`가 없다. 제목·키워드에 검색어가 없는 논문은 찾지 못한다
+7. **한국어 질의에는 임상시험 자료가 없다.** ClinicalTrials.gov는 영어 전용이고 국내 대체 소스를 찾지 못했다. 언어 가드가 호출을 막고 사유를 표시한다
+8. **KCI 키가 없으면 한국어 질의의 논문이 비어 나간다.** 키는 사용자가 open.kci.go.kr에서 직접 발급한다. 서버 기동과 다른 기능에는 영향이 없다
+9. **자료를 늘리면 비용이 오른다.** 체크박스로 고르게 했고 예상 비용이 승인 전에 보이지만, 전부 켜면 프롬프트가 기존의 두세 배가 된다
 
 ---
 
@@ -522,5 +647,8 @@ data.sec.gov, www.ebi.ac.uk, export.arxiv.org, clinicaltrials.gov
 - 브라우저에서 세 섹션이 표시되고 배지·기준 기간이 보인다
 - **`include`를 보내지 않으면 Phase 2a와 동일하게 동작한다**
 - **뉴스만으로 견적받고 논문을 추가해 실행하면 `428`로 막힌다** (§4.5)
+- **한국어 검색어로 수집하면 Europe PMC·arXiv·ClinicalTrials로 요청이 나가지 않는다** (§2.2.1)
+- **`KCI_API_KEY`가 비어도 서버가 기동하고 뉴스·차트·재무가 동작한다**
+- KCI 키로 한국어 질의 1회 성공, 또는 §2.2.2의 검증 4단계 결과를 한계로 문서화
 - `docs/api.md`·`architecture.md`·`security.md`·`README.md` 갱신
 - PR 생성

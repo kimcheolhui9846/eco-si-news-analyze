@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MetaData>
+  <inputData>
+    <key>test</key>
+    <apiCode>nonsense</apiCode>
+    <page>1</page>
+    <displayCount>10</displayCount>
+  </inputData>
+  <outputData>
+    <result>
+      <resultMsg>등록되지 않은 key 입니다.</resultMsg>
+      <resultMsg>등록되지 않은 서비스</resultMsg>
+      <resultMsg>검색 조건이 없습니다.</resultMsg>
+    </result>
+  </outputData>
+</MetaData>
