@@ -1,0 +1,74 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/W7HkPICYWGvolWR6Ad8Pv24NQ6A</id>
+  <title>arXiv Query: search_query=all:battery OR all:recycling&amp;id_list=&amp;start=0&amp;max_results=3</title>
+  <updated>2026-09-03T12:08:55Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=all:battery+OR+all:recycling&amp;start=0&amp;max_results=3&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>3</opensearch:itemsPerPage>
+  <opensearch:totalResults>10819</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2412.20687v1</id>
+    <title>Powering the Future: Innovations in Electric Vehicle Battery Recycling</title>
+    <updated>2024-12-30T03:47:05Z</updated>
+    <link href="https://arxiv.org/abs/2412.20687v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2412.20687v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The global shift towards electric vehicles (EVs) as a sustainable alternative to traditional gasoline-powered cars has triggered a significant rise in the demand for lithium-ion batteries. However, as the adoption of EVs grows, the issue of battery disposal and recycling has emerged as a critical challenge. The recycling of EV batteries is essential not only for reducing the environmental impact of battery waste but also for ensuring the sustainable supply of critical raw materials such as lithium, cobalt, and nickel. This paper explores recent innovations in the field of electric vehicle battery recycling, examining advanced techniques such as direct recycling, hydrometallurgical processes, and sustainable battery design. It also highlights the role of policy and industry collaboration in improving recycling infrastructure and addressing the economic and environmental challenges associated with battery waste. By focusing on both the technical and regulatory aspects of EV battery recycling, this paper aims to provide a comprehensive overview of the state of the industry and the future outlook for recycling technologies, ultimately paving the way for a cleaner, more sustainable future in transportation.</summary>
+    <category term="cs.CE" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-12-30T03:47:05Z</published>
+    <arxiv:primary_category term="cs.CE"/>
+    <author>
+      <name>Venkata Sai Chandra Prasanth Narisetty</name>
+    </author>
+    <author>
+      <name>Tejaswi Maddineni</name>
+    </author>
+    <arxiv:doi>10.62441/nano-ntp.vi.3915</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.62441/nano-ntp.vi.3915" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2401.07238v1</id>
+    <title>Coherently Driven Quantum Harmonic Oscillator Battery</title>
+    <updated>2024-01-14T09:41:48Z</updated>
+    <link href="https://arxiv.org/abs/2401.07238v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2401.07238v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Quantum harmonic oscillator (QHO) battery models have been studied with significant importance in the recent past because these batteries are experimentally realizable and have high ergotropy and capacity to store more than one quanta of energy. QHO battery models are reinvestigated here to answer a set of fundamental questions: Do such models have any benefit? Is unbounded charging possible? Does the use of a catalyst system enhance the energy transfer to quantum batteries? These questions are answered both numerically and analytically by considering a model that allows a laser to shine on a QHO charger that interacts with a QHO battery. In contrast to some of the existing works, the obtained answers are mostly negative. Specifically, in the present work, the laser frequency is tuned with the frequency of the global charger-battery system, which is affected by the interaction between QHOs. It is reported that for a fixed laser field amplitude $\textit{F}$, the battery can store more energy when tuned with the frequency of the global charger-battery system compared to energy stored by tuning the laser frequency with local frequencies of the charger and battery. The charging process of the open QHO, which is a simplified model, and the self-discharging (dissipation) process after switching off the laser field are also investigated to reveal that the charging process of QHO in the simplified model is faster than the charging process of the catalytic (non-catalytic) battery. Further, it's observed that the self-discharging process is almost two times faster than the charging process which makes such models unstable against interaction with the environment.</summary>
+    <category term="quant-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-01-14T09:41:48Z</published>
+    <arxiv:comment>Advantages and limitations of quantum harmonic oscillator battery is investigated</arxiv:comment>
+    <arxiv:primary_category term="quant-ph"/>
+    <author>
+      <name>Kuldeep Gangwar</name>
+    </author>
+    <author>
+      <name>Anirban Pathak</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2303.07617v1</id>
+    <title>ABatRe-Sim: A Comprehensive Framework for Automated Battery Recycling Simulation</title>
+    <updated>2023-03-14T03:55:58Z</updated>
+    <link href="https://arxiv.org/abs/2303.07617v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2303.07617v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>With the rapid surge in the number of on-road Electric Vehicles (EVs), the amount of spent lithium-ion (Li-ion) batteries is also expected to explosively grow. The spent battery packs contain valuable metal and materials that should be recovered, recycled, and reused. However, only less than 5% of the Li-ion batteries are currently recycled, due to a multitude of challenges in technology, logistics and regulation. Existing battery recycling is performed manually, which can pose a series of risks to the human operator as a consequence of remaining high voltage and chemical hazards. Therefore, there is a critical need to develop an automated battery recycling system. In this paper, we present ABatRe-sim, an open-source robotic battery recycling simulator, to facilitate the research and development in efficient and effective battery recycling au-omation. Specifically, we develop a detailed CAD model of the battery pack (with screws, wires, and battery modules), which is imported into Gazebo to enable robot-object interaction in the robot operating system (ROS) environment. It also allows the simulation of battery packs of various aging conditions. Furthermore, perception, planning, and control algorithms are developed to establish the benchmark to demonstrate the interface and realize the basic functionalities for further user customization. Discussions on the utilization and future extensions of the simulator are also presented.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-03-14T03:55:58Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Huanqing Wang</name>
+    </author>
+    <author>
+      <name>Kaixiang Zhang</name>
+    </author>
+    <author>
+      <name>Keyi Zhu</name>
+    </author>
+    <author>
+      <name>Ziyou Song</name>
+    </author>
+    <author>
+      <name>Zhaojian Li</name>
+    </author>
+  </entry>
+</feed>
