@@ -39,12 +39,16 @@ export default function App({ api = defaultApi }) {
     }
   };
 
-  const approve = async ({ newsList, marketData, confirmToken }) => {
+  const approve = async ({
+    newsList, marketData, financial, research, experiments, confirmToken,
+  }) => {
     setStep('analyzing');
     setError(null);
     try {
-      // newsList를 그대로 넘긴다. 한 글자만 바뀌어도 확인 토큰이 428로 거부된다.
-      const result = await api.analyze({ newsList, marketData, confirmToken });
+      // 받은 자료를 그대로 넘긴다. 한 글자만 바뀌어도 확인 토큰이 428로 거부된다.
+      const result = await api.analyze({
+        newsList, marketData, financial, research, experiments, confirmToken,
+      });
       setReport(result);
       setStep('report');
     } catch (err) {
@@ -91,6 +95,10 @@ export default function App({ api = defaultApi }) {
           report={report}
           series={collected?.marketSeries}
           marketData={collected?.marketData}
+          financial={collected?.financial}
+          research={collected?.research}
+          experiments={collected?.experiments}
+          collectedMeta={collected?.collected}
           onNewSearch={newSearch}
         />
       )}

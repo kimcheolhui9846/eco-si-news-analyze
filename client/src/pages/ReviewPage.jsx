@@ -1,11 +1,17 @@
 import SourceSummary from '../components/SourceSummary.jsx';
 import NewsList from '../components/NewsList.jsx';
+import FinancialMetrics from '../components/FinancialMetrics.jsx';
+import ResearchList from '../components/ResearchList.jsx';
+import ExperimentStatus from '../components/ExperimentStatus.jsx';
 import { formatUsd } from '../lib/format.js';
 
 export default function ReviewPage({ collected, onApprove, onBack, busy }) {
   if (!collected) return null;
 
-  const { newsList, marketData, collected: meta, estimate, confirmToken } = collected;
+  const {
+    newsList, marketData, financial, research, experiments,
+    collected: meta, estimate, confirmToken,
+  } = collected;
   const headlineOnly = meta?.headlineOnlyCount ?? 0;
 
   return (
@@ -33,6 +39,18 @@ export default function ReviewPage({ collected, onApprove, onBack, busy }) {
         <NewsList items={newsList} />
       </section>
 
+      {/* 선택한 범위는 비어 있어도 렌더링한다. 감추면 자료가 존재하지
+          않는다고 오해한다. */}
+      {meta?.included?.includes('financial') && (
+        <FinancialMetrics financial={financial} collected={meta} />
+      )}
+      {meta?.included?.includes('research') && (
+        <ResearchList items={research} collected={meta} />
+      )}
+      {meta?.included?.includes('experiments') && (
+        <ExperimentStatus items={experiments} collected={meta} />
+      )}
+
       {/* 승인 바. 스크롤해도 화면 아래 붙어 있다. */}
       <div className="sticky-bar">
         <div className="sticky-info">
@@ -54,7 +72,9 @@ export default function ReviewPage({ collected, onApprove, onBack, busy }) {
           type="button"
           className="primary"
           disabled={busy}
-          onClick={() => onApprove({ newsList, marketData, confirmToken })}
+          onClick={() => onApprove({
+            newsList, marketData, financial, research, experiments, confirmToken,
+          })}
         >
           {busy ? '분석 중…' : '분석 시작'}
         </button>
