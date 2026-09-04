@@ -59,7 +59,7 @@ export function createApiClient({ fetchImpl = fetch } = {}) {
     session: () => call('/api/auth/session'),
     budget: () => call('/api/budget'),
 
-    collect: ({ query, symbol, assetType, lang, range, maxNews }) => {
+    collect: ({ query, symbol, assetType, lang, range, maxNews, include }) => {
       // 빈 문자열을 보내면 zod의 min(1)에서 400이 난다. 아예 뺀다.
       const body = { query };
       if (symbol) body.symbol = symbol;
@@ -67,14 +67,19 @@ export function createApiClient({ fetchImpl = fetch } = {}) {
       if (lang) body.lang = lang;
       if (range) body.range = range;
       if (typeof maxNews === 'number') body.maxNews = maxNews;
+      if (Array.isArray(include) && include.length > 0) body.include = include;
       return call('/api/research/collect', { method: 'POST', body });
     },
 
-    analyze: ({ newsList, marketData, confirmToken }) => {
-      // newsList를 그대로 넘긴다. 한 글자만 바뀌어도 cacheKey가 달라져
-      // 확인 토큰이 428로 거부된다.
+    analyze: ({ newsList, marketData, financial, research, experiments, confirmToken }) => {
+      // 받은 자료를 그대로 되돌려 보낸다. 한 글자만 바뀌어도 cacheKey가
+      // 달라져 확인 토큰이 428로 거부된다. 빈 자료는 필드를 아예 넣지 않는다 —
+      // 서버가 해시를 계산할 때 쓰는 규칙과 같아야 한다.
       const body = { newsList };
       if (marketData) body.marketData = marketData;
+      if (financial) body.financial = financial;
+      if (research?.length) body.research = research;
+      if (experiments?.length) body.experiments = experiments;
       return call('/api/analyze/news', {
         method: 'POST',
         body,

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import ScopePicker from './ScopePicker.jsx';
+
 const RANGES = [
   ['5d', '5일'], ['1mo', '1개월'], ['3mo', '3개월'], ['6mo', '6개월'], ['1y', '1년'],
 ];
@@ -7,6 +9,7 @@ const RANGES = [
 export default function SearchForm({ onSubmit, disabled }) {
   const [form, setForm] = useState({
     query: '', symbol: '', assetType: 'stock', lang: 'ko', range: '1mo', maxNews: 10,
+    include: ['news', 'market'],
   });
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -54,6 +57,12 @@ export default function SearchForm({ onSubmit, disabled }) {
       <label htmlFor="maxNews">최대 기사 수: {form.maxNews}</label>
       <input id="maxNews" type="range" min="1" max="20" value={form.maxNews}
         onChange={(e) => setForm({ ...form, maxNews: Number(e.target.value) })} />
+
+      <ScopePicker
+        value={form.include}
+        onChange={(include) => setForm({ ...form, include })}
+        disabled={disabled}
+      />
 
       <button type="submit" className="primary" disabled={disabled || !form.query}>
         자료 수집

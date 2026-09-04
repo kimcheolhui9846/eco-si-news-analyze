@@ -132,3 +132,30 @@ test('JSON이 아닌 응답도 ApiCallError로 바꾼다', async () => {
     (e) => e instanceof ApiCallError && e.status === 502,
   );
 });
+
+// ─── Phase 2b ───
+
+test('include를 본문에 싣는다', async () => {
+  const f = makeFetch({ body: {} });
+  await createApiClient({ fetchImpl: f }).collect({ query: '엔비디아', include: ['news', 'research'] });
+  assert.deepEqual(JSON.parse(f.calls[0].opts.body).include, ['news', 'research']);
+});
+
+test('include가 없으면 본문에 넣지 않는다', async () => {
+  const f = makeFetch({ body: {} });
+  await createApiClient({ fetchImpl: f }).collect({ query: '엔비디아' });
+  assert.equal('include' in JSON.parse(f.calls[0].opts.body), false);
+});
+
+test('분석 요청에 재무·논문·실험을 그대로 넘긴다', async () => {
+  // 한 글자만 바뀌어도 cacheKey가 달라져 확인 토큰이 428로 거부된다.
+  const f = makeFetch({ body: {} });
+  const research = [{ title: '논문' }];
+  await createApiClient({ fetchImpl: f }).analyze({
+    newsList: [{ title: 'a' }], research, confirmToken: 'ct_x',
+  });
+
+  const body = JSON.parse(f.calls[0].opts.body);
+  assert.deepEqual(body.research, research);
+  assert.equal('experiments' in body, false, '빈 자료는 필드를 아예 넣지 않는다');
+});

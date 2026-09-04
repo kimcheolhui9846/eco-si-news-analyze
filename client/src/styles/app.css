@@ -191,3 +191,8 @@ a { color: var(--accent); }
   .page.has-sticky { padding-bottom: 170px; }
   .page-head { flex-direction: column; align-items: start; gap: 4px; }
 }
+
+/* 수집 범위 선택 */
+.scope-picker { display: grid; gap: 0.5rem; }
+.scope-row { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 0.5rem; }
+.scope-label { font-weight: 600; }
