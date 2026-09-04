@@ -69,6 +69,10 @@ export {
 export {
   createExperimentProvider, parseClinicalTrials,
 } from './lib/providers/experiments.js';
+export {
+  assignResearchIds, assignExperimentIds, FINANCIAL_SOURCE_ID,
+  formatFinancialSection, formatResearchSection, formatExperimentSection,
+} from './lib/sections.js';
 
 // ─── 앱 팩토리 ───
 
