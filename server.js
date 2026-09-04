@@ -66,6 +66,9 @@ export {
 export {
   createKciProvider, buildKciUrl, parseKciResponse, isIpRejection, redactKey, KCI_FIELD_NAMES,
 } from './lib/providers/kci.js';
+export {
+  createExperimentProvider, parseClinicalTrials,
+} from './lib/providers/experiments.js';
 
 // ─── 앱 팩토리 ───
 
