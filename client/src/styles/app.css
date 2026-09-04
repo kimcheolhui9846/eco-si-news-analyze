@@ -193,9 +193,13 @@ a { color: var(--accent); }
 }
 
 /* 수집 범위 선택 */
-.scope-picker { display: grid; gap: 0.5rem; }
-.scope-row { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 0.5rem; }
-.scope-label { font-weight: 600; }
+/* .search-form label 이 (0,1,1)이라 클래스 하나로는 이기지 못한다. 폼으로 한정한다. */
+.scope-picker { display: grid; gap: 8px; margin-top: 14px; }
+.search-form .scope-row {
+  display: grid; grid-template-columns: auto auto 1fr;
+  align-items: baseline; gap: 8px; margin-top: 0; font-weight: 400;
+}
+.scope-row .scope-label { font-weight: 600; }
 
 /* 재무·논문·실험 섹션 */
 .metrics { width: 100%; border-collapse: collapse; }

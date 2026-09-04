@@ -255,3 +255,24 @@ test('저자가 상한 이하면 authorCount가 실제 인원과 같다', () => 
   const items = parseEuropePmc(PMC);
   assert.equal(items[0].authorCount, items[0].authors.length);
 });
+
+test('저자 이름이 아닌 구분 기호를 저자로 세지 않는다', () => {
+  // 실측: arXiv 협업 논문이 <name>NVIDIA</name><name>:</name><name>Aarti Basant</name>로
+  // 온다. ':'를 저자로 실으면 화면과 프롬프트에 "NVIDIA, :, Aarti Basant"가 나간다.
+  const xml = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<feed xmlns="http://www.w3.org/2005/Atom"><entry>',
+    '<id>http://arxiv.org/abs/2508.14444v1</id>',
+    '<title>NVIDIA Nemotron Nano 2</title><summary>초록</summary>',
+    '<published>2025-08-20T00:00:00Z</published>',
+    '<link href="https://arxiv.org/abs/2508.14444v1" rel="alternate" type="text/html"/>',
+    '<author><name>NVIDIA</name></author>',
+    '<author><name>:</name></author>',
+    '<author><name>Aarti Basant</name></author>',
+    '</entry></feed>',
+  ].join('');
+
+  const [item] = parseArxiv(xml);
+  assert.deepEqual(item.authors, ['NVIDIA', 'Aarti Basant']);
+  assert.equal(item.authorCount, 2, '구분 기호를 총 인원에 넣으면 저자 수가 틀린다');
+});
