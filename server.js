@@ -60,6 +60,9 @@ export {
   createFinancialProvider, pickLatestFact, findYearAgoFact, FINANCIAL_CONCEPTS,
 } from './lib/providers/financial.js';
 export { hasHangul, routeForQuery } from './lib/providers/language.js';
+export {
+  createResearchProvider, parseEuropePmc, parseArxiv, dedupeResearch,
+} from './lib/providers/papers.js';
 
 // ─── 앱 팩토리 ───
 
