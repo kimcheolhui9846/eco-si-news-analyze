@@ -165,11 +165,17 @@ KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 
   Phase 2b 실네트워크 검증은 환경변수를 인라인으로 넘겨(`LLM_MODE=mock`)
   돌렸으므로 LLM 비용이 들지 않았다
 
-- **실제 OpenAI 호출 검증이 아직 0회다.** mock 모드로만 검증하고 병합했다
-  (2026-09-02 사용자가 "나중에 맞춰가고 머지하자"고 결정). `.env`에 실제 키를 넣고
-  `LLM_MODE=live ./scripts/verify.sh`를 1회 돌려야 구조화 출력이 실모델에서
-  동작하는지 확인된다. `meta.degraded=false`여야 정상
-- `gpt-4o`는 2026년 기준 구형 모델. 원본 요구사항대로 기본값 유지하되 `OPENAI_MODEL` 교체만으로 바꿀 수 있게 구현
+- ~~실제 OpenAI 호출 검증이 아직 0회다.~~ **2026-09-04 완료.** `./scripts/verify.sh`
+  **통과 9 / 실패 0**. `degraded=false`로 구조화 출력이 실모델에서 첫 시도에 통했다.
+  Phase 2b에서 추가한 `financialSummary`·`researchSummary`·`experimentSummary`
+  세 필드까지 포함한 strict json_schema가 그대로 받아들여졌다.
+  응답 모델 `gpt-4o-2024-08-06`, 실제 비용 **$0.00532**
+- `gpt-4o`는 2026년 기준 구형 모델. 원본 요구사항대로 기본값 유지하되 `OPENAI_MODEL`
+  교체만으로 바꿀 수 있게 구현했다. **모델을 바꾸면 `PRICE_INPUT_PER_1M`·
+  `PRICE_OUTPUT_PER_1M`도 함께 고쳐야 한다** — 안 고치면 예산 상한이 엉뚱한 단가로
+  계산돼 비용 방어가 무의미해진다. 2026-09-04 기준 계정에서 쓸 수 있는 모델은
+  `/v1/models`로 확인했다. `gpt-5.5`와 `gpt-5.5-pro`는 있으나 **`gpt-5.5-mini`는 없다.**
+  mini 계열 최신은 `gpt-5.4-mini`다
 - 토큰 추정은 문자수/4 근사치 — 한국어에서 부정확. 보수적 마진 적용 예정
 
 ---
