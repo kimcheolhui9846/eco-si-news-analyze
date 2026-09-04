@@ -32,6 +32,12 @@ import { createBudgetTracker, estimateCostUsd } from './lib/budget.js';
 import { createHttpClient } from './lib/http.js';
 import { createRssNewsProvider } from './lib/providers/news.js';
 import { createMarketProvider } from './lib/providers/market.js';
+import { cikForSymbol } from './lib/providers/aliases.js';
+import { createFinancialProvider } from './lib/providers/financial.js';
+import { createResearchProvider } from './lib/providers/papers.js';
+import { createKciProvider } from './lib/providers/kci.js';
+import { createExperimentProvider } from './lib/providers/experiments.js';
+import { assignResearchIds, assignExperimentIds } from './lib/sections.js';
 
 // 기존 테스트가 '../server.js'에서 import하던 심볼을 그대로 유지한다.
 export { ApiError } from './lib/errors.js';
@@ -269,6 +275,37 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
     makeBreaker: makeProviderBreaker,
   });
 
+  const financialProvider = createFinancialProvider({
+    http: httpClient,
+    cache: createTtlCache({ ttlMs: config.financialCacheTtlMs, maxEntries: 100, clock: now }),
+    clock: now,
+    makeBreaker: makeProviderBreaker,
+  });
+
+  // 키가 없으면 이 provider가 호출하지 않고 사유만 돌려준다.
+  const kciProvider = createKciProvider({
+    http: httpClient,
+    cache: createTtlCache({ ttlMs: config.researchCacheTtlMs, maxEntries: 100, clock: now }),
+    clock: now,
+    makeBreaker: makeProviderBreaker,
+    apiKey: config.kciApiKey,
+  });
+
+  const researchProvider = createResearchProvider({
+    http: httpClient,
+    cache: createTtlCache({ ttlMs: config.researchCacheTtlMs, maxEntries: 100, clock: now }),
+    clock: now,
+    makeBreaker: makeProviderBreaker,
+    kci: kciProvider,
+  });
+
+  const experimentProvider = createExperimentProvider({
+    http: httpClient,
+    cache: createTtlCache({ ttlMs: config.experimentCacheTtlMs, maxEntries: 100, clock: now }),
+    clock: now,
+    makeBreaker: makeProviderBreaker,
+  });
+
   // ─── 수집 엔드포인트 ───
 
   const researchSchema = buildResearchSchema(config);
@@ -285,13 +322,31 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       }
 
       const { query, symbol, assetType, lang = 'ko', range = '1mo', maxNews = 10 } = parsed.data;
+      const included = normalizeInclude(parsed.data.include);
+      const wanted = (scope) => included.includes(scope);
 
       const resolved = await marketProvider.resolveSymbol({ query, symbol, assetType });
 
-      // 뉴스와 시장 데이터를 병렬로 가져온다. 하나가 느려도 다른 하나를 기다리게 하지 않는다.
-      const [news, market] = await Promise.all([
+      // 선택된 provider만 호출한다. 하나가 느리거나 실패해도 나머지로 진행한다.
+      const [news, market, financialResult, researchResult, experimentResult] = await Promise.all([
         newsProvider.search({ query, lang, limit: maxNews, symbol: resolved.symbol }),
-        marketProvider.fetch({ symbol: resolved.symbol, assetType: resolved.assetType, range }),
+        wanted('market')
+          ? marketProvider.fetch({ symbol: resolved.symbol, assetType: resolved.assetType, range })
+          : null,
+        wanted('financial')
+          // 별칭으로 해석했으면 cik가 함께 온다. symbol을 직접 넣은 경우에는
+          // 티커로 역조회한다.
+          ? financialProvider.fetch({
+            cik: resolved.cik ?? cikForSymbol(resolved.symbol),
+            symbol: resolved.symbol,
+          })
+          : null,
+        wanted('research')
+          ? researchProvider.search({ query, limit: config.maxResearchItems })
+          : null,
+        wanted('experiments')
+          ? experimentProvider.search({ query, limit: config.maxExperimentItems })
+          : null,
       ]);
 
       // 뉴스가 없으면 분석이 성립하지 않는다.
@@ -305,13 +360,29 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       }
 
       const degraded = news.degraded.map((d) => ({ provider: 'news', ...d }));
-      if (!market) {
+
+      if (wanted('market') && !market) {
         degraded.push({
           provider: 'market',
           reason: resolved.symbol
             ? '시장 데이터를 가져오지 못했습니다.'
             : '심볼을 해석하지 못했습니다.',
         });
+      }
+      if (wanted('financial') && !financialResult) {
+        degraded.push({
+          provider: 'financial',
+          reason: '미국 상장사가 아니거나 사전에 없는 종목입니다. SEC EDGAR는 미국 상장사만 다룹니다.',
+        });
+      }
+      for (const d of financialResult?.degraded ?? []) {
+        degraded.push({ provider: 'financial', ...d });
+      }
+      for (const d of researchResult?.degraded ?? []) {
+        degraded.push({ provider: 'research', ...d });
+      }
+      for (const d of experimentResult?.degraded ?? []) {
+        degraded.push({ provider: 'experiments', ...d });
       }
 
       // 분석 엔진에 넘길 형태로 맞춘다. sourceId는 분석 단계에서 부여된다.
@@ -323,6 +394,17 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
         publishedAt: i.publishedAt,
         contentKind: i.contentKind,
       }));
+
+      // 자료가 비면 필드를 아예 싣지 않는다. JSON.stringify가 undefined는
+      // 버리고 []는 남기므로, 규칙을 하나로 고정해야 cacheKey가 일치한다.
+      const financial = financialResult ?? undefined;
+      const research = researchResult?.items.length ? researchResult.items : undefined;
+      const experiments = experimentResult?.items.length ? experimentResult.items : undefined;
+
+      // 언어 판정 근거. 결과가 비었을 때 사용자가 이유를 알아야 한다.
+      const languageRoute = researchResult?.languageRoute
+        ?? experimentResult?.languageRoute
+        ?? null;
 
       const marketData = market?.marketData;
       // 차트용 시계열. 분석 프롬프트에는 넣지 않는다 — 토큰만 늘고
@@ -336,7 +418,12 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       const { items, duplicatesRemoved } =
         normalizeNewsList(newsList, { assetName: marketData?.assetName });
       const collectedAt = new Date(now.now()).toISOString();
-      const userPrompt = buildUserPrompt({ items, marketData, collectedAt });
+      const userPrompt = buildUserPrompt({
+        items, marketData, collectedAt,
+        financial,
+        research: assignResearchIds(research ?? []),
+        experiments: assignExperimentIds(experiments ?? []),
+      });
 
       const estimatedInputTokens = estimateTokens(SYSTEM_PROMPT) + estimateTokens(userPrompt);
       const estimatedCostUsd = estimateCostUsd(
@@ -345,7 +432,9 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       );
 
       const cacheKey = hashRequest({
-        items, marketData, analysisPeriod: undefined, model: config.openaiModel,
+        items, marketData, analysisPeriod: undefined,
+        financial, research, experiments,
+        model: config.openaiModel,
       });
 
       const confirmToken = `ct_${randomBytes(24).toString('base64url')}`;
@@ -356,12 +445,20 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
         newsList,
         marketData,
         marketSeries,
+        financial,
+        research,
+        experiments,
         collected: {
           collectedAt,
+          included,
+          languageRoute,
           resolvedSymbol: resolved.symbol,
           symbolSource: resolved.source,
           feedsUsed: news.feedsUsed,
           newsCount: items.length,
+          researchCount: research?.length ?? 0,
+          experimentCount: experiments?.length ?? 0,
+          financialMetricCount: financial?.metrics.length ?? 0,
           duplicatesRemoved,
           headlineOnlyCount: items.filter((i) => i.contentKind === 'headline').length,
           degraded,
@@ -392,16 +489,28 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
     }
 
-    const { newsList, marketData, analysisPeriod } = parsed.data;
-    const { items, duplicatesRemoved, urlWhitelist } =
+    const { newsList, marketData, analysisPeriod, financial, research, experiments } = parsed.data;
+    const { items, duplicatesRemoved } =
       normalizeNewsList(newsList, { assetName: marketData?.assetName });
 
     if (items.length === 0) {
       throw new ApiError(422, 'INSUFFICIENT_DATA', '중복 제거 후 분석할 자료가 남지 않았습니다.');
     }
 
+    // 출처 ID는 순서로 결정된다. collect와 analyze가 같은 배열을 보므로 같은 ID가 나온다.
+    const researchItems = assignResearchIds(research ?? []);
+    const experimentItems = assignExperimentIds(experiments ?? []);
+
+    // 논문·실험·재무 URL을 넣지 않으면 진짜 출처가 위조로 판정돼 지워진다.
+    const urlWhitelist = collectUrlWhitelist({
+      items, research: researchItems, experiments: experimentItems, financial,
+    });
+
     const collectedAt = new Date(now.now()).toISOString();
-    const userPrompt = buildUserPrompt({ items, marketData, collectedAt, analysisPeriod });
+    const userPrompt = buildUserPrompt({
+      items, marketData, collectedAt, analysisPeriod,
+      financial, research: researchItems, experiments: experimentItems,
+    });
 
     // 프롬프트 길이와 토큰 예산을 LLM 호출 전에 확인한다.
     const estimatedInputTokens = estimateTokens(SYSTEM_PROMPT) + estimateTokens(userPrompt);
@@ -416,9 +525,15 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
 
     return {
       items, marketData, analysisPeriod, duplicatesRemoved, urlWhitelist,
+      financial, researchItems, experimentItems,
       collectedAt, userPrompt, estimatedInputTokens, estimatedCostUsd,
       // 캐시 키는 정규화된 자료 기준이다. 순서만 다른 요청도 같은 키가 된다.
-      cacheKey: hashRequest({ items, marketData, analysisPeriod, model: config.openaiModel }),
+      // 새 자료를 넣지 않으면 작은 견적으로 큰 요청을 실행할 수 있다.
+      cacheKey: hashRequest({
+        items, marketData, analysisPeriod,
+        financial, research, experiments,
+        model: config.openaiModel,
+      }),
     };
   };
 
@@ -474,11 +589,24 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
     async (req, res) => {
       const {
         items, duplicatesRemoved, urlWhitelist, collectedAt,
+        financial, researchItems, experimentItems,
         userPrompt, estimatedInputTokens, estimatedCostUsd, cacheKey,
       } = prepare(req);
 
-      const sources = buildSources(items, collectedAt);
-      const baseMeta = { collectedAt, sourceCount: items.length, duplicatesRemoved, estimatedInputTokens };
+      const sources = [
+        ...buildSources(items, collectedAt),
+        ...buildExtraSources({
+          research: researchItems, experiments: experimentItems, financial, collectedAt,
+        }),
+      ];
+      const baseMeta = {
+        collectedAt,
+        sourceCount: items.length,
+        researchCount: researchItems.length,
+        experimentCount: experimentItems.length,
+        duplicatesRemoved,
+        estimatedInputTokens,
+      };
 
       // 캐시 히트는 LLM을 부르지 않는다. 비용이 0이므로 확인도 예산 차감도 필요 없다.
       const cached = analysisCache.get(cacheKey);
