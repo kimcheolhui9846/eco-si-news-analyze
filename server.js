@@ -13,7 +13,9 @@ import { ApiError } from './lib/errors.js';
 import { loadConfig } from './lib/config.js';
 import { createLogger } from './lib/logger.js';
 import { createSessionStore, safeCompare } from './lib/session.js';
-import { buildAnalyzeSchema, buildResearchSchema, formatZodError } from './lib/validation.js';
+import {
+  buildAnalyzeSchema, buildResearchSchema, formatZodError, normalizeInclude,
+} from './lib/validation.js';
 import { normalizeNewsList } from './lib/normalize.js';
 import { SYSTEM_PROMPT, buildUserPrompt, estimateTokens } from './lib/prompt.js';
 import {
@@ -36,7 +38,9 @@ export { ApiError } from './lib/errors.js';
 export { loadConfig } from './lib/config.js';
 export { createLogger } from './lib/logger.js';
 export { createSessionStore } from './lib/session.js';
-export { buildAnalyzeSchema, formatZodError } from './lib/validation.js';
+export {
+  buildAnalyzeSchema, buildResearchSchema, formatZodError, COLLECT_SCOPES, normalizeInclude,
+} from './lib/validation.js';
 export { normalizeNewsList, stripControlChars } from './lib/normalize.js';
 export {
   SYSTEM_PROMPT, buildUserPrompt, escapeDelimiters, estimateTokens,
