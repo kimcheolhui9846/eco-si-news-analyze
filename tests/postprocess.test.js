@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stripFabricatedUrls, parseAnalysis, buildSources, normalizeNewsList } from '../server.js';
+import {
+  stripFabricatedUrls, parseAnalysis, buildSources, normalizeNewsList,
+  buildExtraSources, collectUrlWhitelist,
+} from '../server.js';
 
 const whitelist = new Set(['https://real.com/a', 'https://real.com/b']);
 
@@ -117,4 +120,74 @@ test('출처 목록은 입력 자료에서 서버가 만든다', () => {
     type: 'news',
     relevance: 0,
   });
+});
+
+// ─── Phase 2b 출처 타입 ───
+
+const PAPER = {
+  sourceId: 'P1', title: '배터리 재활용 공정', sourceName: 'Europe PMC',
+  url: 'https://doi.org/10.1/abc', publishedAt: '2026-01-01T00:00:00.000Z',
+};
+const TRIAL = {
+  sourceId: 'T1', title: '가용성 섬유 연구', organization: 'Canadian Center',
+  url: 'https://clinicaltrials.gov/study/NCT00644098', startDate: '2008-09',
+};
+const FINANCIAL = {
+  entityName: 'NVIDIA CORP',
+  filingUrl: 'https://www.sec.gov/Archives/edgar/data/1045810/000104581026000075/0001045810-26-000075-index.htm',
+  metrics: [{ concept: 'Revenues', filed: '2026-08-26' }],
+};
+
+test('기존 뉴스 출처는 여전히 type이 news다', () => {
+  const sources = buildSources(
+    [{ sourceId: 'S1', title: 'T', source: '연합뉴스', url: 'https://a.example/1', publishedAt: '2026-08-30T09:00:00.000Z', relevance: 1 }],
+    '2026-09-04T00:00:00.000Z',
+  );
+  assert.equal(sources[0].type, 'news');
+});
+
+test('항목이 자기 타입을 가지면 그것을 쓴다', () => {
+  const sources = buildSources(
+    [{ sourceId: 'P1', title: 'T', source: 'Europe PMC', url: 'https://doi.org/10.1/abc', publishedAt: '2026-01-01T00:00:00.000Z', type: 'research' }],
+    '2026-09-04T00:00:00.000Z',
+  );
+  assert.equal(sources[0].type, 'research');
+});
+
+test('논문·실험·재무가 각자 타입으로 출처에 실린다', () => {
+  const sources = buildExtraSources({
+    research: [PAPER], experiments: [TRIAL], financial: FINANCIAL,
+    collectedAt: '2026-09-04T00:00:00.000Z',
+  });
+
+  assert.deepEqual(sources.map((s) => s.type), ['research', 'experiment', 'financial']);
+  assert.deepEqual(sources.map((s) => s.sourceId), ['P1', 'T1', 'F1']);
+  assert.equal(sources[2].url, FINANCIAL.filingUrl);
+});
+
+test('자료가 없으면 빈 배열이다', () => {
+  assert.deepEqual(buildExtraSources({ collectedAt: '2026-09-04T00:00:00.000Z' }), []);
+});
+
+test('화이트리스트에 논문과 실험 URL이 들어간다', () => {
+  // 넣지 않으면 stripFabricatedUrls가 진짜 출처를 위조로 오판한다.
+  const list = collectUrlWhitelist({
+    items: [{ url: 'https://a.example/1' }],
+    research: [PAPER], experiments: [TRIAL], financial: FINANCIAL,
+  });
+
+  assert.ok(list.has('https://doi.org/10.1/abc'));
+  assert.ok(list.has('https://clinicaltrials.gov/study/NCT00644098'));
+  assert.ok(list.has(FINANCIAL.filingUrl));
+  assert.ok(list.has('https://a.example/1'));
+});
+
+test('논문 URL이 위조로 제거되지 않는다', () => {
+  const list = collectUrlWhitelist({ items: [], research: [PAPER] });
+  const { value, removed } = stripFabricatedUrls(
+    { report: '근거는 https://doi.org/10.1/abc 입니다.' },
+    list,
+  );
+  assert.equal(removed, 0);
+  assert.match(value.report, /https:\/\/doi\.org\/10\.1\/abc/);
 });

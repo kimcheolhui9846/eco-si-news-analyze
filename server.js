@@ -19,7 +19,9 @@ import { SYSTEM_PROMPT, buildUserPrompt, estimateTokens } from './lib/prompt.js'
 import {
   createLlmClient, createMockLlmClient, callWithResilience, createCircuitBreaker,
 } from './lib/llm.js';
-import { stripFabricatedUrls, parseAnalysis, buildSources } from './lib/postprocess.js';
+import {
+  stripFabricatedUrls, parseAnalysis, buildSources, buildExtraSources, collectUrlWhitelist,
+} from './lib/postprocess.js';
 import {
   createTtlCache, createSemaphore, createInflightMap, hashRequest,
   makeLoginLimiter, makeAnalyzeLimiter, makeSessionLimiter, makeResearchLimiter,
@@ -44,7 +46,9 @@ export {
   createLlmClient, createMockLlmClient, callWithResilience,
   createCircuitBreaker, ANALYSIS_JSON_SCHEMA,
 } from './lib/llm.js';
-export { stripFabricatedUrls, parseAnalysis, buildSources } from './lib/postprocess.js';
+export {
+  stripFabricatedUrls, parseAnalysis, buildSources, buildExtraSources, collectUrlWhitelist,
+} from './lib/postprocess.js';
 export {
   createTtlCache, createSemaphore, createInflightMap, hashRequest,
 } from './lib/cost-defense.js';
