@@ -155,7 +155,8 @@ curl -X POST http://localhost:3000/api/auth/logout \
   "assetType": "stock",
   "lang": "ko",
   "range": "1mo",
-  "maxNews": 8
+  "maxNews": 8,
+  "include": ["news", "market", "financial", "research", "experiments"]
 }
 ```
 
@@ -167,6 +168,19 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | `lang` | ❌ | `ko` \| `en`. 기본 `ko`. 어느 피드를 쓸지 결정한다 |
 | `range` | ❌ | `5d` \| `1mo` \| `3mo` \| `6mo` \| `1y`. 기본 `1mo` |
 | `maxNews` | ❌ | 1~`MAX_NEWS_ITEMS`(20). 기본 10 |
+| `include` | ❌ | 수집 범위. `news` `market` `financial` `research` `experiments` 중 부분집합 |
+
+**`include`를 생략하면 `["news", "market"]`이고 Phase 2a와 완전히 같이 동작한다.** 비용도 그대로다.
+`news`는 빼도 강제로 포함된다 — 뉴스가 없으면 분석이 성립하지 않는다.
+알려지지 않은 값이 하나라도 들어 있으면 `400 INVALID_REQUEST`다.
+
+| 값 | 소스 |
+|---|---|
+| `news` | Google 뉴스·연합뉴스·전자신문·Yahoo Finance |
+| `market` | Yahoo Finance 차트 / CoinGecko |
+| `financial` | SEC EDGAR XBRL companyconcept. **미국 상장사만** |
+| `research` | Europe PMC + arXiv (영문 질의) / KCI (한국어 질의) |
+| `experiments` | ClinicalTrials.gov v2. **영문 질의에서만** |
 
 목록에 없는 필드는 `400 INVALID_REQUEST`로 거부된다.
 
@@ -239,7 +253,59 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | `feedsUsed` | 자료를 **하나 이상 준** 피드의 id |
 | `newsCount` | 중복 제거 후 실제 자료 수 |
 | `headlineOnlyCount` | **제목만 확보된 자료 수.** 분석 깊이의 한계를 나타낸다 |
+| `included` | 실제로 수집한 범위. 요청의 `include`를 정규화한 값 |
+| `languageRoute` | 어떤 소스를 왜 불렀는지. `{ route, useEnglishPapers, useKci, useTrials, reason }` |
+| `researchCount` | 논문 수 |
+| `experimentCount` | 임상시험 수 |
+| `financialMetricCount` | 확보한 재무지표 개수 |
 | `degraded` | 실패했거나 빠진 provider와 사유 |
+
+### `financial` · `research` · `experiments`
+
+요청하지 않았거나 자료가 없으면 **필드 자체가 없다**(`null`이 아니다).
+이 규칙은 협상 대상이 아니다 — `cacheKey`가 `JSON.stringify`로 계산되는데
+`undefined` 키는 버려지고 `[]`는 남으므로, 규칙이 갈라지면 확인 토큰이 `428`로 거부된다.
+
+```json
+{
+  "financial": {
+    "symbol": "NVDA", "cik": "0001045810", "entityName": "NVIDIA CORP",
+    "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/.../...-index.htm",
+    "metrics": [{ "concept": "Revenues", "label": "매출", "value": 96221000000,
+      "unit": "USD", "fiscalYear": 2027, "fiscalPeriod": "Q2",
+      "form": "10-Q", "filed": "2026-08-26" }],
+    "derived": [{ "label": "부채비율", "value": 41.2, "unit": "%",
+      "basis": "2026-07-26 기준", "formula": "부채 / 자산" }],
+    "degraded": [{ "concept": "NetIncomeLoss", "reason": "..." }]
+  },
+  "research": [{ "title": "...", "abstract": "...", "authors": ["..."],
+    "venue": "Nature Energy", "doi": "10.1/abc", "url": "https://doi.org/10.1/abc",
+    "publishedAt": "2026-01-01T00:00:00.000Z", "datePrecision": "year",
+    "peerReviewed": "peer-reviewed", "sourceName": "Europe PMC", "language": "en" }],
+  "experiments": [{ "nctId": "NCT00644098", "title": "...",
+    "organization": "...", "phase": "PHASE2", "status": "COMPLETED",
+    "enrollmentCount": 138, "enrollmentType": "ACTUAL",
+    "conditions": ["..."], "startDate": "2008-09", "hasResults": false }]
+}
+```
+
+**`datePrecision`이 `year`이면 발표 월·일은 확인되지 않은 것이다.** `publishedAt`의 `01-01`은
+저장 형식일 뿐 사실이 아니다.
+
+**`enrollmentType`이 `ESTIMATED`이면 모집 목표치다.** 이미 그만큼 등록됐다는 뜻이 아니다.
+
+### 언어에 따라 부르는 소스가 달라진다
+
+검색어에 한글이 하나라도 있으면 Europe PMC·arXiv·ClinicalTrials.gov로 **요청을 보내지 않는다.**
+걸러내는 것이 아니라 호출하지 않는다. 한국어 질의에 이 소스들이 0건이 아니라
+**무관한 실존 논문**을 돌려주기 때문이다(설계 문서 §1.5).
+
+| 검색어 | 논문 | 임상시험 |
+|---|---|---|
+| 한글 포함 | KCI만 (`KCI_API_KEY` 필요) | 호출하지 않음 |
+| 영문만 | Europe PMC + arXiv | ClinicalTrials.gov |
+
+사유는 `collected.languageRoute.reason`과 `collected.degraded`에 실려 나간다.
 
 ### `marketSeries` — 차트용 시계열
 
@@ -264,6 +330,12 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | **모든 뉴스 피드 실패** | `502 COLLECTION_FAILED` — 뉴스가 없으면 분석이 성립하지 않는다 |
 | 시장 데이터 실패 | `marketData` 없이 `200`. `degraded`에 기록 |
 | 심볼 해석 실패 | 위와 같음 |
+| 재무: CIK 없음 | `financial` 없이 `200`. 미국 상장사가 아니거나 사전에 없는 종목 |
+| 재무: 일부 개념 없음 | 있는 지표만. 없는 것은 `financial.degraded`에 개념명 |
+| 논문: 한 소스 실패 | 나머지 소스로 진행 |
+| 논문·실험 전부 실패 | 해당 필드 없이 `200`. 뉴스가 있으면 분석은 계속된다 |
+
+**뉴스를 제외한 모든 provider의 실패는 치명적이지 않다.** 자료가 줄 뿐 분석은 성립한다.
 
 ### 수집한 자료로 분석하기
 
@@ -273,7 +345,12 @@ curl -X POST http://localhost:3000/api/auth/logout \
 curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: application/json'   -H "Authorization: Bearer $TOKEN"   -H "X-Confirm-Token: $CONFIRM"   -d '{"newsList": [...], "marketData": {...}}'
 ```
 
-**`newsList`를 수정하면 확인 토큰이 통하지 않는다** (`428`). 작은 자료로 견적을 받고 큰 자료로 실행하는 것을 막기 위한 의도된 동작이다.
+**수집 응답의 자료를 하나라도 고치면 확인 토큰이 통하지 않는다** (`428`).
+`newsList`·`marketData`뿐 아니라 `financial`·`research`·`experiments`도 `cacheKey`에 들어간다.
+작은 자료로 견적을 받고 큰 자료로 실행하는 것을 막기 위한 의도된 동작이다.
+
+특히 **빈 배열을 넣지 말 것.** 수집 응답에 `research`가 없었다면 분석 요청에도 넣지 않아야 한다.
+`{"research": []}`를 보내면 해시가 달라져 `428`이 난다.
 
 전체 시나리오는 `scripts/verify-research.sh`가 자동 검증한다.
 
@@ -410,6 +487,17 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
 | `marketData.chartTrend` | 조건부 | 문자열 | 1~`MAX_TREND_CHARS`(1000)자 |
 | `newsList[].contentKind` | ❌ | 문자열 | `headline` \| `summary` \| `full`. 없으면 `full`로 간주 |
 | `analysisPeriod` | ❌ | 문자열 | 200자 이하 |
+| `financial` | ❌ | 객체 | `/api/research/collect`가 준 값 **그대로** |
+| `research` | ❌ | 배열 | `MAX_RESEARCH_ITEMS`(5) 이하. 수집 응답 그대로 |
+| `experiments` | ❌ | 배열 | `MAX_EXPERIMENT_ITEMS`(5) 이하. 수집 응답 그대로 |
+
+`research[].sourceName`은 `Europe PMC` \| `arXiv` \| `KCI`만 허용하는 **열거형**이다.
+`peerReviewed`(`peer-reviewed`\|`preprint`\|`unknown`), `datePrecision`(`day`\|`month`\|`year`\|`unknown`),
+`experiments[].enrollmentType`(`ACTUAL`\|`ESTIMATED`\|`null`)도 마찬가지다.
+자유 문자열이면 지어낸 DB 이름이 프롬프트에 그대로 실린다.
+
+`research[].abstract`는 **빈 문자열을 허용한다.** 초록이 없는 논문이 실제로 있고,
+막으면 정상 자료가 `400`이 된다.
 
 **위 목록에 없는 필드는 거부된다.** `systemPrompt`, `messages`, `model`, `temperature` 같은 필드를 보내면 `400 INVALID_REQUEST`가 반환된다. 사용자가 LLM 호출 파라미터를 조작할 수 있는 경로는 없다.
 
@@ -500,6 +588,12 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
 ```
 
 클라이언트는 `meta.degraded`를 확인해 두 형태를 모두 처리해야 한다.
+
+### 출처 타입
+
+`sources[].type`은 `news` \| `financial` \| `research` \| `experiment` 중 하나다.
+`sourceId` 접두어가 종류를 드러낸다 — 뉴스 `S1..Sn`, 논문 `P1..Pn`, 실험 `T1..Tn`, 재무 `F1`.
+LLM이 `[P2]`를 인용하면 그것이 논문이라는 사실이 인용 자체에 드러난다.
 
 ### 출처 무결성 보장
 
