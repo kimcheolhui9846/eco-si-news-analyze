@@ -188,7 +188,7 @@ const FINANCIAL = {
 };
 
 const PAPER = {
-  title: '배터리 재활용 공정', abstract: '초록 내용입니다.', authors: ['홍길동', '김철수'],
+  title: '배터리 재활용 공정', abstract: '초록 내용입니다.', authors: ['홍길동', '김철수'], authorCount: 2,
   venue: 'Nature Energy', doi: '10.1/abc', url: 'https://doi.org/10.1/abc',
   publishedAt: '2026-01-01T00:00:00.000Z', datePrecision: 'year',
   peerReviewed: 'peer-reviewed', sourceName: 'Europe PMC', language: 'en',

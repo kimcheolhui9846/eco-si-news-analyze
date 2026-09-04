@@ -207,3 +207,51 @@ test('같은 질의를 두 번 부르면 두 번째는 캐시에서 온다', asy
   await p.search({ query: 'battery recycling', limit: 5 });
   assert.equal(http.calls.length, before, '캐시 히트면 추가 호출이 없다');
 });
+
+// ─── provider 출력은 항상 스키마를 통과해야 한다 ───
+//
+// 실측에서 arXiv의 NVIDIA 협업 논문에 저자가 217명이었다. 그대로 실었더니
+// 분석 스키마가 자기 provider의 출력을 400으로 거부했다.
+// provider는 자기 검증기가 받아들이는 범위 안에서만 자료를 만든다.
+
+const arxivWithAuthors = (count) => [
+  '<?xml version="1.0" encoding="UTF-8"?>',
+  '<feed xmlns="http://www.w3.org/2005/Atom"><entry>',
+  '<id>http://arxiv.org/abs/1234.5678v1</id>',
+  '<title>많은 저자 논문</title>',
+  '<summary>초록</summary>',
+  '<published>2026-01-02T00:00:00Z</published>',
+  '<link href="https://arxiv.org/abs/1234.5678v1" rel="alternate" type="text/html"/>',
+  Array.from({ length: count }, (_, i) => `<author><name>저자 ${i + 1}</name></author>`).join(''),
+  '</entry></feed>',
+].join('');
+
+test('저자가 아주 많아도 상한까지만 싣고 총 인원을 남긴다', () => {
+  const [item] = parseArxiv(arxivWithAuthors(217));
+  assert.equal(item.authors.length, 10);
+  assert.equal(item.authorCount, 217, '총 인원을 잃으면 몇 명 연구인지 알 수 없다');
+});
+
+test('아주 긴 제목과 초록을 스키마 상한까지 자른다', () => {
+  const body = JSON.stringify({
+    resultList: {
+      result: [{
+        id: 'X1',
+        source: 'MED',
+        pubYear: '2026',
+        title: 'ㄱ'.repeat(900),
+        abstractText: 'ㄴ'.repeat(9000),
+        journalInfo: { journal: { title: 'ㄷ'.repeat(500) } },
+      }],
+    },
+  });
+  const [item] = parseEuropePmc(body);
+  assert.equal(item.title.length, 500);
+  assert.equal(item.abstract.length, 5000);
+  assert.equal(item.venue.length, 300);
+});
+
+test('저자가 상한 이하면 authorCount가 실제 인원과 같다', () => {
+  const items = parseEuropePmc(PMC);
+  assert.equal(items[0].authorCount, items[0].authors.length);
+});

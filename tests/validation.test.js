@@ -323,7 +323,7 @@ const FINANCIAL = {
 };
 
 const PAPER = {
-  title: '논문 제목', abstract: '', authors: ['홍길동'], venue: 'Nature',
+  title: '논문 제목', abstract: '', authors: ['홍길동'], authorCount: 1, venue: 'Nature',
   doi: '10.1/abc', url: 'https://doi.org/10.1/abc',
   publishedAt: '2026-01-01T00:00:00.000Z', datePrecision: 'year',
   peerReviewed: 'peer-reviewed', sourceName: 'Europe PMC', language: 'en',
