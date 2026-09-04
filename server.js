@@ -59,6 +59,7 @@ export { createMarketProvider } from './lib/providers/market.js';
 export {
   createFinancialProvider, pickLatestFact, findYearAgoFact, FINANCIAL_CONCEPTS,
 } from './lib/providers/financial.js';
+export { hasHangul, routeForQuery } from './lib/providers/language.js';
 
 // ─── 앱 팩토리 ───
 
