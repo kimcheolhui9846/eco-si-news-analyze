@@ -63,6 +63,9 @@ export { hasHangul, routeForQuery } from './lib/providers/language.js';
 export {
   createResearchProvider, parseEuropePmc, parseArxiv, dedupeResearch,
 } from './lib/providers/papers.js';
+export {
+  createKciProvider, buildKciUrl, parseKciResponse, isIpRejection, redactKey, KCI_FIELD_NAMES,
+} from './lib/providers/kci.js';
 
 // ─── 앱 팩토리 ───
 
