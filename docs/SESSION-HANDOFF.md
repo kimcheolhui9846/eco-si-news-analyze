@@ -53,7 +53,9 @@ KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 
 정상 응답의 XML 요소 이름도 확인하지 못해 `lib/providers/kci.js`의
 `KCI_FIELD_NAMES` 한 곳에 후보를 모아 두었다. 실제 응답을 받으면 그 표만 고치면 된다.
 
-계획 문서 Task 14에 4단계 검증 절차가 적혀 있다.
+`./scripts/verify-kci.sh`가 이 4단계를 한 번에 돌린다. `.env`의 `KCI_API_KEY`를
+읽고, 응답에서 키를 가린 뒤, 정상 응답이면 나타난 XML 요소 이름을 모두 출력한다.
+그 목록으로 `KCI_FIELD_NAMES`를 확정하면 된다.
 
 1. `title=battery` (ASCII) — API 자체가 도는지
 2. `title=배터리` UTF-8 퍼센트 인코딩 — 되면 그대로 간다
