@@ -191,3 +191,23 @@ a { color: var(--accent); }
   .page.has-sticky { padding-bottom: 170px; }
   .page-head { flex-direction: column; align-items: start; gap: 4px; }
 }
+
+/* 수집 범위 선택 */
+/* .search-form label 이 (0,1,1)이라 클래스 하나로는 이기지 못한다. 폼으로 한정한다. */
+.scope-picker { display: grid; gap: 8px; margin-top: 14px; }
+.search-form .scope-row {
+  display: grid; grid-template-columns: auto auto 1fr;
+  align-items: baseline; gap: 8px; margin-top: 0; font-weight: 400;
+}
+.scope-row .scope-label { font-weight: 600; }
+
+/* 재무·논문·실험 섹션 */
+.metrics { width: 100%; border-collapse: collapse; }
+.metrics th, .metrics td { text-align: left; padding: 0.35rem 0.5rem; vertical-align: top; }
+.badge { display: inline-block; padding: 0 0.4rem; border-radius: 999px;
+  border: 1px solid currentColor; font-size: 0.75rem; }
+.badge.ok { color: #2b7a4b; }
+.badge.warn { color: #a86b00; }
+.research-list, .trial-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+.research-head, .trial-head { display: flex; gap: 0.5rem; align-items: center; }
+.research-title, .trial-title { margin: 0.25rem 0; font-size: 1rem; }

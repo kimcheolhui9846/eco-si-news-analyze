@@ -36,9 +36,11 @@ field() {
 }
 
 # 한글이 깨지지 않도록 요청 본문을 node로 만든다.
+# 재무·논문·실험은 영문 질의에서만 제대로 동작한다. 언어 가드는 5단계에서 따로 본다.
 node -e "
   require('fs').writeFileSync(process.argv[1], JSON.stringify({
-    query: '엔비디아 AI 반도체', symbol: 'NVDA', lang: 'ko', maxNews: 8,
+    query: 'nvidia earnings', symbol: 'NVDA', lang: 'en', maxNews: 8,
+    include: ['news', 'market', 'financial', 'research', 'experiments'],
   }), 'utf8');
 " "$TMP/collect-req.json"
 
@@ -83,12 +85,40 @@ echo "  (참고) 사용 피드: $FEEDS"
 echo "  (참고) 제목만 확보: ${HEADLINE_ONLY}건 | degraded: $DEGRADED"
 echo "  (참고) 추세: $TREND..."
 
+RESEARCH=$(field 'v.research ? v.research.length : 0' < "$TMP/collect.json")
+TRIALS=$(field 'v.experiments ? v.experiments.length : 0' < "$TMP/collect.json")
+FIN=$(field 'v.financial ? v.financial.metrics.length : 0' < "$TMP/collect.json")
+INCLUDED=$(field 'v.collected ? v.collected.included.join(",") : ""' < "$TMP/collect.json")
+
+check "수집 범위" "news,market,financial,research,experiments" "$INCLUDED"
+if [ "${RESEARCH:-0}" -gt 0 ]; then
+  echo "  [OK] 논문 ${RESEARCH}건 수집"
+  PASS=$((PASS + 1))
+else
+  echo "  [FAIL] 논문 0건"
+  FAIL=$((FAIL + 1))
+fi
+# 반도체 실적 질의에 임상시험이 없는 것은 결함이 아니라 사실이다.
+# 임상시험 경로는 7단계에서 의학 질의로 따로 확인한다.
+echo "  (참고) 임상시험 ${TRIALS}건 — 이 질의에는 없을 수 있다"
+if [ "${FIN:-0}" -gt 0 ]; then
+  echo "  [OK] 재무지표 ${FIN}개 수집"
+  PASS=$((PASS + 1))
+else
+  echo "  [FAIL] 재무지표 0개"
+  FAIL=$((FAIL + 1))
+fi
+
 echo "3. 수집 결과로 분석"
 CONFIRM=$(field 'v.confirmToken' < "$TMP/collect.json")
+# 빈 자료는 넣지 않는다. []를 보내면 cacheKey가 어긋나 428이 난다.
 node -e "
   const c = require(process.argv[1]);
   const body = { newsList: c.newsList };
   if (c.marketData) body.marketData = c.marketData;
+  if (c.financial) body.financial = c.financial;
+  if (c.research && c.research.length) body.research = c.research;
+  if (c.experiments && c.experiments.length) body.experiments = c.experiments;
   require('fs').writeFileSync(process.argv[2], JSON.stringify(body), 'utf8');
 " "$TMP/collect.json" "$TMP/analyze-body.json"
 
@@ -118,6 +148,67 @@ if [ "$RCODE" = "428" ] || [ "$RCODE" = "200" ]; then
   PASS=$((PASS + 1))
 else
   echo "  [FAIL] 예상 밖 응답 $RCODE"
+  FAIL=$((FAIL + 1))
+fi
+
+echo "5. 출처 타입"
+TYPES=$(field 'v.sources ? [...new Set(v.sources.map(s => s.type))].sort().join(",") : ""' < "$TMP/analyze.json")
+echo "  (참고) 출처 타입: $TYPES"
+case "$TYPES" in
+  *research*) echo "  [OK] 논문 출처가 인용 목록에 있다"; PASS=$((PASS + 1)) ;;
+  *)          echo "  [FAIL] 논문 출처가 없다"; FAIL=$((FAIL + 1)) ;;
+esac
+
+echo "6. 한국어 질의 언어 가드"
+# 한글 질의에는 Europe PMC·arXiv·ClinicalTrials로 요청이 나가면 안 된다.
+node -e "
+  require('fs').writeFileSync(process.argv[1], JSON.stringify({
+    query: '배터리 재활용', lang: 'ko', maxNews: 5,
+    include: ['news', 'research', 'experiments'],
+  }), 'utf8');
+" "$TMP/ko-req.json"
+
+KOCODE=$(curl -sS -o "$TMP/ko.json" -w '%{http_code}' \
+  -X POST "$BASE/api/research/collect" \
+  -H 'Content-Type: application/json; charset=utf-8' \
+  -H "Authorization: Bearer $TOKEN" \
+  --data-binary @"$TMP/ko-req.json")
+
+check "한국어 수집 응답 코드" "200" "$KOCODE"
+
+# 중첩 따옴표를 피하려고 판정을 node 한 곳에 몰아 둔다.
+KOROUTE=$(node -e "
+  const c = require(process.argv[1]).collected;
+  console.log(c && c.languageRoute ? c.languageRoute.route : '');
+" "$TMP/ko.json")
+check "언어 판정" "ko" "$KOROUTE"
+
+node -e "
+  const c = require(process.argv[1]).collected;
+  const reasons = (c && c.degraded ? c.degraded : []).map(d => d.reason);
+  console.log('  (참고) 사유: ' + (reasons.join(' | ') || '없음'));
+" "$TMP/ko.json"
+
+echo "7. 임상시험 경로 (의학 질의)"
+node -e "
+  require('fs').writeFileSync(process.argv[1], JSON.stringify({
+    query: 'obesity drug trial', lang: 'en', maxNews: 3,
+    include: ['news', 'experiments'],
+  }), 'utf8');
+" "$TMP/trial-req.json"
+
+curl -sS -o "$TMP/trial.json" \
+  -X POST "$BASE/api/research/collect" \
+  -H 'Content-Type: application/json; charset=utf-8' \
+  -H "Authorization: Bearer $TOKEN" \
+  --data-binary @"$TMP/trial-req.json"
+
+TRIALS2=$(field 'v.experiments ? v.experiments.length : 0' < "$TMP/trial.json")
+if [ "${TRIALS2:-0}" -gt 0 ]; then
+  echo "  [OK] 임상시험 ${TRIALS2}건 수집"
+  PASS=$((PASS + 1))
+else
+  echo "  [FAIL] 임상시험 0건"
   FAIL=$((FAIL + 1))
 fi
 

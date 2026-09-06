@@ -126,11 +126,30 @@ OPENAI_API_KEY=sk-...
 | `CORS_ORIGIN` | `http://localhost:3000` | **현재 미사용** — 동일 출처라 CORS 미들웨어를 붙이지 않았다 |
 | `EXTERNAL_TIMEOUT_MS` | `10000` | 외부 API 타임아웃 |
 | `MAX_EXTERNAL_RESPONSE_BYTES` | `2000000` | 외부 응답 크기 상한 |
-| `EXTERNAL_ALLOWLIST` | (6개 호스트) | **허용목록. 여기 없는 호스트로는 요청이 나가지 않는다** |
+| `EXTERNAL_ALLOWLIST` | (11개 호스트) | **허용목록. 여기 없는 호스트로는 요청이 나가지 않는다** |
 | `PROVIDER_BREAKER_THRESHOLD` / `_COOLDOWN_MS` | `3` / `60000` | provider별 회로 차단기 |
 | `NEWS_CACHE_TTL_MS` | `300000` | 뉴스 피드 캐시 |
 | `MARKET_CACHE_TTL_MS` | `60000` | 시장 차트 캐시 |
 | `RESEARCH_RATE_WINDOW_MS` / `_MAX` | `900000` / `60` | 수집 rate limit |
+| `FINANCIAL_CACHE_TTL_MS` | `86400000` | SEC 재무지표 캐시. 분기 실적은 하루에 여러 번 바뀌지 않는다 |
+| `RESEARCH_CACHE_TTL_MS` | `3600000` | 논문 캐시 |
+| `EXPERIMENT_CACHE_TTL_MS` | `3600000` | 임상시험 캐시 |
+| `MAX_RESEARCH_ITEMS` | `5` | 수집할 논문 수 상한 |
+| `MAX_EXPERIMENT_ITEMS` | `5` | 수집할 임상시험 수 상한 |
+| `KCI_API_KEY` | (빈 값) | **선택.** 국내 논문 검색용. 아래 설명 참고 |
+
+**`KCI_API_KEY`에 대하여.** `open.kci.go.kr`에서 무료로 발급한다. 신청서에 **공인 IP**를
+적어야 하고 등록된 IP에서 온 요청만 받는다. IP는 여러 개 등록할 수 있다.
+
+비워 두면 한국어 검색어의 논문 결과가 "자료 부족"으로 나가고 사유가 함께 표시된다.
+**서버 기동과 나머지 기능에는 영향이 없다** — 뉴스·차트·재무·영문 논문·임상시험은 그대로 동작한다.
+
+가정용 회선은 유동 IP라 공유기 재부팅이나 임대 갱신만으로 바뀔 수 있다. 그때는 아무 오류도
+나지 않고 국내 논문 섹션만 조용히 비어 나오므로, 그 상황을 전용 문구로 알린다.
+
+키를 받으면 `./scripts/verify-kci.sh`로 동작을 확인한다. 이 스크립트는 ASCII·UTF-8·EUC-KR
+세 방식으로 질의해 어느 것이 통하는지 판정하고, 정상 응답이면 XML 요소 이름을 출력한다.
+출력과 저장 파일에서 키는 가려진다.
 
 </details>
 

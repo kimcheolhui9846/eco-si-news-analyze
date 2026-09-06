@@ -189,3 +189,32 @@ test('mock 클라이언트는 스키마를 만족하는 결정적 응답을 준�
     assert.ok(key in parsed, `mock 응답에 ${key}가 없다`);
   }
 });
+
+// ─── Phase 2b 요약 필드 ───
+
+test('응답 스키마에 Phase 2b 요약 필드 3개가 있다', () => {
+  const props = ANALYSIS_JSON_SCHEMA.schema.properties;
+  for (const key of ['financialSummary', 'researchSummary', 'experimentSummary']) {
+    assert.ok(props[key], `${key}가 없다`);
+    assert.equal(props[key].additionalProperties, false);
+  }
+});
+
+test('available이 열거형이라 근거 없는 서술을 막는다', () => {
+  // 자유 문자열이면 "재무지표가 양호합니다" 같은 서술이 나온다.
+  const props = ANALYSIS_JSON_SCHEMA.schema.properties;
+  for (const key of ['financialSummary', 'researchSummary', 'experimentSummary']) {
+    assert.deepEqual(props[key].properties.available.enum, ['자료 있음', '자료 부족']);
+  }
+});
+
+test('strict 모드 규칙대로 새 필드도 required에 있다', () => {
+  const schema = ANALYSIS_JSON_SCHEMA.schema;
+  for (const key of ['financialSummary', 'researchSummary', 'experimentSummary']) {
+    assert.ok(schema.required.includes(key));
+    assert.deepEqual(
+      schema.properties[key].required.slice().sort(),
+      Object.keys(schema.properties[key].properties).sort(),
+    );
+  }
+});

@@ -45,3 +45,31 @@ test('GET /api/health가 주입된 시계를 사용한다', async () => {
   assert.equal(res.body.status, 'ok');
   assert.equal(res.body.time, new Date(1_700_000_000_000).toISOString());
 });
+
+test('Phase 2b 환경변수의 기본값을 채운다', () => {
+  const config = loadConfig({ MY_SECRET_PASSWORD: 'x', LLM_MODE: 'mock' });
+  assert.equal(config.financialCacheTtlMs, 86_400_000);
+  assert.equal(config.researchCacheTtlMs, 3_600_000);
+  assert.equal(config.experimentCacheTtlMs, 3_600_000);
+  assert.equal(config.maxResearchItems, 5);
+  assert.equal(config.maxExperimentItems, 5);
+});
+
+test('KCI_API_KEY가 없어도 설정 로드가 통과한다', () => {
+  // 키는 선택 사항이다. 없으면 국내 논문만 빠지고 서버는 정상 기동한다.
+  const config = loadConfig({ MY_SECRET_PASSWORD: 'x', LLM_MODE: 'mock' });
+  assert.equal(config.kciApiKey, '');
+});
+
+test('KCI_API_KEY가 있으면 그대로 싣는다', () => {
+  const config = loadConfig({ MY_SECRET_PASSWORD: 'x', LLM_MODE: 'mock', KCI_API_KEY: 'abc123' });
+  assert.equal(config.kciApiKey, 'abc123');
+});
+
+test('허용목록 기본값에 Phase 2b 호스트가 들어 있다', () => {
+  const config = loadConfig({ MY_SECRET_PASSWORD: 'x', LLM_MODE: 'mock' });
+  const hosts = ['data.sec.gov', 'www.ebi.ac.uk', 'export.arxiv.org', 'clinicaltrials.gov', 'open.kci.go.kr'];
+  for (const host of hosts) {
+    assert.ok(config.externalAllowlist.includes(host), `${host}이(가) 허용목록에 없다`);
+  }
+});

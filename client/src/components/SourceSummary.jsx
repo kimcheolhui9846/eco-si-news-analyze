@@ -1,5 +1,11 @@
 import { formatDateTime, formatCount } from '../lib/format.js';
 
+// degraded의 provider 이름표. 없으면 재무·논문·실험이 모두 '뉴스'로 둔갑한다.
+const PROVIDER_LABEL = {
+  news: '뉴스', market: '시장 데이터', financial: '재무지표',
+  research: '논문', experiments: '실험·임상',
+};
+
 const SOURCE_LABEL = {
   explicit: '직접 입력', alias: '별칭 사전', search: '검색', unresolved: '해석 실패',
 };
@@ -28,7 +34,7 @@ export default function SourceSummary({ collected }) {
         <ul className="degraded">
           {collected.degraded.map((d, i) => (
             <li key={`${d.provider}-${i}`}>
-              {d.provider === 'market' ? '시장 데이터' : '뉴스'}: {d.reason}
+              {PROVIDER_LABEL[d.provider] ?? d.provider}: {d.reason}
             </li>
           ))}
         </ul>
