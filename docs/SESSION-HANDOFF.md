@@ -3,12 +3,71 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-04 (Phase 2b 구현 완료 — KCI 키 발급만 남음)
-- **현재 브랜치**: `feature/research-connectors`
+- **최종 갱신**: 2026-09-07 (배포 작업 중 — Render 계정 연결부터 남음)
+- **현재 브랜치**: `feature/deployment` (`main`에서 분기, 원격에 푸시됨)
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
 
+## 0. 처음 이어받는다면 — 빠른 지도
+
+**이 앱이 하는 일.** 검색어를 받아 뉴스·주가차트·SEC 재무지표·논문·임상시험을 모으고,
+그것만을 근거로 LLM 분석 보고서를 만든다. 챗봇이 아니라 조사 도구다.
+출처를 지어내지 않는 것과 LLM 비용이 새지 않는 것이 이 프로젝트의 두 축이다.
+
+### 구조
+
+```
+server.js              Express 앱 팩토리. 모든 라우트와 배선. lib/의 심볼을 re-export한다
+lib/
+  config.js            환경변수 로드·검증. 기동 시 한 번만 읽는다
+  session.js           메모리 Map 기반 세션
+  validation.js        Zod 입력 스키마. z.strictObject로 미허용 필드를 거부
+  normalize.js         뉴스 정규화·중복 제거·출처 ID(S1..Sn) 부여
+  prompt.js            시스템/사용자 프롬프트 조립
+  sections.js          재무·논문·실험 구획 문자열과 출처 ID(P/T/F)
+  llm.js               OpenAI 클라이언트, 응답 스키마, 회로차단기, 재시도
+  postprocess.js       위조 URL 제거, 출처 배열 생성
+  cost-defense.js      TTL 캐시·세마포어·중복 병합·rate limit·해시
+  budget.js            비용 추정과 예산 추적 (.budget.json에 영속화)
+  http.js              외부 호출 단일 통로. 허용목록·리다이렉트 차단·크기 상한
+  providers/           news, market, financial, papers, kci, experiments, language
+client/src/            React 19 프론트엔드 (Vite). 빌드 산출물은 Express가 서빙
+tests/                 node:test. 530개
+scripts/               verify.sh, verify-research.sh, verify-kci.sh
+docs/superpowers/      specs(설계)와 plans(구현 계획)
+```
+
+### 명령
+
+```bash
+npm test               # 전체 테스트. API 키·네트워크 불필요
+npm run build:client   # 프론트엔드 빌드 (client/dist는 gitignore)
+npm start              # 서버 기동 → http://localhost:3000  (.env를 읽는다)
+
+# 실네트워크 검증. 서버가 떠 있어야 한다
+./scripts/verify-research.sh [BASE_URL]   # 수집 경로 14항목. 비용 0
+MY_SECRET_PASSWORD=<값> ./scripts/verify.sh [BASE_URL]   # 실호출 1회 약 $0.005
+./scripts/verify-kci.sh                   # KCI 계약 확인. 키가 있어야 의미 있다
+
+# 비용 없이 전체 동작 보기
+MY_SECRET_PASSWORD=test-pw LLM_MODE=mock npm start
+```
+
+테스트 하나만 돌리려면 `node --import tsx --test tests/<파일>`.
+`node --test tests/`는 Windows에서 `MODULE_NOT_FOUND`가 난다 — 글롭을 써야 한다.
+
+### 일할 때 지킬 것
+
+- 저장소 루트 `CLAUDE.md`와 §4를 먼저 읽는다. 커밋 저자 표기 규칙이 있다
+- 커밋·푸시는 **사용자가 요청할 때만** 한다
+- 기능을 고칠 때는 테스트를 먼저 쓴다. 이 저장소는 그렇게 만들어졌다
+- 실패하는 테스트나 동작하지 않는 기능을 완료로 보고하지 않는다 (원본 요구사항 §1-7)
+- 외부 호출은 반드시 `lib/http.js`를 통한다. provider가 `fetch`를 직접 부르지 않는다
+- 새 외부 호스트는 `EXTERNAL_ALLOWLIST`에 정확한 호스트명으로 추가한다
+- **`.env`, API 키, 비밀번호를 커밋하지 않는다.** `.env.example`은 커밋되는 템플릿이다
+
+---
 ## 1. 지금 어디까지 왔나
 
 | 단계 | 상태 |
@@ -19,48 +78,119 @@
 | Phase 1 구현 계획 작성 | ✅ 완료 (12개 태스크, 138개 테스트 설계) |
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
 | Phase 2a (뉴스·시장 커넥터) | ✅ 완료 — 289개 테스트, 실네트워크 검증 통과 |
-| Phase 2b (재무·논문·실험) | 🟢 구현 완료 — 522개 테스트, 실네트워크 14/14 통과. KCI 키만 남음 |
+| Phase 2b (재무·논문·실험) | ✅ 완료 — **PR #4 병합됨** (`2cad716`). KCI 키만 미발급 |
 | Phase 3 (프론트엔드) | ✅ 완료 — 379개 테스트, 실브라우저 전 과정 확인 |
+| 실제 OpenAI 호출 검증 | ✅ 완료 (2026-09-04) — `verify.sh` 9/0, `degraded=false` |
+| 배포 설계·계획 | ✅ 완료 — spec·plan 작성 및 커밋 |
+| 배포 구현 (Task 1~2) | ✅ 완료 — `render.yaml`, `engines`, 테스트 7건, 문서 |
+| **배포 실행 (Task 3)** | 🔴 **여기서 멈춤. 사용자가 Render 계정 작업을 해야 한다** |
+| 배포 기록·PR (Task 4) | ⬜ Task 3 이후 |
 
-## 2. 다음에 할 일
+**현재 테스트: 530 tests / 529 pass / 0 fail / 1 skip** (`npm test`)
+skip 1건은 KCI 정상 응답 픽스처가 없어서다. 키를 받으면 해제한다.
 
-1. **PR 생성** — `feature/research-connectors` → `main`. Phase 2b 구현이 끝났다.
-2. **KCI API 키 발급** (계획 Task 14) — 없어도 나머지는 전부 동작한다. 아래 참고.
-3. **실제 OpenAI 호출 검증** — 아직 0회다 (§8 참조).
+## 2. 다음에 할 일 — 배포
 
-### KCI API 키에 대하여 (선택 사항)
+> **이어받는 사람에게.** 애플리케이션은 완성됐고 로컬·실네트워크·실브라우저 검증까지
+> 끝났다. 남은 것은 **Render에 올리는 일 하나**다. 코드는 더 짤 게 없다.
 
-사용자가 open.kci.go.kr에서 직접 받는다 (무료).
+진행 중인 계획: `docs/superpowers/plans/2026-09-06-render-deployment.md`
+설계 근거: `docs/superpowers/specs/2026-09-06-deployment-design.md`
 
-**`.env.example`이 아니라 `.env`에 넣는다.** `.env`는 아직 없으므로
-`cp .env.example .env`로 만들어야 한다. `.env.example`은 커밋되는
-템플릿이라 실제 키를 넣으면 GitHub에 올라간다.
+### 끝난 것 (Task 1~2, 커밋됨)
 
-키가 없어도 서버는 정상 기동하고 뉴스·차트·재무·영문 논문·임상시험이 전부 동작한다.
-한국어 질의의 논문만 '자료 부족'으로 나가고 사유가 함께 표시된다.
+| 산출물 | 내용 |
+|---|---|
+| `render.yaml` | 배포 정의. 설정의 단일 출처 |
+| `package.json` | `engines.node: ">=22"` 추가 |
+| `tests/deployment.test.js` | 회귀 테스트 7건 (전부 통과) |
+| `README.md` | "## 배포" 절 + 무료 티어 한계 6가지 |
+| `docs/architecture.md` | "상태는 어디에 사는가 — 인스턴스는 하나여야 한다" |
 
-신청서가 **신청 IP**를 요구한다. KCI는 등록된 공인 IP에서 온 요청만 받는다.
-IP는 여러 개 등록할 수 있고 바뀌면 신청서에서 고치면 된다 (코드 변경 없음).
-2026-09-03 기준 사용자 공인 IP는 `112.186.34.17`이었다.
-**유동 IP라면 바뀔 수 있고, 바뀌면 키가 멀쩡해도 거부당한다.** 재등록은
-쉽지만 바뀐 줄 알아채기가 어렵다 — 오류 없이 국내 논문만 조용히 사라진다.
-그래서 IP 불일치를 일반 오류와 분리해 전용 문구로 표시하도록 구현했다
-(`lib/providers/kci.js`의 `isIpRejection`).
+브랜치 `feature/deployment`는 **원격에 푸시되어 있다**(`origin/feature/deployment`).
+Render가 저장소에서 `render.yaml`을 읽어야 하므로 이미 올려 뒀다.
 
-### 키를 받으면 제일 먼저 할 일
+### 다음 단계 — Task 3 Step 2부터 (사용자 작업)
 
-KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 수 없었다.
-정상 응답의 XML 요소 이름도 확인하지 못해 `lib/providers/kci.js`의
-`KCI_FIELD_NAMES` 한 곳에 후보를 모아 두었다. 실제 응답을 받으면 그 표만 고치면 된다.
+**1. Render에 저장소를 연결한다**
 
-`./scripts/verify-kci.sh`가 이 4단계를 한 번에 돌린다. `.env`의 `KCI_API_KEY`를
-읽고, 응답에서 키를 가린 뒤, 정상 응답이면 나타난 XML 요소 이름을 모두 출력한다.
-그 목록으로 `KCI_FIELD_NAMES`를 확정하면 된다.
+[render.com](https://render.com) → New → **Blueprint** →
+저장소 `kimcheolhui9846/eco-si-news-analyze` → 브랜치 **`feature/deployment`**
 
-1. `title=battery` (ASCII) — API 자체가 도는지
-2. `title=배터리` UTF-8 퍼센트 인코딩 — 되면 그대로 간다
-3. 0건이면 EUC-KR 퍼센트 인코딩(`%B9%E8%C5%CD%B8%AE`) — `iconv-lite` 추가가 필요하다
-4. 둘 다 실패하면 한계로 문서화하고 언어 가드에서 KCI도 제외
+`main`이 아니라 feature 브랜치를 지정하는 이유는 병합 전에 실제로 뜨는지 먼저 보기 위함이다.
+
+> **Blueprint가 무료 플랜에서 동작하는지, `numInstances: 1`이 허용되는지 확인되지 않았다.**
+> Render 문서에 명시가 없어 스펙 §7에 "확인 필요"로 남겨 뒀다.
+> 거부되면 New → **Web Service**로 만들고 `render.yaml`의 값을 대시보드에 직접 넣는다.
+> **어느 쪽이었는지 반드시 기록한다** — Task 4에서 문서에 남길 항목이다.
+
+**2. 비밀값 둘을 대시보드에 입력한다** (Environment 탭)
+
+| 변수 | 값 |
+|---|---|
+| `MY_SECRET_PASSWORD` | 로그인 비밀번호. **로컬의 8자보다 길게.** 공개 인터넷이다 |
+| `OPENAI_API_KEY` | 로컬 `.env`에 넣은 것과 같은 키 |
+
+나머지 셋(`NODE_ENV`, `TRUST_PROXY`, `KCI_API_KEY`)은 `render.yaml`에 있어 자동으로 들어간다.
+`PORT`는 설정하지 않는다 — Render가 주입하고 `config.port`가 읽는다.
+
+**비밀값을 대화창이나 저장소에 넣지 않는다.** 대시보드에만 입력한다.
+
+**3. 빌드 로그에서 두 가지를 확인한다**
+
+- `vite build`가 성공했는가 — 실패하면 `--include=dev`가 안 먹은 것이다(§배포 함정 참고)
+- Node 버전이 몇인가 — `engines`가 먹혔는지 확인하고 **적어 둔다**
+
+**4. 검증 3단계를 돌린다**
+
+```bash
+# 첫 요청은 약 1분 걸린다. 정지 상태에서 깨어나는 시간이다.
+curl -sS --max-time 120 https://<앱이름>.onrender.com/api/health
+#   기대: {"status":"ok","llmMode":"live",...}
+
+./scripts/verify-research.sh https://<앱이름>.onrender.com
+#   기대: 통과 14 / 실패 0.  비용 0
+#   한국어 단계에서 KCI 사유가 나오는 것은 정상이다 (키를 비워 뒀다)
+
+MY_SECRET_PASSWORD=<대시보드에 넣은 값> ./scripts/verify.sh https://<앱이름>.onrender.com
+#   기대: 통과 9 / 실패 0, degraded=false.  실호출 1회 약 $0.005
+```
+
+그다음 브라우저에서 로그인 → 수집 → 승인 → 보고서까지 한 번 돈다.
+
+**어느 단계든 실패하면 거기서 멈추고 고친다.** 원본 요구사항 §1-7 —
+동작하지 않는 기능을 완료로 보고하지 않는다.
+
+### 그다음 — Task 4 (기록과 PR)
+
+계획서 Task 4에 채울 자리가 대괄호로 표시돼 있다. Task 3에서 확인한 값으로 채운다.
+
+1. 이 문서 §1 표와 §6에 배포 URL·플랫폼·Node 버전·Blueprint 사용 여부를 적는다
+2. Blueprint를 못 썼다면 `render.yaml` 맨 위 주석에 그 사실과 날짜를 남긴다
+3. `npm test`로 530 tests / 529 pass / 1 skip 확인
+4. 커밋 후 `git push`
+5. `gh pr create --base main --head feature/deployment` — 본문은 스크래치패드에 파일로 쓰고
+   `--body-file`로 넘긴다. 셸에 긴 한글을 직접 넣으면 CP949에서 깨진다
+
+### 배포에서 걸릴 함정 — 미리 잡아 둔 것
+
+**`--include=dev`를 지우면 빌드가 깨진다.** `vite`와 `@vitejs/plugin-react`가
+`client/`의 devDependencies인데 `NODE_ENV=production`은 빌드 단계에도 적용된다.
+플래그가 없으면 `npm ci`가 이들을 건너뛰어 `vite: not found`가 난다.
+`client/dist`는 `.gitignore`에 있어 미리 만들어 둔 산출물도 없다.
+
+**`sync: false`를 지우면 비밀값이 저장소에 올라간다.** `render.yaml`의
+`MY_SECRET_PASSWORD`·`OPENAI_API_KEY`는 값을 적지 않고 대시보드에서 받는다.
+
+위 둘과 `numInstances: 1`, `plan: free`, `NODE_ENV`, `TRUST_PROXY`, `engines`를
+`tests/deployment.test.js`가 고정한다. 설정 파일이라 테스트가 없으면 조용히 깨진다.
+
+### 배포 후에도 남는 것 (선택)
+
+- **KCI API 키** — Render 무료는 고정 아웃바운드 IP가 없어 **배포 환경에서는 쓸 수 없다.**
+  필요해지면 Fly.io 전용 IPv4($2/월)로 옮긴 뒤 그 서버에서 `./scripts/verify-kci.sh`를 돌린다
+- **`MONTHLY_COST_LIMIT_USD`** — 현재 `5`. 사용자가 월 $7까지 가능하다고 했으므로
+  올리려면 Render 대시보드 환경변수에서 바꾸고 **OpenAI 계정 한도도 같은 값으로 맞춘다**
 ## 3. 핵심 문서
 
 | 문서 | 내용 |
@@ -71,7 +201,9 @@ KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 
 | `docs/superpowers/plans/2026-09-03-phase2a-data-connectors.md` | Phase 2a 구현 계획 — 9개 태스크 |
 | `docs/superpowers/specs/2026-09-03-phase3-frontend-design.md` | Phase 3 설계 (완료) |
 | `docs/superpowers/specs/2026-09-03-phase2b-research-connectors-design.md` | Phase 2b 설계 (승인됨) |
-| `docs/superpowers/plans/2026-09-04-phase2b-research-connectors.md` | **Phase 2b 구현 계획 — 14개 태스크. Task 14만 남음** |
+| `docs/superpowers/plans/2026-09-04-phase2b-research-connectors.md` | Phase 2b 구현 계획 — 14개 태스크. Task 14(KCI 키)만 남음 |
+| `docs/superpowers/specs/2026-09-06-deployment-design.md` | 배포 설계 (승인됨) |
+| `docs/superpowers/plans/2026-09-06-render-deployment.md` | **배포 구현 계획 — 4개 태스크. Task 3부터 진행할 차례** |
 | `~/Desktop/claude-code-integrated-prompt.md` | 사용자 원본 요구사항 |
 
 ## 4. 반드시 지켜야 할 결정사항
@@ -114,6 +246,20 @@ KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 
 - Node v24.18.0 / npm 11.16.0 / Windows 11, PowerShell + Git Bash
 - git 신원: `kim cheol hui <144594976+kimcheolhui9846@users.noreply.github.com>`
 - `gh` CLI 인증됨 (`kimcheolhui9846`)
+- 로컬 `.env` 존재함. `MY_SECRET_PASSWORD`(8자)와 `OPENAI_API_KEY`가 채워져 있고
+  `KCI_API_KEY`는 비어 있다. `.gitignore`에 걸려 커밋되지 않는다
+
+### 배포 (Task 3 완료 후 채운다)
+
+- URL: (미정 — Render 연결 후)
+- 플랫폼: Render 무료 웹 서비스
+- 설정 출처: `render.yaml` — Blueprint 사용 여부 (미확인)
+- `numInstances: 1` 적용 여부 (미확인)
+- 배포된 Node 버전 (미확인)
+- 비밀값 2개는 Render 대시보드에만 있다
+
+**인스턴스를 늘리지 말 것.** 이유는 `docs/architecture.md`의
+"상태는 어디에 사는가" 절 참고. 성능이 아니라 정확성 문제다.
 
 ## 7. 계획 단계에서 확인한 라이브러리 사실
 
@@ -160,10 +306,15 @@ KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 
   검증한다. 되는 것으로 가정하고 구현하면 안 된다
 - **KCI의 IP 거부 응답이 어떻게 생겼는지 모른다.** 키가 없어 확인하지 못했다.
   키 발급 후 함께 확인해 식별 조건을 확정한다
-- **`.env`가 아직 존재하지 않는다.** 이것이 실제 OpenAI 호출 검증이 0회인
-  이유이기도 하다. `cp .env.example .env` 후 실제 값을 채워야 한다.
-  Phase 2b 실네트워크 검증은 환경변수를 인라인으로 넘겨(`LLM_MODE=mock`)
-  돌렸으므로 LLM 비용이 들지 않았다
+- ~~`.env`가 아직 존재하지 않는다.~~ **2026-09-04 생성 완료.** 비밀번호와 OpenAI 키가
+  채워져 있고 로그인·실호출이 확인됐다. `KCI_API_KEY`만 비어 있다
+- **배포 환경에서 예산 카운터가 재시작마다 리셋된다.** Render 무료는 파일시스템이
+  휘발성이라 `.budget.json`이 정지·재배포마다 사라진다. **실제 지출 상한은
+  OpenAI 계정 Billing에서 걸어야 한다.** 앱 예산은 한 세션 안에서만 유효하다.
+  이것은 결함이 아니라 배포 설계 §5에서 근거를 적고 받아들인 선택이다
+- **배포 환경에서 KCI를 쓸 수 없다.** 아웃바운드 IP가 유동이라 허용목록에 등록할 수 없다
+- **Render Blueprint가 무료 플랜에서 되는지, `numInstances`가 허용되는지 모른다.**
+  Render 문서에 명시가 없다. Task 3에서 실제로 시도해 확인한다
 
 - ~~실제 OpenAI 호출 검증이 아직 0회다.~~ **2026-09-04 완료.** `./scripts/verify.sh`
   **통과 9 / 실패 0**. `degraded=false`로 구조화 출력이 실모델에서 첫 시도에 통했다.
