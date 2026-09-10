@@ -3,7 +3,7 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-07 (배포 작업 중 — Render 계정 연결부터 남음)
+- **최종 갱신**: 2026-09-10 (배포 완료·검증 완료 — 시장 차트 결함 1건 미해결)
 - **현재 브랜치**: `feature/deployment` (`main`에서 분기, 원격에 푸시됨)
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
@@ -83,114 +83,119 @@ MY_SECRET_PASSWORD=test-pw LLM_MODE=mock npm start
 | 실제 OpenAI 호출 검증 | ✅ 완료 (2026-09-04) — `verify.sh` 9/0, `degraded=false` |
 | 배포 설계·계획 | ✅ 완료 — spec·plan 작성 및 커밋 |
 | 배포 구현 (Task 1~2) | ✅ 완료 — `render.yaml`, `engines`, 테스트 7건, 문서 |
-| **배포 실행 (Task 3)** | 🔴 **여기서 멈춤. 사용자가 Render 계정 작업을 해야 한다** |
-| 배포 기록·PR (Task 4) | ⬜ Task 3 이후 |
+| 배포 실행 (Task 3) | ✅ 완료 — https://eco-si-news-analyze.onrender.com |
+| 배포 검증 | 🟡 `verify.sh` **9/0 통과**, `verify-research.sh` **13/1** — 시장 차트만 실패 |
+| 배포 기록·PR (Task 4) | 🟡 문서 기록 완료. PR #5 병합 대기 |
+| **시장 차트 소스 교체** | 🔴 **다음 작업.** §2 참고 |
 
 **현재 테스트: 530 tests / 529 pass / 0 fail / 1 skip** (`npm test`)
 skip 1건은 KCI 정상 응답 픽스처가 없어서다. 키를 받으면 해제한다.
 
-## 2. 다음에 할 일 — 배포
+## 2. 다음에 할 일 — 시장 차트 소스 교체
 
-> **이어받는 사람에게.** 애플리케이션은 완성됐고 로컬·실네트워크·실브라우저 검증까지
-> 끝났다. 남은 것은 **Render에 올리는 일 하나**다. 코드는 더 짤 게 없다.
+> **이어받는 사람에게.** 배포는 끝났고 앱은 살아 있다. 뉴스·재무·논문·실험·LLM 분석이
+> 배포 환경에서 전부 동작하는 것을 실측으로 확인했다. **단 하나, 시장 차트가 안 된다.**
+> 아래 조사는 이미 끝났으니 다시 하지 말 것.
 
-진행 중인 계획: `docs/superpowers/plans/2026-09-06-render-deployment.md`
-설계 근거: `docs/superpowers/specs/2026-09-06-deployment-design.md`
+### 배포 현황
 
-### 끝난 것 (Task 1~2, 커밋됨)
+- URL: **https://eco-si-news-analyze.onrender.com**
+- Render 무료 웹 서비스. Blueprint(`render.yaml`)로 생성
+- 대시보드에 직접 넣은 환경변수는 `MY_SECRET_PASSWORD`와 `OPENAI_API_KEY` 둘뿐이다.
+  나머지는 `render.yaml`과 `lib/config.js` 기본값이 적용된다
+- **Render가 보고 있는 브랜치는 `feature/deployment`다.** PR #5를 병합한 뒤
+  대시보드에서 브랜치를 `main`으로 바꿔야 한다. 안 바꾸고 브랜치를 지우면 배포가 멈춘다
 
-| 산출물 | 내용 |
+### 실측 검증 결과 (2026-09-10)
+
+| 스크립트 | 결과 |
 |---|---|
-| `render.yaml` | 배포 정의. 설정의 단일 출처 |
-| `package.json` | `engines.node: ">=22"` 추가 |
-| `tests/deployment.test.js` | 회귀 테스트 7건 (전부 통과) |
-| `README.md` | "## 배포" 절 + 무료 티어 한계 6가지 |
-| `docs/architecture.md` | "상태는 어디에 사는가 — 인스턴스는 하나여야 한다" |
+| `verify.sh` | **통과 9 / 실패 0.** `degraded=false`, `model=gpt-4o-2024-08-06`, 위조 URL 0건 |
+| `verify-research.sh` | **통과 13 / 실패 1.** 시장 데이터만 실패 |
 
-브랜치 `feature/deployment`는 **원격에 푸시되어 있다**(`origin/feature/deployment`).
-Render가 저장소에서 `render.yaml`을 읽어야 하므로 이미 올려 뒀다.
+배포에서 확인된 것: 로그인, 확인 토큰 `428` 차단, 견적, **OpenAI 실호출**, 세션 연장,
+로그아웃 후 `403`, 뉴스 8건, 재무지표 6개, 논문 5건, 임상시험 5건, 한국어 언어 가드.
 
-### 다음 단계 — Task 3 Step 2부터 (사용자 작업)
+### 시장 차트가 안 되는 이유 — 조사 끝났다
 
-**1. Render에 저장소를 연결한다**
+**Yahoo 차트 API와 CoinGecko가 Render의 데이터센터 IP를 거부한다.**
 
-[render.com](https://render.com) → New → **Blueprint** →
-저장소 `kimcheolhui9846/eco-si-news-analyze` → 브랜치 **`feature/deployment`**
+확정에 쓴 증거다. 다시 확인할 필요 없다.
 
-`main`이 아니라 feature 브랜치를 지정하는 이유는 병합 전에 실제로 뜨는지 먼저 보기 위함이다.
-
-> **Blueprint가 무료 플랜에서 동작하는지, `numInstances: 1`이 허용되는지 확인되지 않았다.**
-> Render 문서에 명시가 없어 스펙 §7에 "확인 필요"로 남겨 뒀다.
-> 거부되면 New → **Web Service**로 만들고 `render.yaml`의 값을 대시보드에 직접 넣는다.
-> **어느 쪽이었는지 반드시 기록한다** — Task 4에서 문서에 남길 항목이다.
-
-**2. 비밀값 둘을 대시보드에 입력한다** (Environment 탭)
-
-| 변수 | 값 |
+| 확인한 것 | 결과 |
 |---|---|
-| `MY_SECRET_PASSWORD` | 로그인 비밀번호. **로컬의 8자보다 길게.** 공개 인터넷이다 |
-| `OPENAI_API_KEY` | 로컬 `.env`에 넣은 것과 같은 키 |
+| Yahoo만의 문제인가 | 아니다. **CoinGecko도 동일하게 실패** |
+| 아웃바운드 자체가 막혔나 | 아니다. SEC·arXiv·EuropePMC·ClinicalTrials·Google뉴스·OpenAI 정상 |
+| 타임아웃인가 | 아니다. **0.2초 즉시 실패** |
+| API가 죽었나 | 아니다. **가정용 IP에서는 둘 다 `HTTP 200`** |
+| 허용목록 설정 문제인가 | 아니다. 대시보드에 `EXTERNAL_ALLOWLIST`를 넣지 않아 기본값이 적용됐고,
+  기본값에 두 호스트가 모두 있다 |
+| 인스턴스가 여러 개인가 | 아니다. Render 무료는 단일 인스턴스로 제한된다 |
 
-나머지 셋(`NODE_ENV`, `TRUST_PROXY`, `KCI_API_KEY`)은 `render.yaml`에 있어 자동으로 들어간다.
-`PORT`는 설정하지 않는다 — Render가 주입하고 `config.port`가 읽는다.
+Yahoo는 **RSS(`feeds.finance.yahoo.com`)는 되고 API(`query1.finance.yahoo.com`)만 안 된다.**
+서비스별 차단 정책과 일치한다. Phase 2b 설계에서 Yahoo `quoteSummary`를
+"쿠키+crumb 인증 필요"로 탈락시킨 적이 있는데, 데이터센터 IP에서는 차트 엔드포인트에도
+같은 요구가 붙는 것으로 보인다.
 
-**비밀값을 대화창이나 저장소에 넣지 않는다.** 대시보드에만 입력한다.
+**설정으로 못 고친다. 호스팅을 옮겨도 대부분의 클라우드 IP가 같은 취급을 받는다.**
 
-**3. 빌드 로그에서 두 가지를 확인한다**
+### 그래서 할 일 — 시세 소스 교체
 
-- `vite build`가 성공했는가 — 실패하면 `--include=dev`가 안 먹은 것이다(§배포 함정 참고)
-- Node 버전이 몇인가 — `engines`가 먹혔는지 확인하고 **적어 둔다**
+사용자가 "1 → 2"로 결정했다. 즉 **지금 상태를 한계로 적고 병합**한 뒤,
+**시세 소스 교체를 별도 작업으로** 진행한다.
 
-**4. 검증 3단계를 돌린다**
+브레인스토밍부터 시작할 것. 설계 없이 provider부터 짜지 말 것.
 
-```bash
-# 첫 요청은 약 1분 걸린다. 정지 상태에서 깨어나는 시간이다.
-curl -sS --max-time 120 https://<앱이름>.onrender.com/api/health
-#   기대: {"status":"ok","llmMode":"live",...}
+**요구 조건**
 
-./scripts/verify-research.sh https://<앱이름>.onrender.com
-#   기대: 통과 14 / 실패 0.  비용 0
-#   한국어 단계에서 KCI 사유가 나오는 것은 정상이다 (키를 비워 뒀다)
+- 데이터센터 IP를 막지 않을 것 (이게 교체하는 이유다)
+- 일별 종가 시계열을 줄 것. `lib/providers/indicators.js`가 이동평균·변동성을 계산한다
+- 주식과 코인을 모두 다룰 것. 한 소스로 안 되면 둘로 나눠도 된다
+- API 키는 없는 편이 낫다. 필요하면 KCI처럼 "없어도 서버가 뜨는" 구조로
 
-MY_SECRET_PASSWORD=<대시보드에 넣은 값> ./scripts/verify.sh https://<앱이름>.onrender.com
-#   기대: 통과 9 / 실패 0, degraded=false.  실호출 1회 약 $0.005
+**후보 (미검증 — 실제로 호출해 확인할 것)**
+
+| 소스 | 특징 |
+|---|---|
+| Stooq (`stooq.com`) | 키 불필요, CSV. 데이터센터 허용으로 알려져 있다 |
+| Alpha Vantage | 키 필요(무료), 하루 호출 수 제한이 빡빡하다 |
+| Twelve Data | 키 필요(무료), 한도가 좀 넉넉하다 |
+
+**추정하지 말고 실제로 호출해 확인할 것.** Phase 2b에서 후보를 전부 실측한 뒤
+설계를 확정했고, 그 과정에서 처음 가정이 여러 번 뒤집혔다(§9 참고).
+
+**바꾸지 말아야 할 것**
+
+`createMarketProvider`의 계약은 그대로 두고 내부만 갈아끼운다. 호출부가 의존하는 형태다.
+
+```js
+createMarketProvider({ http, cache, clock, makeBreaker })
+  → resolveSymbol({ query, symbol, assetType })
+      → { symbol, assetType, name, source, cik? }
+  → fetch({ symbol, assetType, range })
+      → { indicators, series, marketData } | null
 ```
 
-그다음 브라우저에서 로그인 → 수집 → 승인 → 보고서까지 한 번 돈다.
+- `marketData`는 `lib/validation.js`의 스키마를 통과해야 한다
+  (`assetName`, `currentPrice`, `priceChange`, `chartTrend`)
+- `series.points`의 개수는 `indicators.points`와 **반드시 같아야 한다**.
+  어긋나면 차트와 이동평균이 따로 논다
+- `chartTrend` 문장은 계속 코드가 만든다. LLM에게 추세 판단을 맡기지 않는다
+- 기존 테스트 `tests/market-provider.test.js`와 픽스처가 있다. 새 소스의 실제 응답을
+  픽스처로 저장하고 같은 방식으로 검증할 것
+- 새 호스트를 `EXTERNAL_ALLOWLIST` 기본값(`lib/config.js`)과 `.env.example`에 추가할 것
 
-**어느 단계든 실패하면 거기서 멈추고 고친다.** 원본 요구사항 §1-7 —
-동작하지 않는 기능을 완료로 보고하지 않는다.
+**먼저 고치면 좋을 것**
 
-### 그다음 — Task 4 (기록과 PR)
+`lib/providers/market.js`는 실패를 **조용히 삼킨다**. `catch { breaker.recordFailure(); return null; }`뿐이라
+`403`인지 `429`인지 알 수 없었고, 이번 조사에서 상태코드를 끝내 확인하지 못했다.
+새 provider에는 실패 사유를 로그로 남길 것. 뉴스 provider가 `degraded`에 사유를 담는 것과 같은 방식으로.
 
-계획서 Task 4에 채울 자리가 대괄호로 표시돼 있다. Task 3에서 확인한 값으로 채운다.
+### 배포 후 남은 다른 일
 
-1. 이 문서 §1 표와 §6에 배포 URL·플랫폼·Node 버전·Blueprint 사용 여부를 적는다
-2. Blueprint를 못 썼다면 `render.yaml` 맨 위 주석에 그 사실과 날짜를 남긴다
-3. `npm test`로 530 tests / 529 pass / 1 skip 확인
-4. 커밋 후 `git push`
-5. `gh pr create --base main --head feature/deployment` — 본문은 스크래치패드에 파일로 쓰고
-   `--body-file`로 넘긴다. 셸에 긴 한글을 직접 넣으면 CP949에서 깨진다
-
-### 배포에서 걸릴 함정 — 미리 잡아 둔 것
-
-**`--include=dev`를 지우면 빌드가 깨진다.** `vite`와 `@vitejs/plugin-react`가
-`client/`의 devDependencies인데 `NODE_ENV=production`은 빌드 단계에도 적용된다.
-플래그가 없으면 `npm ci`가 이들을 건너뛰어 `vite: not found`가 난다.
-`client/dist`는 `.gitignore`에 있어 미리 만들어 둔 산출물도 없다.
-
-**`sync: false`를 지우면 비밀값이 저장소에 올라간다.** `render.yaml`의
-`MY_SECRET_PASSWORD`·`OPENAI_API_KEY`는 값을 적지 않고 대시보드에서 받는다.
-
-위 둘과 `numInstances: 1`, `plan: free`, `NODE_ENV`, `TRUST_PROXY`, `engines`를
-`tests/deployment.test.js`가 고정한다. 설정 파일이라 테스트가 없으면 조용히 깨진다.
-
-### 배포 후에도 남는 것 (선택)
-
-- **KCI API 키** — Render 무료는 고정 아웃바운드 IP가 없어 **배포 환경에서는 쓸 수 없다.**
-  필요해지면 Fly.io 전용 IPv4($2/월)로 옮긴 뒤 그 서버에서 `./scripts/verify-kci.sh`를 돌린다
-- **`MONTHLY_COST_LIMIT_USD`** — 현재 `5`. 사용자가 월 $7까지 가능하다고 했으므로
-  올리려면 Render 대시보드 환경변수에서 바꾸고 **OpenAI 계정 한도도 같은 값으로 맞춘다**
+1. **PR #5 병합 → Render 브랜치를 `main`으로 변경** (위 배포 현황 참고)
+2. **`trust proxy: 1`이 Render 프록시 깊이와 맞지 않는다** — §8 참고
+3. **KCI 키** — 배포 환경에서는 어차피 못 쓴다(고정 IP 없음). §8 참고
 ## 3. 핵심 문서
 
 | 문서 | 내용 |
@@ -249,14 +254,17 @@ MY_SECRET_PASSWORD=<대시보드에 넣은 값> ./scripts/verify.sh https://<앱
 - 로컬 `.env` 존재함. `MY_SECRET_PASSWORD`(8자)와 `OPENAI_API_KEY`가 채워져 있고
   `KCI_API_KEY`는 비어 있다. `.gitignore`에 걸려 커밋되지 않는다
 
-### 배포 (Task 3 완료 후 채운다)
+### 배포 (2026-09-10 확인)
 
-- URL: (미정 — Render 연결 후)
+- URL: **https://eco-si-news-analyze.onrender.com**
 - 플랫폼: Render 무료 웹 서비스
-- 설정 출처: `render.yaml` — Blueprint 사용 여부 (미확인)
-- `numInstances: 1` 적용 여부 (미확인)
-- 배포된 Node 버전 (미확인)
-- 비밀값 2개는 Render 대시보드에만 있다
+- 설정 출처: `render.yaml` (Blueprint). 대시보드에 직접 넣은 것은 비밀값 2개뿐
+- 추적 브랜치: **`feature/deployment`** — PR #5 병합 후 `main`으로 바꿀 것
+- 인스턴스 수: Render 무료는 단일 인스턴스로 제한되므로 자동으로 1개다
+- 배포된 Node 버전: 빌드 로그에서 미확인. `engines: >=22`는 반영돼 있고 앱은 정상 기동
+- 비밀값 2개(`MY_SECRET_PASSWORD`, `OPENAI_API_KEY`)는 Render 대시보드에만 있다
+- 로컬 `.env`의 `DEPLOY_PASSWORD`는 배포 검증용으로 사용자가 넣은 값이다.
+  검증이 끝났으므로 지워도 된다
 
 **인스턴스를 늘리지 말 것.** 이유는 `docs/architecture.md`의
 "상태는 어디에 사는가" 절 참고. 성능이 아니라 정확성 문제다.
@@ -313,8 +321,25 @@ MY_SECRET_PASSWORD=<대시보드에 넣은 값> ./scripts/verify.sh https://<앱
   OpenAI 계정 Billing에서 걸어야 한다.** 앱 예산은 한 세션 안에서만 유효하다.
   이것은 결함이 아니라 배포 설계 §5에서 근거를 적고 받아들인 선택이다
 - **배포 환경에서 KCI를 쓸 수 없다.** 아웃바운드 IP가 유동이라 허용목록에 등록할 수 없다
-- **Render Blueprint가 무료 플랜에서 되는지, `numInstances`가 허용되는지 모른다.**
-  Render 문서에 명시가 없다. Task 3에서 실제로 시도해 확인한다
+- ~~Render Blueprint가 무료 플랜에서 되는지 모른다.~~ **된다.** Blueprint로 배포했다
+- **[중요] 배포 환경에서 시장 차트가 동작하지 않는다.** Yahoo 차트 API와 CoinGecko가
+  Render의 데이터센터 IP를 거부한다. 조사는 끝났고 §2에 근거가 전부 적혀 있다.
+  해결책은 시세 소스 교체이며 그것이 다음 작업이다
+- **`trust proxy: 1`이 Render의 프록시 깊이와 맞지 않는다.** Render는 Cloudflare와
+  자체 로드밸런서를 거치는데 `server.js`는 홉 하나만 신뢰한다. 그래서 `req.ip`가
+  실제 사용자가 아니라 중간 프록시 주소로 잡히고, 그 주소가 노드마다 달라진다.
+
+  **관측 근거**: 같은 클라이언트로 연속 요청했는데 rate limit 카운터가 두 갈래로 갈렸다
+  (`remaining` 51→50→49 / `reset=798`과 `remaining=54` / `reset=792`가 번갈아 나옴).
+  `express-rate-limit` 8.7.0의 `MemoryStore`는 키 하나당 카운터 하나이므로(`localKeys = true`)
+  키가 둘이라는 뜻이다. IPv4 고정, XFF 고정, 단일 인스턴스를 모두 배제했다.
+
+  **영향은 제한적이다.** 세션·확인 토큰·예산은 IP로 키를 만들지 않아 멀쩡하다.
+  로그인 무차별 대입 방어가 `10회`가 아니라 `10 × 프록시 노드 수`로 느슨해질 뿐이다.
+
+  **주의**: `trust proxy: true`로 바꾸면 이번엔 클라이언트가 `X-Forwarded-For`를
+  위조해 rate limit을 우회할 수 있다(README에 적힌 트레이드오프). 단순 교체가 답이 아니다.
+  Render가 보장하는 헤더를 쓰거나 `keyGenerator`를 직접 만드는 쪽을 검토할 것
 
 - ~~실제 OpenAI 호출 검증이 아직 0회다.~~ **2026-09-04 완료.** `./scripts/verify.sh`
   **통과 9 / 실패 0**. `degraded=false`로 구조화 출력이 실모델에서 첫 시도에 통했다.
