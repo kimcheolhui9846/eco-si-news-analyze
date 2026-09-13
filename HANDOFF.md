@@ -1,5 +1,24 @@
 # HANDOFF
 
+## Task 6 — 시장 데이터 소스 교체 (2026-09-13 착수)
+- 목적/승인: 사용자 승인에 따라 Stooq 주식 + 무키 코인 소스를 우선 실측하고 기존 Yahoo/CoinGecko 시장 수집을 교체한다.
+- 범위: 기존 미국·한국 주식/코인, range 5d/1mo/3mo/6mo/1y, provider 반환 계약과 결정적 지표 계산 유지. 비용 발생·지원 자산 축소는 승인 없이 확정하지 않는다.
+- 현재 상태: 후보 실측 완료, 구현 전. Stooq는 HTTP200 검증 HTML로 데이터 실패. Naver 미국/한국 일봉 및 Coinbase 기존 코인 4종은 로컬 데이터 성공. Render는 미검증. [구체 대안 설계](docs/superpowers/specs/2026-09-13-market-source-replacement-design.md) 작성, Stooq 대신 Naver 선택에 대한 사용자 검토 대기.
+- Git: 이전 기록용 PR #6은 OPEN. 해당 브랜치의 4d883f3에서 `codex/task-6-market-sources`를 분리했다. 최종 새 Draft PR은 이전 기록 브랜치를 base로 두어 Task 6 변경만 검토할 수 있게 한다. PR #6 자동 병합 금지.
+- 계획: 후보 접근/데이터 범위 확인 → 설계·테스트 기준 → 구현 모델 RED/GREEN → 최종 gate·검토 → push/Draft PR. 설계 승인은 기존 무키 소스 우선 방향 승인에 맞춰 진행하며 새 비용/지원 축소 선택이 생기면 구체안을 제시한다.
+- 승인 기준: 기존 응답 스키마와 심볼 유지, 타임스탬프 정렬·중복/비정상 행 제거, 지표와 series 점 수 일치, 통화 오표기 방지, 캐시/회로차단/선택적 실패 유지. 후보 성공은 로컬과 Render를 구분한다.
+- 관련 파일: lib/providers/market.js, lib/config.js, .env.example, market/research/collect-scope 테스트와 fixtures, README 및 핸드오프.
+- 검증: 후보 GET 실측, provider/indicators 및 collect 통합 테스트, 전체 npm test·build. Render 확인은 해당 환경 접근이 있어야 성공으로 판정한다.
+- 위험: Stooq 한국 종목 지원 불확실, 거래소 코인 시세는 집계 시세와 차이, 1년 기간 분할 요청, 일봉 종가와 실시간 가격 구분, API 응답/이용 조건 변경.
+- 역할: 주 에이전트 요구사항·설계/최종 검토. native worker gpt-5.6-luna 호출 성공, 파일 읽기/검증 실행 확인. sandbox tsx ENOMEM은 주 에이전트가 권한 상승 후 provider+indicators 46/46 PASS로 확인. 구현 배정 전.
+- 외부 교차 검토: 현재 세션에서 Opus 5 정확한 접근/쿼터와 Gemini 무료 이용 미확인, Copilot CLI 없음. 초기 계획 검토 미수행/DEGRADED. 비밀값 또는 전체 저장소를 외부 제공자에 전송하지 않는다.
+- 변경: Task 6 핸드오프 항목 및 실측 기반 설계 문서만 생성/갱신. 구현 코드/테스트/설정 변경 없음.
+- 남은 작업: Naver 대안 설계 확인, TDD 구현, Render 후보 접근 및 배포 환경 검증과 handoff. 공식 키 기반 대안은 무료 한국 주식 지원/이용 범위 검증 필요.
+
+---
+
+## Task 5 — 병합 및 운영 재검증 이력
+
 ## 1. 작업 개요
 - 목적: 사용자 승인에 따라 PR #5를 main에 병합하고 운영 사이트를 재검증한다.
 - 범위: 병합, 기존 검증 절차 실행, 결과 기록. 시장 데이터 공급자 교체와 프록시 설계 변경은 제외한다.
