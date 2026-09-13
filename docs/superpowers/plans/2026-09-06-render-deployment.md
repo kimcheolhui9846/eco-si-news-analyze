@@ -434,7 +434,7 @@ curl -sS --max-time 120 https://<앱이름>.onrender.com/api/health
 
 **첫 요청은 약 1분 걸린다.** `--max-time 120`을 준 이유다.
 
-- [ ] **Step 6: 수집 경로 검증 (비용 0)**
+- [ ] **Step 6: 수집·분석 경로 검증 (live 서버에서는 유료 분석 1회 포함, 비용 가변)**
 
 ```bash
 ./scripts/verify-research.sh https://<앱이름>.onrender.com

@@ -58,7 +58,7 @@ npm run build:client   # 프론트엔드 빌드 (client/dist는 gitignore)
 npm start              # 서버 기동 → http://localhost:3000  (.env를 읽는다)
 
 # 실네트워크 검증. 서버가 떠 있어야 한다
-./scripts/verify-research.sh [BASE_URL]   # 수집 경로 14항목. 비용 0
+./scripts/verify-research.sh [BASE_URL]   # 14항목. live 서버에서는 유료 분석 1회 포함(비용 가변). LLM_MODE=mock 서버에서는 LLM 비용 0
 MY_SECRET_PASSWORD=<값> ./scripts/verify.sh [BASE_URL]   # 실호출 1회 약 $0.005
 ./scripts/verify-kci.sh                   # KCI 계약 확인. 키가 있어야 의미 있다
 
@@ -106,7 +106,8 @@ skip 1건은 KCI 정상 응답 픽스처가 없어서다. 키를 받으면 해�
 ## 2. 다음에 할 일 — 시장 차트 소스 교체
 
 > **이어받는 사람에게.** 배포는 끝났고 앱은 살아 있다. 뉴스·재무·논문·실험·LLM 분석이
-> 배포 환경에서 전부 동작하는 것을 실측으로 확인했다. **단 하나, 시장 차트가 안 된다.**
+> 배포 환경에서 동작하는 것을 실측으로 확인했다. **시장 차트는 여전히 안 된다.**
+> 2026-09-13에는 arXiv 부분 실패도 관측됐다. 다른 소스로 논문 5건을 확보했으며 원인·지속성은 미확인이다.
 > 아래 조사는 이미 끝났으니 다시 하지 말 것.
 
 ### 배포 현황
