@@ -114,3 +114,65 @@ test('Coinbase malformed payload returns neutral no-data result', async () => {
   const http = httpFor([['BTC-USD/candles', { error: 'bad' }]]);
   assert.equal(await createCoinbaseMarket({ http, clock })('bitcoin', '1mo'), null);
 });
+
+test('Naver generic US symbols try the .O candidate then accept a matching bare candidate', async () => {
+  const http = { calls: [], async get(url) {
+    this.calls.push(url);
+    if (url.endsWith('/IBM.O/basic')) return { status: 200, text: JSON.stringify({}), url };
+    if (url.endsWith('/IBM/basic')) return { status: 200, text: JSON.stringify(meta({ reutersCode: 'IBM', symbolCode: 'IBM', stockExchangeType: { name: 'NYSE', nationCode: 'USA' } })), url };
+    return { status: 200, text: JSON.stringify(chart), url };
+  } };
+  const result = await createNaverMarket({ http, clock })('IBM', '1mo');
+  assert.ok(result);
+  assert.ok(http.calls.some((url) => url.endsWith('/stock/IBM.O/basic')));
+  assert.ok(http.calls.some((url) => url.endsWith('/stock/IBM/basic')));
+});
+
+test('Naver rejects an unmatched generic identity without requesting chart data', async () => {
+  const http = httpFor([['api.stock.naver.com', meta({ reutersCode: 'OTHER.O', symbolCode: 'OTHER' })]]);
+  assert.equal(typeof await createNaverMarket({ http, clock })('IBM', '1mo'), 'symbol');
+  assert.equal(http.calls.some((url) => url.includes('/chart/')), false);
+});
+
+test('Coinbase maps all four supported crypto ids to explicit USD products', async () => {
+  const expected = { bitcoin: 'BTC-USD', ethereum: 'ETH-USD', solana: 'SOL-USD', ripple: 'XRP-USD' };
+  const http = { calls: [], async get(url) {
+    this.calls.push(url);
+    const day = Math.floor(Date.parse('2026-09-12T00:00:00Z') / 1000);
+    return { status: 200, text: JSON.stringify([[day, 1, 2, 1, 2, 1], [day + 86400, 1, 2, 1, 3, 1]]), url };
+  } };
+  for (const [symbol, product] of Object.entries(expected)) {
+    const result = await createCoinbaseMarket({ http, clock })(symbol, '1mo');
+    assert.ok(result, symbol);
+    assert.ok(http.calls.at(-1).includes(`/products/${product}/candles`));
+  }
+});
+
+test('Naver OPEN metadata excludes the current local trading day while CLOSE matching includes it', async () => {
+  const rows = [{ localDate: '20260910', closePrice: 217, accumulatedTradingVolume: 1 }, { localDate: '20260911', closePrice: 218, accumulatedTradingVolume: 2 }, { localDate: '20260914', closePrice: 219, accumulatedTradingVolume: 3 }];
+  const open = httpFor([['/basic', meta({ marketStatus: 'OPEN', closePrice: '219', localTradedAt: '2026-09-14T10:00:00-04:00' })], ['/chart/foreign/item/NVDA.O/day', rows]]);
+  const openResult = await createNaverMarket({ http: open, clock })('NVDA', '1mo');
+  assert.deepEqual(openResult.series.points.map((point) => point.c), [217, 218]);
+  const close = httpFor([['/basic', meta({ marketStatus: 'CLOSE', closePrice: '219', localTradedAt: '2026-09-14T16:00:00-04:00' })], ['/chart/foreign/item/NVDA.O/day', rows]]);
+  const closeResult = await createNaverMarket({ http: close, clock: { now: () => Date.parse('2026-09-14T21:00:00Z') } })('NVDA', '1mo');
+  assert.deepEqual(closeResult.series.points.map((point) => point.c), [218, 219]);
+});
+
+test('Naver uses calendar month clamping and exchange-local dates for request bounds', async () => {
+  const http = httpFor([['/basic', meta()], ['/chart/foreign/item/NVDA.O/day', chart]]);
+  await createNaverMarket({ http, clock: { now: () => Date.parse('2026-01-31T18:00:00Z') } })('NVDA', '1mo');
+  assert.ok(http.calls.some((url) => url.includes('startDateTime=202512310000')));
+  const dstHttp = httpFor([['/basic', meta({ localTradedAt: '2026-03-09T16:00:00-04:00' })], ['/chart/foreign/item/NVDA.O/day', chart]]);
+  await createNaverMarket({ http: dstHttp, clock: { now: () => Date.parse('2026-03-10T03:00:00Z') } })('NVDA', '1mo');
+  assert.ok(dstHttp.calls.some((url) => url.includes('endDateTime=202603092359')));
+});
+
+test('Naver metadata cache is shared across ranges while chart requests remain range-specific', async () => {
+  const cache = new Map();
+  const http = httpFor([['/basic', meta()], ['/chart/foreign/item/NVDA.O/day', chart]]);
+  const fetch = createNaverMarket({ http, clock, cache: { get: (key) => cache.get(key), set: (key, value) => cache.set(key, value) } });
+  await fetch('NVDA', '1mo');
+  await fetch('NVDA', '1y');
+  assert.equal(http.calls.filter((url) => url.includes('/basic')).length, 1);
+  assert.equal(http.calls.filter((url) => url.includes('/chart/')).length, 2);
+});

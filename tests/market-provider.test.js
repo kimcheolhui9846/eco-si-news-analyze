@@ -282,13 +282,13 @@ test('시계열 점 수가 지표의 점 수와 같다', async () => {
 test('종가가 null인 지점은 시계열에서 빠진다', async () => {
   const withGaps = JSON.stringify({
     chart: { result: [{
-      meta: { symbol: 'X', currency: 'USD', regularMarketPrice: 110 },
+      meta: { symbol: 'BRK-B', currency: 'USD', regularMarketPrice: 110 },
       timestamp: [1756000000, 1756086400, 1756172800],
       indicators: { quote: [{ close: [100, null, 110], volume: [10, null, 20] }] },
     }] },
   });
   const r = await provider(makeHttp({ 'query1.finance.yahoo.com/v8': withGaps }))
-    .fetch({ symbol: 'X', assetType: 'stock', range: '1mo' });
+    .fetch({ symbol: 'BRK-B', assetType: 'stock', range: '1mo' });
 
   assert.equal(r.series.points.length, 2);
   assert.deepEqual(r.series.points.map((p) => p.c), [100, 110]);
