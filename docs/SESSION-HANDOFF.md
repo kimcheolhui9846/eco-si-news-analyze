@@ -3,11 +3,20 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-10 (배포 완료·검증 완료 — 시장 차트 결함 1건 미해결)
-- **현재 브랜치**: `feature/deployment` (`main`에서 분기, 원격에 푸시됨)
+- **최종 갱신**: 2026-09-13 (PR #5 main 병합 완료, 운영 인증 재검증 대기)
+- **현재 브랜치**: `codex/task-5-post-merge-verification` (병합된 main 기준 검증 기록)
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
+
+## 2026-09-13 병합 후 검증
+
+- 사용자 승인으로 [PR #5](https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/5)를 병합했다. 커밋: `8e16b308adee43c532bd6793cc83e1960433be54`.
+- 이번 실행의 계획·검증·검토 공백·미완료 항목은 [루트 HANDOFF.md](../HANDOFF.md)에 기록한다. 아래 2026-09-10 실측 결과는 과거 이력이며 이번 재검증 결과가 아니다.
+- 병합 전 배포 테스트 7/7, 전체 529 pass / 0 fail / 1 skip, 클라이언트 빌드 성공.
+- 운영 health는 `ok/live`. 로컬 `.env` 비밀번호로 운영 로그인은 HTTP 403으로 거부됐다. 따라서 `verify.sh`와 `verify-research.sh`는 이번에 실행하지 못했고 유료 분석을 호출하지 않았다.
+- Render main 추적 전환과 실제 배포 커밋은 아직 미확인. 연결 브라우저와 Render API 인증이 없어 사용자 확인 대기. 기존 배포 브랜치는 보존했다.
+- 외부 교차 검토는 DEGRADED. 별도 native 보완 리뷰는 새로운 blocker/major 회귀 없음. 기존 프록시 제한과 시장 데이터 결함은 유지한다.
 
 ## 0. 처음 이어받는다면 — 빠른 지도
 
@@ -85,7 +94,7 @@ MY_SECRET_PASSWORD=test-pw LLM_MODE=mock npm start
 | 배포 구현 (Task 1~2) | ✅ 완료 — `render.yaml`, `engines`, 테스트 7건, 문서 |
 | 배포 실행 (Task 3) | ✅ 완료 — https://eco-si-news-analyze.onrender.com |
 | 배포 검증 | 🟡 `verify.sh` **9/0 통과**, `verify-research.sh` **13/1** — 시장 차트만 실패 |
-| 배포 기록·PR (Task 4) | 🟡 문서 기록 완료. PR #5 병합 대기 |
+| 배포 기록·PR (Task 4) | PR #5 main 병합 완료 (2026-09-13). 운영 main 전환 확인 대기 |
 | **시장 차트 소스 교체** | 🔴 **다음 작업.** §2 참고 |
 
 **현재 테스트: 530 tests / 529 pass / 0 fail / 1 skip** (`npm test`)
@@ -103,8 +112,8 @@ skip 1건은 KCI 정상 응답 픽스처가 없어서다. 키를 받으면 해�
 - Render 무료 웹 서비스. Blueprint(`render.yaml`)로 생성
 - 대시보드에 직접 넣은 환경변수는 `MY_SECRET_PASSWORD`와 `OPENAI_API_KEY` 둘뿐이다.
   나머지는 `render.yaml`과 `lib/config.js` 기본값이 적용된다
-- **Render가 보고 있는 브랜치는 `feature/deployment`다.** PR #5를 병합한 뒤
-  대시보드에서 브랜치를 `main`으로 바꿔야 한다. 안 바꾸고 브랜치를 지우면 배포가 멈춘다
+- **2026-09-10 기록상 Render 추적 브랜치는 `feature/deployment`다.** PR #5는 2026-09-13 병합했다.
+  대시보드에서 `main` 전환 및 배포 커밋을 확인해야 한다. 확인 전 기존 브랜치를 삭제하지 않는다.
 
 ### 실측 검증 결과 (2026-09-10)
 
@@ -208,7 +217,7 @@ createMarketProvider({ http, cache, clock, makeBreaker })
 | `docs/superpowers/specs/2026-09-03-phase2b-research-connectors-design.md` | Phase 2b 설계 (승인됨) |
 | `docs/superpowers/plans/2026-09-04-phase2b-research-connectors.md` | Phase 2b 구현 계획 — 14개 태스크. Task 14(KCI 키)만 남음 |
 | `docs/superpowers/specs/2026-09-06-deployment-design.md` | 배포 설계 (승인됨) |
-| `docs/superpowers/plans/2026-09-06-render-deployment.md` | **배포 구현 계획 — 4개 태스크. Task 3부터 진행할 차례** |
+| `docs/superpowers/plans/2026-09-06-render-deployment.md` | 배포 구현·최초 배포·PR 병합 완료. main 배포와 인증 재검증 대기 |
 | `~/Desktop/claude-code-integrated-prompt.md` | 사용자 원본 요구사항 |
 
 ## 4. 반드시 지켜야 할 결정사항
