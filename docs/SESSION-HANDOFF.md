@@ -3,12 +3,71 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-04 (Phase 2b 구현 완료 — KCI 키 발급만 남음)
-- **현재 브랜치**: `feature/research-connectors`
+- **최종 갱신**: 2026-09-10 (배포 완료·검증 완료 — 시장 차트 결함 1건 미해결)
+- **현재 브랜치**: `feature/deployment` (`main`에서 분기, 원격에 푸시됨)
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
 
+## 0. 처음 이어받는다면 — 빠른 지도
+
+**이 앱이 하는 일.** 검색어를 받아 뉴스·주가차트·SEC 재무지표·논문·임상시험을 모으고,
+그것만을 근거로 LLM 분석 보고서를 만든다. 챗봇이 아니라 조사 도구다.
+출처를 지어내지 않는 것과 LLM 비용이 새지 않는 것이 이 프로젝트의 두 축이다.
+
+### 구조
+
+```
+server.js              Express 앱 팩토리. 모든 라우트와 배선. lib/의 심볼을 re-export한다
+lib/
+  config.js            환경변수 로드·검증. 기동 시 한 번만 읽는다
+  session.js           메모리 Map 기반 세션
+  validation.js        Zod 입력 스키마. z.strictObject로 미허용 필드를 거부
+  normalize.js         뉴스 정규화·중복 제거·출처 ID(S1..Sn) 부여
+  prompt.js            시스템/사용자 프롬프트 조립
+  sections.js          재무·논문·실험 구획 문자열과 출처 ID(P/T/F)
+  llm.js               OpenAI 클라이언트, 응답 스키마, 회로차단기, 재시도
+  postprocess.js       위조 URL 제거, 출처 배열 생성
+  cost-defense.js      TTL 캐시·세마포어·중복 병합·rate limit·해시
+  budget.js            비용 추정과 예산 추적 (.budget.json에 영속화)
+  http.js              외부 호출 단일 통로. 허용목록·리다이렉트 차단·크기 상한
+  providers/           news, market, financial, papers, kci, experiments, language
+client/src/            React 19 프론트엔드 (Vite). 빌드 산출물은 Express가 서빙
+tests/                 node:test. 530개
+scripts/               verify.sh, verify-research.sh, verify-kci.sh
+docs/superpowers/      specs(설계)와 plans(구현 계획)
+```
+
+### 명령
+
+```bash
+npm test               # 전체 테스트. API 키·네트워크 불필요
+npm run build:client   # 프론트엔드 빌드 (client/dist는 gitignore)
+npm start              # 서버 기동 → http://localhost:3000  (.env를 읽는다)
+
+# 실네트워크 검증. 서버가 떠 있어야 한다
+./scripts/verify-research.sh [BASE_URL]   # 수집 경로 14항목. 비용 0
+MY_SECRET_PASSWORD=<값> ./scripts/verify.sh [BASE_URL]   # 실호출 1회 약 $0.005
+./scripts/verify-kci.sh                   # KCI 계약 확인. 키가 있어야 의미 있다
+
+# 비용 없이 전체 동작 보기
+MY_SECRET_PASSWORD=test-pw LLM_MODE=mock npm start
+```
+
+테스트 하나만 돌리려면 `node --import tsx --test tests/<파일>`.
+`node --test tests/`는 Windows에서 `MODULE_NOT_FOUND`가 난다 — 글롭을 써야 한다.
+
+### 일할 때 지킬 것
+
+- 저장소 루트 `CLAUDE.md`와 §4를 먼저 읽는다. 커밋 저자 표기 규칙이 있다
+- 커밋·푸시는 **사용자가 요청할 때만** 한다
+- 기능을 고칠 때는 테스트를 먼저 쓴다. 이 저장소는 그렇게 만들어졌다
+- 실패하는 테스트나 동작하지 않는 기능을 완료로 보고하지 않는다 (원본 요구사항 §1-7)
+- 외부 호출은 반드시 `lib/http.js`를 통한다. provider가 `fetch`를 직접 부르지 않는다
+- 새 외부 호스트는 `EXTERNAL_ALLOWLIST`에 정확한 호스트명으로 추가한다
+- **`.env`, API 키, 비밀번호를 커밋하지 않는다.** `.env.example`은 커밋되는 템플릿이다
+
+---
 ## 1. 지금 어디까지 왔나
 
 | 단계 | 상태 |
@@ -19,48 +78,124 @@
 | Phase 1 구현 계획 작성 | ✅ 완료 (12개 태스크, 138개 테스트 설계) |
 | Phase 1 구현 | ✅ 완료 — PR #1 병합됨 (d0ba4ae), 164개 테스트 통과 |
 | Phase 2a (뉴스·시장 커넥터) | ✅ 완료 — 289개 테스트, 실네트워크 검증 통과 |
-| Phase 2b (재무·논문·실험) | 🟢 구현 완료 — 522개 테스트, 실네트워크 14/14 통과. KCI 키만 남음 |
+| Phase 2b (재무·논문·실험) | ✅ 완료 — **PR #4 병합됨** (`2cad716`). KCI 키만 미발급 |
 | Phase 3 (프론트엔드) | ✅ 완료 — 379개 테스트, 실브라우저 전 과정 확인 |
+| 실제 OpenAI 호출 검증 | ✅ 완료 (2026-09-04) — `verify.sh` 9/0, `degraded=false` |
+| 배포 설계·계획 | ✅ 완료 — spec·plan 작성 및 커밋 |
+| 배포 구현 (Task 1~2) | ✅ 완료 — `render.yaml`, `engines`, 테스트 7건, 문서 |
+| 배포 실행 (Task 3) | ✅ 완료 — https://eco-si-news-analyze.onrender.com |
+| 배포 검증 | 🟡 `verify.sh` **9/0 통과**, `verify-research.sh` **13/1** — 시장 차트만 실패 |
+| 배포 기록·PR (Task 4) | 🟡 문서 기록 완료. PR #5 병합 대기 |
+| **시장 차트 소스 교체** | 🔴 **다음 작업.** §2 참고 |
 
-## 2. 다음에 할 일
+**현재 테스트: 530 tests / 529 pass / 0 fail / 1 skip** (`npm test`)
+skip 1건은 KCI 정상 응답 픽스처가 없어서다. 키를 받으면 해제한다.
 
-1. **PR 생성** — `feature/research-connectors` → `main`. Phase 2b 구현이 끝났다.
-2. **KCI API 키 발급** (계획 Task 14) — 없어도 나머지는 전부 동작한다. 아래 참고.
-3. **실제 OpenAI 호출 검증** — 아직 0회다 (§8 참조).
+## 2. 다음에 할 일 — 시장 차트 소스 교체
 
-### KCI API 키에 대하여 (선택 사항)
+> **이어받는 사람에게.** 배포는 끝났고 앱은 살아 있다. 뉴스·재무·논문·실험·LLM 분석이
+> 배포 환경에서 전부 동작하는 것을 실측으로 확인했다. **단 하나, 시장 차트가 안 된다.**
+> 아래 조사는 이미 끝났으니 다시 하지 말 것.
 
-사용자가 open.kci.go.kr에서 직접 받는다 (무료).
+### 배포 현황
 
-**`.env.example`이 아니라 `.env`에 넣는다.** `.env`는 아직 없으므로
-`cp .env.example .env`로 만들어야 한다. `.env.example`은 커밋되는
-템플릿이라 실제 키를 넣으면 GitHub에 올라간다.
+- URL: **https://eco-si-news-analyze.onrender.com**
+- Render 무료 웹 서비스. Blueprint(`render.yaml`)로 생성
+- 대시보드에 직접 넣은 환경변수는 `MY_SECRET_PASSWORD`와 `OPENAI_API_KEY` 둘뿐이다.
+  나머지는 `render.yaml`과 `lib/config.js` 기본값이 적용된다
+- **Render가 보고 있는 브랜치는 `feature/deployment`다.** PR #5를 병합한 뒤
+  대시보드에서 브랜치를 `main`으로 바꿔야 한다. 안 바꾸고 브랜치를 지우면 배포가 멈춘다
 
-키가 없어도 서버는 정상 기동하고 뉴스·차트·재무·영문 논문·임상시험이 전부 동작한다.
-한국어 질의의 논문만 '자료 부족'으로 나가고 사유가 함께 표시된다.
+### 실측 검증 결과 (2026-09-10)
 
-신청서가 **신청 IP**를 요구한다. KCI는 등록된 공인 IP에서 온 요청만 받는다.
-IP는 여러 개 등록할 수 있고 바뀌면 신청서에서 고치면 된다 (코드 변경 없음).
-2026-09-03 기준 사용자 공인 IP는 `112.186.34.17`이었다.
-**유동 IP라면 바뀔 수 있고, 바뀌면 키가 멀쩡해도 거부당한다.** 재등록은
-쉽지만 바뀐 줄 알아채기가 어렵다 — 오류 없이 국내 논문만 조용히 사라진다.
-그래서 IP 불일치를 일반 오류와 분리해 전용 문구로 표시하도록 구현했다
-(`lib/providers/kci.js`의 `isIpRejection`).
+| 스크립트 | 결과 |
+|---|---|
+| `verify.sh` | **통과 9 / 실패 0.** `degraded=false`, `model=gpt-4o-2024-08-06`, 위조 URL 0건 |
+| `verify-research.sh` | **통과 13 / 실패 1.** 시장 데이터만 실패 |
 
-### 키를 받으면 제일 먼저 할 일
+배포에서 확인된 것: 로그인, 확인 토큰 `428` 차단, 견적, **OpenAI 실호출**, 세션 연장,
+로그아웃 후 `403`, 뉴스 8건, 재무지표 6개, 논문 5건, 임상시험 5건, 한국어 언어 가드.
 
-KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 수 없었다.
-정상 응답의 XML 요소 이름도 확인하지 못해 `lib/providers/kci.js`의
-`KCI_FIELD_NAMES` 한 곳에 후보를 모아 두었다. 실제 응답을 받으면 그 표만 고치면 된다.
+### 시장 차트가 안 되는 이유 — 조사 끝났다
 
-`./scripts/verify-kci.sh`가 이 4단계를 한 번에 돌린다. `.env`의 `KCI_API_KEY`를
-읽고, 응답에서 키를 가린 뒤, 정상 응답이면 나타난 XML 요소 이름을 모두 출력한다.
-그 목록으로 `KCI_FIELD_NAMES`를 확정하면 된다.
+**Yahoo 차트 API와 CoinGecko가 Render의 데이터센터 IP를 거부한다.**
 
-1. `title=battery` (ASCII) — API 자체가 도는지
-2. `title=배터리` UTF-8 퍼센트 인코딩 — 되면 그대로 간다
-3. 0건이면 EUC-KR 퍼센트 인코딩(`%B9%E8%C5%CD%B8%AE`) — `iconv-lite` 추가가 필요하다
-4. 둘 다 실패하면 한계로 문서화하고 언어 가드에서 KCI도 제외
+확정에 쓴 증거다. 다시 확인할 필요 없다.
+
+| 확인한 것 | 결과 |
+|---|---|
+| Yahoo만의 문제인가 | 아니다. **CoinGecko도 동일하게 실패** |
+| 아웃바운드 자체가 막혔나 | 아니다. SEC·arXiv·EuropePMC·ClinicalTrials·Google뉴스·OpenAI 정상 |
+| 타임아웃인가 | 아니다. **0.2초 즉시 실패** |
+| API가 죽었나 | 아니다. **가정용 IP에서는 둘 다 `HTTP 200`** |
+| 허용목록 설정 문제인가 | 아니다. 대시보드에 `EXTERNAL_ALLOWLIST`를 넣지 않아 기본값이 적용됐고,
+  기본값에 두 호스트가 모두 있다 |
+| 인스턴스가 여러 개인가 | 아니다. Render 무료는 단일 인스턴스로 제한된다 |
+
+Yahoo는 **RSS(`feeds.finance.yahoo.com`)는 되고 API(`query1.finance.yahoo.com`)만 안 된다.**
+서비스별 차단 정책과 일치한다. Phase 2b 설계에서 Yahoo `quoteSummary`를
+"쿠키+crumb 인증 필요"로 탈락시킨 적이 있는데, 데이터센터 IP에서는 차트 엔드포인트에도
+같은 요구가 붙는 것으로 보인다.
+
+**설정으로 못 고친다. 호스팅을 옮겨도 대부분의 클라우드 IP가 같은 취급을 받는다.**
+
+### 그래서 할 일 — 시세 소스 교체
+
+사용자가 "1 → 2"로 결정했다. 즉 **지금 상태를 한계로 적고 병합**한 뒤,
+**시세 소스 교체를 별도 작업으로** 진행한다.
+
+브레인스토밍부터 시작할 것. 설계 없이 provider부터 짜지 말 것.
+
+**요구 조건**
+
+- 데이터센터 IP를 막지 않을 것 (이게 교체하는 이유다)
+- 일별 종가 시계열을 줄 것. `lib/providers/indicators.js`가 이동평균·변동성을 계산한다
+- 주식과 코인을 모두 다룰 것. 한 소스로 안 되면 둘로 나눠도 된다
+- API 키는 없는 편이 낫다. 필요하면 KCI처럼 "없어도 서버가 뜨는" 구조로
+
+**후보 (미검증 — 실제로 호출해 확인할 것)**
+
+| 소스 | 특징 |
+|---|---|
+| Stooq (`stooq.com`) | 키 불필요, CSV. 데이터센터 허용으로 알려져 있다 |
+| Alpha Vantage | 키 필요(무료), 하루 호출 수 제한이 빡빡하다 |
+| Twelve Data | 키 필요(무료), 한도가 좀 넉넉하다 |
+
+**추정하지 말고 실제로 호출해 확인할 것.** Phase 2b에서 후보를 전부 실측한 뒤
+설계를 확정했고, 그 과정에서 처음 가정이 여러 번 뒤집혔다(§9 참고).
+
+**바꾸지 말아야 할 것**
+
+`createMarketProvider`의 계약은 그대로 두고 내부만 갈아끼운다. 호출부가 의존하는 형태다.
+
+```js
+createMarketProvider({ http, cache, clock, makeBreaker })
+  → resolveSymbol({ query, symbol, assetType })
+      → { symbol, assetType, name, source, cik? }
+  → fetch({ symbol, assetType, range })
+      → { indicators, series, marketData } | null
+```
+
+- `marketData`는 `lib/validation.js`의 스키마를 통과해야 한다
+  (`assetName`, `currentPrice`, `priceChange`, `chartTrend`)
+- `series.points`의 개수는 `indicators.points`와 **반드시 같아야 한다**.
+  어긋나면 차트와 이동평균이 따로 논다
+- `chartTrend` 문장은 계속 코드가 만든다. LLM에게 추세 판단을 맡기지 않는다
+- 기존 테스트 `tests/market-provider.test.js`와 픽스처가 있다. 새 소스의 실제 응답을
+  픽스처로 저장하고 같은 방식으로 검증할 것
+- 새 호스트를 `EXTERNAL_ALLOWLIST` 기본값(`lib/config.js`)과 `.env.example`에 추가할 것
+
+**먼저 고치면 좋을 것**
+
+`lib/providers/market.js`는 실패를 **조용히 삼킨다**. `catch { breaker.recordFailure(); return null; }`뿐이라
+`403`인지 `429`인지 알 수 없었고, 이번 조사에서 상태코드를 끝내 확인하지 못했다.
+새 provider에는 실패 사유를 로그로 남길 것. 뉴스 provider가 `degraded`에 사유를 담는 것과 같은 방식으로.
+
+### 배포 후 남은 다른 일
+
+1. **PR #5 병합 → Render 브랜치를 `main`으로 변경** (위 배포 현황 참고)
+2. **`trust proxy: 1`이 Render 프록시 깊이와 맞지 않는다** — §8 참고
+3. **KCI 키** — 배포 환경에서는 어차피 못 쓴다(고정 IP 없음). §8 참고
 ## 3. 핵심 문서
 
 | 문서 | 내용 |
@@ -71,7 +206,9 @@ KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 
 | `docs/superpowers/plans/2026-09-03-phase2a-data-connectors.md` | Phase 2a 구현 계획 — 9개 태스크 |
 | `docs/superpowers/specs/2026-09-03-phase3-frontend-design.md` | Phase 3 설계 (완료) |
 | `docs/superpowers/specs/2026-09-03-phase2b-research-connectors-design.md` | Phase 2b 설계 (승인됨) |
-| `docs/superpowers/plans/2026-09-04-phase2b-research-connectors.md` | **Phase 2b 구현 계획 — 14개 태스크. Task 14만 남음** |
+| `docs/superpowers/plans/2026-09-04-phase2b-research-connectors.md` | Phase 2b 구현 계획 — 14개 태스크. Task 14(KCI 키)만 남음 |
+| `docs/superpowers/specs/2026-09-06-deployment-design.md` | 배포 설계 (승인됨) |
+| `docs/superpowers/plans/2026-09-06-render-deployment.md` | **배포 구현 계획 — 4개 태스크. Task 3부터 진행할 차례** |
 | `~/Desktop/claude-code-integrated-prompt.md` | 사용자 원본 요구사항 |
 
 ## 4. 반드시 지켜야 할 결정사항
@@ -114,6 +251,23 @@ KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 
 - Node v24.18.0 / npm 11.16.0 / Windows 11, PowerShell + Git Bash
 - git 신원: `kim cheol hui <144594976+kimcheolhui9846@users.noreply.github.com>`
 - `gh` CLI 인증됨 (`kimcheolhui9846`)
+- 로컬 `.env` 존재함. `MY_SECRET_PASSWORD`(8자)와 `OPENAI_API_KEY`가 채워져 있고
+  `KCI_API_KEY`는 비어 있다. `.gitignore`에 걸려 커밋되지 않는다
+
+### 배포 (2026-09-10 확인)
+
+- URL: **https://eco-si-news-analyze.onrender.com**
+- 플랫폼: Render 무료 웹 서비스
+- 설정 출처: `render.yaml` (Blueprint). 대시보드에 직접 넣은 것은 비밀값 2개뿐
+- 추적 브랜치: **`feature/deployment`** — PR #5 병합 후 `main`으로 바꿀 것
+- 인스턴스 수: Render 무료는 단일 인스턴스로 제한되므로 자동으로 1개다
+- 배포된 Node 버전: 빌드 로그에서 미확인. `engines: >=22`는 반영돼 있고 앱은 정상 기동
+- 비밀값 2개(`MY_SECRET_PASSWORD`, `OPENAI_API_KEY`)는 Render 대시보드에만 있다
+- 로컬 `.env`의 `DEPLOY_PASSWORD`는 배포 검증용으로 사용자가 넣은 값이다.
+  검증이 끝났으므로 지워도 된다
+
+**인스턴스를 늘리지 말 것.** 이유는 `docs/architecture.md`의
+"상태는 어디에 사는가" 절 참고. 성능이 아니라 정확성 문제다.
 
 ## 7. 계획 단계에서 확인한 라이브러리 사실
 
@@ -160,10 +314,32 @@ KCI가 한국어 질의를 받는지 **아직 모른다.** 키 없이 확인할 
   검증한다. 되는 것으로 가정하고 구현하면 안 된다
 - **KCI의 IP 거부 응답이 어떻게 생겼는지 모른다.** 키가 없어 확인하지 못했다.
   키 발급 후 함께 확인해 식별 조건을 확정한다
-- **`.env`가 아직 존재하지 않는다.** 이것이 실제 OpenAI 호출 검증이 0회인
-  이유이기도 하다. `cp .env.example .env` 후 실제 값을 채워야 한다.
-  Phase 2b 실네트워크 검증은 환경변수를 인라인으로 넘겨(`LLM_MODE=mock`)
-  돌렸으므로 LLM 비용이 들지 않았다
+- ~~`.env`가 아직 존재하지 않는다.~~ **2026-09-04 생성 완료.** 비밀번호와 OpenAI 키가
+  채워져 있고 로그인·실호출이 확인됐다. `KCI_API_KEY`만 비어 있다
+- **배포 환경에서 예산 카운터가 재시작마다 리셋된다.** Render 무료는 파일시스템이
+  휘발성이라 `.budget.json`이 정지·재배포마다 사라진다. **실제 지출 상한은
+  OpenAI 계정 Billing에서 걸어야 한다.** 앱 예산은 한 세션 안에서만 유효하다.
+  이것은 결함이 아니라 배포 설계 §5에서 근거를 적고 받아들인 선택이다
+- **배포 환경에서 KCI를 쓸 수 없다.** 아웃바운드 IP가 유동이라 허용목록에 등록할 수 없다
+- ~~Render Blueprint가 무료 플랜에서 되는지 모른다.~~ **된다.** Blueprint로 배포했다
+- **[중요] 배포 환경에서 시장 차트가 동작하지 않는다.** Yahoo 차트 API와 CoinGecko가
+  Render의 데이터센터 IP를 거부한다. 조사는 끝났고 §2에 근거가 전부 적혀 있다.
+  해결책은 시세 소스 교체이며 그것이 다음 작업이다
+- **`trust proxy: 1`이 Render의 프록시 깊이와 맞지 않는다.** Render는 Cloudflare와
+  자체 로드밸런서를 거치는데 `server.js`는 홉 하나만 신뢰한다. 그래서 `req.ip`가
+  실제 사용자가 아니라 중간 프록시 주소로 잡히고, 그 주소가 노드마다 달라진다.
+
+  **관측 근거**: 같은 클라이언트로 연속 요청했는데 rate limit 카운터가 두 갈래로 갈렸다
+  (`remaining` 51→50→49 / `reset=798`과 `remaining=54` / `reset=792`가 번갈아 나옴).
+  `express-rate-limit` 8.7.0의 `MemoryStore`는 키 하나당 카운터 하나이므로(`localKeys = true`)
+  키가 둘이라는 뜻이다. IPv4 고정, XFF 고정, 단일 인스턴스를 모두 배제했다.
+
+  **영향은 제한적이다.** 세션·확인 토큰·예산은 IP로 키를 만들지 않아 멀쩡하다.
+  로그인 무차별 대입 방어가 `10회`가 아니라 `10 × 프록시 노드 수`로 느슨해질 뿐이다.
+
+  **주의**: `trust proxy: true`로 바꾸면 이번엔 클라이언트가 `X-Forwarded-For`를
+  위조해 rate limit을 우회할 수 있다(README에 적힌 트레이드오프). 단순 교체가 답이 아니다.
+  Render가 보장하는 헤더를 쓰거나 `keyGenerator`를 직접 만드는 쪽을 검토할 것
 
 - ~~실제 OpenAI 호출 검증이 아직 0회다.~~ **2026-09-04 완료.** `./scripts/verify.sh`
   **통과 9 / 실패 0**. `degraded=false`로 구조화 출력이 실모델에서 첫 시도에 통했다.

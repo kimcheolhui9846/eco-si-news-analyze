@@ -96,7 +96,7 @@ OPENAI_API_KEY=sk-...
 |---|---|---|
 | `PORT` | `3000` | 서버 포트 |
 | `NODE_ENV` | `development` | `production`이면 Secure 쿠키 사용 |
-| `TRUST_PROXY` | `false` | **리버스 프록시 뒤 배포 시 반드시 `true`** |
+| `TRUST_PROXY` | `false` | **리버스 프록시 뒤 배포 시 반드시 `true`.** 안 켜면 `req.ip`가 프록시 주소가 되어 rate limit이 전체 트래픽을 한 통으로 센다 |
 | `MY_SECRET_PASSWORD` | — | **필수.** 로그인 비밀번호 |
 | `SESSION_TTL_MINUTES` | `15` | 세션 유효 시간 |
 | `OPENAI_API_KEY` | — | `LLM_MODE=live`일 때 **필수** |
@@ -183,6 +183,53 @@ MY_SECRET_PASSWORD=test-pw LLM_MODE=mock npm start
 
 `LLM_MODE=mock`은 결정적인 가짜 응답을 돌려준다. 모든 응답에 `[MOCK]` 표시가 붙으므로
 실제 분석으로 오인할 수 없다.
+
+---
+
+## 배포
+
+Render 무료 인스턴스에 올린다. 설정은 저장소의 `render.yaml`이 단일 출처다.
+설계 근거는 `docs/superpowers/specs/2026-09-06-deployment-design.md`에 있다.
+
+### 절차
+
+1. [render.com](https://render.com)에서 GitHub 저장소를 연결한다 (비공개 저장소도 된다)
+2. Blueprint로 `render.yaml`을 읽히거나, 안 되면 대시보드에 같은 값을 넣는다
+3. 대시보드 Environment에 비밀값 둘을 넣는다 — 저장소에는 없다
+
+   | 변수 | 값 |
+   |---|---|
+   | `MY_SECRET_PASSWORD` | 로그인 비밀번호. **공개 인터넷이므로 길게 잡는다** |
+   | `OPENAI_API_KEY` | OpenAI 키 |
+
+4. 배포 후 확인한다
+
+   ```bash
+   curl https://<앱이름>.onrender.com/api/health          # llmMode: live
+   ./scripts/verify-research.sh https://<앱이름>.onrender.com
+   MY_SECRET_PASSWORD=<값> ./scripts/verify.sh https://<앱이름>.onrender.com
+   ```
+
+**첫 요청은 약 1분 걸린다.** 정지 상태에서 깨어나는 시간이다. 검증 스크립트가
+타임아웃으로 실패하면 결함이 아니므로, 먼저 `/api/health`를 한 번 불러 깨워 두고 시작한다.
+
+### 무료 인스턴스의 한계
+
+1. **예산 파일이 휘발한다.** 정지·재배포마다 `.budget.json`이 사라져 하루 50회·월 상한
+   카운터가 0으로 돌아간다. **실제 지출 상한은 OpenAI 계정 Billing에서 걸어야 한다.**
+   앱 예산은 한 세션 안에서만 유효하다
+2. **15분 유휴 후 정지한다.** 다시 깨우는 데 약 1분
+3. **KCI를 쓸 수 없다.** 아웃바운드 IP가 유동이라 허용목록에 등록할 수 없다.
+   한국어 검색어의 논문은 사유와 함께 비어 나간다
+3-1. **시장 차트가 동작하지 않는다.** Yahoo 차트 API와 CoinGecko가 데이터센터 IP를
+   거부한다(2026-09-10 실측). 뉴스·재무·논문·실험·분석은 모두 정상이다.
+   시세 소스 교체가 예정돼 있다 — `docs/SESSION-HANDOFF.md` §2 참고
+4. **월 750 instance-hours.** 개인 사용에는 넉넉하지만 계속 깨워 두면 한도에 붙는다
+5. **인스턴스를 늘리면 안 된다.** 이유는 `docs/architecture.md` 참고
+6. **비밀번호 하나가 유일한 인증이고 공개 인터넷에 노출된다**
+
+1·2·3이 거슬리면 Fly.io로 옮긴다. 항상 켜진 소형 머신 월 $2~3, 볼륨 $0.15/GB,
+전용 IPv4 $2로 세 가지를 모두 푼다.
 
 ---
 

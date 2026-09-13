@@ -1,0 +1,49 @@
+# Render 배포 정의. 설계: docs/superpowers/specs/2026-09-06-deployment-design.md
+#
+# 대시보드에서 클릭으로 설정하면 재현되지 않고 기록도 남지 않는다.
+# 이 파일이 설정의 단일 출처다.
+services:
+  - type: web
+    name: eco-si-news-analyze
+    runtime: node
+    plan: free
+
+    # 인스턴스는 하나여야 한다.
+    # 세션(lib/session.js의 Map), 확인 토큰, rate limit, 회로차단기가 전부
+    # 프로세스 메모리에 있다. 늘리면 견적 낸 인스턴스와 분석하는 인스턴스가
+    # 달라져 정상 요청이 428로 막힌다. 설계 §4 참고.
+    numInstances: 1
+
+    # --include=dev 를 지우지 말 것.
+    # vite와 @vitejs/plugin-react가 client의 devDependencies인데
+    # NODE_ENV=production은 빌드 단계에도 적용된다. 플래그가 없으면
+    # npm ci가 이들을 건너뛰어 'vite: not found'로 빌드가 깨진다.
+    # client/dist는 .gitignore에 있어 미리 만들어 둔 산출물도 없다. 설계 §8 참고.
+    buildCommand: npm ci --include=dev && npm run build:client
+    startCommand: npm start
+
+    healthCheckPath: /api/health
+
+    envVars:
+      # 세션 쿠키에 Secure가 붙는다. Render가 HTTPS를 준다.
+      - key: NODE_ENV
+        value: production
+
+      # 켜지 않으면 req.ip가 프록시 주소가 되어 rate limit이
+      # 전체 트래픽을 한 통으로 센다.
+      - key: TRUST_PROXY
+        value: "true"
+
+      # Render 무료는 고정 아웃바운드 IP를 주지 않아 KCI 허용목록에
+      # 등록할 수 없다. 비워 두면 국내 논문만 사유와 함께 비어 나가고
+      # 나머지는 전부 동작한다. 설계 §6 참고.
+      - key: KCI_API_KEY
+        value: ""
+
+      # 아래 둘은 Render 대시보드에서 입력한다. 저장소에 넣지 않는다.
+      - key: MY_SECRET_PASSWORD
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+    # PORT는 설정하지 않는다. Render가 주입하고 config.port가 읽는다.
