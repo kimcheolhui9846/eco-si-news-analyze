@@ -32,7 +32,7 @@ const provider = (http, over = {}) => {
     http,
     cache: over.cache ?? createTtlCache({ ttlMs: 60_000, maxEntries: 50, clock }),
     clock,
-    makeBreaker: () => createCircuitBreaker({ threshold: 3, cooldownMs: 60_000, clock }),
+    makeBreaker: over.makeBreaker ?? (() => createCircuitBreaker({ threshold: 3, cooldownMs: 60_000, clock })),
   });
 };
 
@@ -262,6 +262,18 @@ test('주식 조회가 시계열을 함께 반환한다', async () => {
   assert.equal(r.series.symbol, 'NVDA');
   assert.equal(r.series.currency, 'USD');
   assert.ok(r.series.points.length > 1);
+});
+
+test('supported source breaker opens after three failures while legacy breaker remains isolated', async () => {
+  const breakers = [];
+  const makeBreaker = () => { const state = { failures: 0, calls: 0 }; breakers.push(state); return { canPass: () => { state.calls += 1; return state.failures < 3; }, recordFailure: () => { state.failures += 1; }, recordSuccess: () => {} }; };
+  const http = makeHttp({ 'api.stock.naver.com': new Error('down'), 'query1.finance.yahoo.com/v8': fixture('yahoo-chart-nvda.json') });
+  const p = provider(http, { clock: FIXED_CLOCK, makeBreaker, cache: createTtlCache({ ttlMs: 0, maxEntries: 10, clock: FIXED_CLOCK }) });
+  for (let i = 0; i < 4; i += 1) await p.fetch({ symbol: 'NVDA', assetType: 'stock', range: '1mo' });
+  await p.fetch({ symbol: 'BRK-B', assetType: 'stock', range: '1mo' });
+  assert.equal(http.calls.filter((url) => url.includes('api.stock.naver.com')).length, 3);
+  assert.ok(http.calls.some((url) => url.includes('query1.finance.yahoo.com/v8')));
+  assert.ok(breakers.length >= 2);
 });
 
 test('시계열 각 점이 시각과 종가를 갖는다', async () => {
