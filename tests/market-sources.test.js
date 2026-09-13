@@ -155,7 +155,7 @@ test('Naver OPEN metadata excludes the current local trading day while CLOSE mat
   assert.deepEqual(openResult.series.points.map((point) => point.c), [217, 218]);
   const close = httpFor([['/basic', meta({ marketStatus: 'CLOSE', closePrice: '219', localTradedAt: '2026-09-14T16:00:00-04:00' })], ['/chart/foreign/item/NVDA.O/day', rows]]);
   const closeResult = await createNaverMarket({ http: close, clock: { now: () => Date.parse('2026-09-14T21:00:00Z') } })('NVDA', '1mo');
-  assert.deepEqual(closeResult.series.points.map((point) => point.c), [218, 219]);
+  assert.deepEqual(closeResult.series.points.map((point) => point.c), [217, 218, 219]);
 });
 
 test('Naver uses calendar month clamping and exchange-local dates for request bounds', async () => {
