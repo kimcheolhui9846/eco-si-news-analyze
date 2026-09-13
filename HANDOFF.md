@@ -30,6 +30,7 @@
 - 운영 `/api/health`: HTTP 응답 JSON `status=ok`, `llmMode=live` (05:24:04 UTC).
 - 병합 후 05:44:59 UTC: `/api/health` 200 ok/live, `/` 200 HTML(root mount 존재), JS/CSS 각각 200 (216745/7162 bytes), 비인증 `/api/auth/session` 403. 자산 파일명은 로컬 빌드와 일치하지만 배포 커밋 증명은 아니다.
 - 병합 후 `npm.cmd test`: 529 pass / 0 fail / 1 skip. `npm.cmd run build:client`: PASS.
+- Draft PR #6 생성 후 최종 `npm.cmd test`: 529 pass / 0 fail / 1 skip (3099.9469ms), `npm.cmd run build:client`: PASS. 이후 변경은 검증 결과 기록 및 남은 작업 문구 정리뿐이며 `git diff --check`로 확인한다.
 - 운영 로그인: 로컬 .env 값을 출력하지 않고 사용, HTTP 403 / token 미발급.
 - `scripts/verify-research.sh`, `scripts/verify.sh`: NOT RUN — 사전 로그인 실패로 실행하지 않음. 유료 분석 호출 없음.
 - 브라우저: NOT RUN — 연결된 브라우저 0개, iab 생성도 unavailable.
@@ -54,6 +55,7 @@
 - 별도 native code-reviewer의 보완 검토: 새 blocker/major 회귀 없음, PASS WITH NOTES. 외부 제공자 검토가 아니다.
 - 보완 검토 note: 기존 프록시 제한 분산, README Node 버전 불일치, 비밀값 테스트의 블록 경계 취약성, 오래된 완료 상태 문구. README 버전 및 배포 상태 문구만 사실에 맞게 갱신했다. 동작 변경은 후속 승인 범위.
 - 주 에이전트가 실제 diff, 테스트 출력, GitHub 병합 결과를 직접 확인했다.
+- 문서 마일스톤 native 보완 검토: 4개 파일의 사실/미검증 구분 확인, PASS WITH NOTES. 남은 작업에 병합을 중복 기재한 minor 문구를 수정했다.
 
 ## 8. 자체 리뷰
 - 코드 변경 없이 승인한 커밋을 병합했고 검증 기록과 기존 결함을 구분한다.
@@ -72,4 +74,6 @@
 
 ## 11. 최종 요약
 - 병합 완료. 전체 사이트 이상 없음 판정은 운영 인증과 배포 커밋을 확인한 후 가능하다.
+- 기록용 [Draft PR #6](https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/6) 생성 및 브랜치 push 완료. 문서 PR은 병합하지 않았다.
+- 최종 Astra 판단: BLOCKED (운영 인증 및 Render 배포 확인 공백). 완료된 공개 HTTP·로컬 테스트 결과는 PASS이며 전체 기능 성공으로 확대하지 않는다.
 - 다음 작업자는 이 문서의 미검증 항목과 기존 상세 핸드오프를 먼저 확인한다.

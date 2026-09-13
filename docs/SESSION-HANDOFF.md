@@ -202,7 +202,7 @@ createMarketProvider({ http, cache, clock, makeBreaker })
 
 ### 배포 후 남은 다른 일
 
-1. **PR #5 병합 → Render 브랜치를 `main`으로 변경** (위 배포 현황 참고)
+1. **Render 브랜치를 `main`으로 변경하고 배포 확인** — PR #5 병합은 완료 (위 배포 현황 참고)
 2. **`trust proxy: 1`이 Render 프록시 깊이와 맞지 않는다** — §8 참고
 3. **KCI 키** — 배포 환경에서는 어차피 못 쓴다(고정 IP 없음). §8 참고
 ## 3. 핵심 문서
