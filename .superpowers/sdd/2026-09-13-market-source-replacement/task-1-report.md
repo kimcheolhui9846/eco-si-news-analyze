@@ -14,6 +14,6 @@ Added Naver stock and Coinbase daily candle adapters, shared point normalization
 
 ## Self-review / concerns
 
-- Existing market-provider and integration fixtures/tests need migration to Naver/Coinbase fixtures by the controller or a follow-up owned test change.
+- Existing market-provider and integration fixtures/tests still need migration to Naver/Coinbase fixtures within this Task; the current full gate remains failing for those legacy assumptions.
 - Production smoke and full npm/build gates were not run by this worker.
 - Naver payload parsing accepts the observed array/data/result variants and validates symbol/currency/market identity; Coinbase filters completed UTC candles and splits ranges at 299 days.
