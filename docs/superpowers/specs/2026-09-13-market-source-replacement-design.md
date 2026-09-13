@@ -90,5 +90,5 @@ NAVER metadata에서 NVDA.O의 symbolCode/거래소 NASDAQ 및 USD, TSM의 거�
 
 - 외부 교차 검토: DEGRADED. 현재 세션에서 Opus 5 실제 모델/쿼터, Gemini 무료 쿼터 미확인; Copilot CLI 없음. 외부 검토 성공 주장 없음.
 - 설계 자체 검토: 비용·키 없음은 실측한 공개 요청 범위의 사실이다. 장기 이용·Render 접근·Naver API 호환성 보장으로 확대하지 않는다.
-- native 보완 리뷰의 초기 major 의견(KOSDAQ 실제 기간 경로, 미국 전체 매핑, 완료 봉/기간 경계)을 반영해 실측과 정확한 규칙을 추가했다. 무지원 심볼을 기존 경로로 fallback해 지원 축소를 피하고, no-data 회로차단 중립 규칙도 명시했다. 추가 검토 결과는 HANDOFF에 기록한다.
+- native 보완 리뷰의 초기 major 의견(KOSDAQ 실제 기간 경로, 미국 전체 매핑, 완료 봉/기간 경계)을 반영해 실측과 정확한 규칙을 추가했다. 무지원 심볼을 기존 경로로 fallback해 지원 축소를 피하고, no-data 회로차단 중립 규칙도 명시했다. 재검토 APPROVE, 남은 blocker/major 없음. fallback은 미매핑 호환성에만 한정하며 신규 소스의 transport/malformed 실패를 숨기기 위해 호출하지 않는다.
 - 승인할 구체 범위: Stooq를 제외하고 Naver 주식 + Coinbase Exchange 코인으로 구현하는 대안, 최근 완료 일봉 종가 기준, Naver 비공식 인터페이스 의존 한계. 구현 코드 작성 전 사용자 확인 필요.

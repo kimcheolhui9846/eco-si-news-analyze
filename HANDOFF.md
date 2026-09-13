@@ -14,6 +14,9 @@
 - 외부 교차 검토: 현재 세션에서 Opus 5 정확한 접근/쿼터와 Gemini 무료 이용 미확인, Copilot CLI 없음. 초기 계획 검토 미수행/DEGRADED. 비밀값 또는 전체 저장소를 외부 제공자에 전송하지 않는다.
 - 변경: Task 6 핸드오프 항목 및 실측 기반 설계 문서만 생성/갱신. 구현 코드/테스트/설정 변경 없음.
 - 초기 native 설계 검토 CHANGES REQUIRED: KOSDAQ 기간 경로, 미국 종목 매핑 범위, 완료 봉/기간 경계 규칙이 부족함. 추가 실측으로 미국 별칭 11종 metadata USD/심볼 일치, KQ 1mo 21행/1y 242행을 확보했다. 설계에 결정적 날짜/종목/통화 규칙 및 기존 미매핑 심볼 fallback과 중립 no-data 회로차단을 반영하고 재검토 요청함. 외부 제공자 검토를 대체했다고 주장하지 않는다.
+- 재검토: native reviewer APPROVE, 기존 major 모두 해소, 남은 blocker/major 없음. legacy fallback은 미매핑 호환성에만 한정하고 신규 소스의 장애를 숨기지 않는다.
+- [Draft PR #7](https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/7) 생성. 생성 후 npm test 530 total / 529 pass / 0 fail / 1 skip (3334.1273ms), build PASS 41 modules, diff --check PASS. RED는 구현 전이므로 미수행, baseline 검증만 수행.
+- Astra 체크포인트: 실측·설계 준비 PASS WITH NOTES (외부 검토 DEGRADED, Render 미검증). Task 전체 구현은 미완료이며 Naver 대안 승인 대기. 기존 사용자 승인을 취소하거나 Stooq 성공을 주장하지 않는다.
 - 남은 작업: Naver 대안 설계 확인, TDD 구현, Render 후보 접근 및 배포 환경 검증과 handoff. 공식 키 기반 대안은 무료 한국 주식 지원/이용 범위 검증 필요.
 
 ---
