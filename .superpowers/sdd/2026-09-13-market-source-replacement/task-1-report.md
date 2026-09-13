@@ -2,7 +2,7 @@
 
 ## RED
 
-The pre-implementation targeted source test file was absent in the checkout. The existing targeted command initially failed in the sandbox because `tsx` triggered Node `uv_os_get_passwd returned ENOMEM`; the approved escalated runtime workaround allowed tests to execute.
+The first-pass implementation did not have genuine test-first evidence. The pre-implementation targeted source test file was absent, so that missing-file result is not RED. After adding the contract tests, the first run produced 2 expected failures: wrong foreign exchange identity was accepted, and invalid rolled dates were retained (the invalid date also exposed a `RangeError` path). The sandbox separately triggered `uv_os_get_passwd returned ENOMEM`; the approved escalated runtime workaround allowed tests to execute.
 
 ## Implementation
 
@@ -10,7 +10,7 @@ Added Naver stock and Coinbase daily candle adapters, shared point normalization
 
 ## GREEN / verification
 
-`node --import tsx --test tests/market-provider.test.js tests/market-sources.test.js tests/indicators.test.js tests/research.test.js tests/collect-scope.test.js tests/config.test.js` executed successfully under approved escalation. Result: 76 passed, 14 failed. The 14 failures are existing market/research integration assertions whose injected fixtures still expose Yahoo/CoinGecko only; supported identifiers now correctly select Naver/Coinbase and return null when those new routes are absent. Syntax checks for all four provider modules and `git diff --check` pass.
+`node --import tsx --test tests/market-sources.test.js` passes 4/4 after the identity and date fixes. The earlier focused suite result remains 76 passed, 14 failed: existing market/research integration assertions still inject Yahoo/CoinGecko-only fixtures; this is a real compatibility test migration gap, not a passing result. Syntax checks for all four provider modules and `git diff --check` pass.
 
 ## Self-review / concerns
 
