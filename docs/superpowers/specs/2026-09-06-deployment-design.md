@@ -219,7 +219,7 @@ services:
 | 순서 | 명령 | 기대 | 비용 |
 |---|---|---|---|
 | 1 | `curl <URL>/api/health` | `llmMode: live` | 0 |
-| 2 | `./scripts/verify-research.sh <URL>` | 통과 14 / 실패 0 | 0 |
+| 2 | `./scripts/verify-research.sh <URL>` | 통과 14 / 실패 0 | live 서버에서 유료 분석 1회 포함, 비용 가변 (LLM_MODE=mock 서버에서는 LLM 비용 0) |
 | 3 | `MY_SECRET_PASSWORD=<값> ./scripts/verify.sh <URL>` | 통과 9 / 실패 0, `degraded=false` | 약 $0.005 |
 | 4 | 브라우저 | 로그인 → 수집 → 승인 → 보고서 | 실행 시 약 $0.005 |
 
