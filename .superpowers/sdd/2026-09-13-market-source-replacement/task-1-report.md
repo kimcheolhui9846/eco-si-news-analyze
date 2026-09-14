@@ -1,5 +1,7 @@
 # Task 1 report
 
+> First-pass worker report below is retained as history. Final controller verification on 2026-09-14: migrated fixtures and source/routing/cache regressions pass; full suite 551 pass / 0 fail / 1 skip, client build PASS, public market smoke13/13PASS. Supplementary native Astra review PASS WITH NOTES (no blocker/major); minor assertion/doc improvements incorporated. External cross-check DEGRADED, initial test-first evidence gap and Render NOT RUN remain explicit. See root HANDOFF.md for current delivery state.
+
 ## RED
 
 The first-pass implementation did not have genuine test-first evidence. The pre-implementation targeted source test file was absent, so that missing-file result is not RED. After adding the contract tests, the first run produced 2 expected failures: wrong foreign exchange identity was accepted, and invalid rolled dates were retained (the invalid date also exposed a `RangeError` path). The sandbox separately triggered `uv_os_get_passwd returned ENOMEM`; the approved escalated runtime workaround allowed tests to execute.

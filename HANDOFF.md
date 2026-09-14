@@ -1,9 +1,20 @@
 # HANDOFF
 
 ## Task 6 — 시장 데이터 소스 교체 (2026-09-13 착수)
+- 최신 검증(2026-09-14): `node --import tsx --test tests/market-provider.test.js tests/market-sources.test.js tests/config.test.js` 61/61 PASS; `npm.cmd test` 552 total / 551 pass / 0 fail / 1 skip (3883.106ms); `npm.cmd run build:client` PASS, 41 modules. 새 코드(990cc00)의 공개 GET 13개 조합도 다시 exit 0. Render 배포/차트 UI는 NOT RUN.
+- 완료 범위: Naver 미국/KOSPI/KOSDAQ 완료 일봉, Coinbase 4종 USD 완료 일봉, 엄격한 metadata 검증, 월말/DST/진행 봉/299일 chunk 처리, 일치하는 지표/시계열, range별 결과 캐시 및 TTL metadata 캐시, 미매핑 전용 legacy fallback, 소스별 중립 회로차단, README/API 문서 갱신. UI/인증/LLM/기타 제공자는 변경하지 않았다.
+- 최종 검토: 별도 native gpt-6-astra 실제 리뷰 완료, PASS WITH NOTES, blocker/major 없음. reviewer가 source17/17와 diff --check를 별도 확인했다. minor 3건(마감 이후 시계로 가격 불일치 검증, 직렬화 시계열의 프롬프트 제외 확인, 세션 상태 문구)을 반영하고 source/research39/39 재검증했다. 기존 Sol native 최종 리뷰는 사용량 한도로 미수행. 외부 제공자 검토 DEGRADED와 초기 TDD 공백은 유지한다.
+- 남은 전달 절차: 문서·테스트 커밋/push 및 기존 Draft PR #7 갱신, 마지막 로컬 gate. 이후 사용자 명시 승인으로 PR #6→#7 병합/대상 재확인, Render main 배포 확인 및 실제 운영 차트 검증이 필요하다. 이번 Task에서 병합/배포하지 않는다.
+- 2026-09-14 현재 상태: 사용자 `다음 작업 진행해`에 따라 같은 Task의 수정·검증을 계속한다. 50b81ed/c1fda05 구현 커밋은 로컬에만 있으며, 최초 구현 검증은 76 pass / 14 fail로 **FAIL**이다. 누락된 테스트 파일과 sandbox ENOMEM은 RED 증거가 아니다. 최초 구현에 테스트 우선 증거가 없다는 절차 공백을 기록한다.
+- Astra 구현 검토 CHANGES REQUIRED: 완료 봉 판정, 월말 보정, 종목/거래소 검증, 잘못된 날짜 처리, 5d 정규화 순서, Coinbase 구간 필터링이 승인 설계에 미달한다. Luna에 동일 Task 내 회귀 테스트 추가와 수정·전체 gate를 재배정했다. 아래 구현 전/승인 대기 문구는 과거 체크포인트이며 현재 승인은 유효하다.
+- 2026-09-14 보완 native 리뷰(c1fda05 기준): major 2건 — 일반 심볼 라우팅 누락, 중립 null 결과가 회로차단기 실패 횟수를 초기화함. 구현자에게 전달했으며 해결 검증 전이다. 외부 제공자 검토는 Opus 5/무료 Gemini 접근 미확인 및 Copilot CLI 부재로 계속 DEGRADED이며 native 검토와 구분한다.
+- 2026-09-14 중간 실측(9a63e0c): production HTTP/market factory를 통한 공개 GET 13개 조합 성공. NVDA/TSM 1mo 21개·1y 250개, 005930.KS/035900.KQ 1mo 20개·1y 242개, bitcoin 1mo 30개·1y 365개, ethereum/solana/ripple 1mo 각30개. 주식 마지막 거래일 2026-09-11, 코인 마지막 완료 UTC일 2026-09-12. 통화·심볼·정렬·지표 점 수 일치 확인. `node .superpowers/sdd/2026-09-13-market-source-replacement/live-smoke.mjs`: 최초 sandbox 전부 NO_DATA, 네트워크 권한 상승 후 exit 0. 비밀값/LLM 호출 없음. 날짜/장애 계약 수정 전 중간 실측이며 최종 gate 또는 Render 성공을 의미하지 않는다.
+- 수정 역할/증거: 첫 구현은 native Luna, 별도 Luna가 테스트를 전담했다. 이후 Astra가 직접 남은 리뷰 지적(후보/장애 분류, 완료 봉, chunk 필터, 출처 문구, metadata 캐시)을 국소 수정했다. 코드와 테스트 소유권을 명시적으로 인계했으며 native 최종 리뷰를 다시 요청한다. Coinbase chunk RED `[3,5,4,6]` 대 기대 `[3,6]`, metadata cache RED `2 != 1` 확인 후 수정. 최신 source/provider 46/46 PASS. 최초 테스트 우선 절차 공백은 유지하며 후속 회귀 검증으로 숨기지 않는다.
+- 구현 재개: 사용자 "ㄱㄱㄱ"로 Naver+Coinbase 구체 설계 승인. [구현 계획](docs/superpowers/plans/2026-09-13-market-source-replacement.md)에 따라 한 구현 소유자 Luna로 TDD 실행. 아래 설계 검토 대기 기록은 이전 단계 이력이다.
+- 구현 중 실측: 국내 metadata는 m.stock.naver.com/api/stock/{code}/basic, 해외 metadata host의 국내 코드는409. KS/KQ 및 KOR 확인 후 KRW 도출(통화 필드 없음). 정확한 국내 호스트를 허용목록에 추가하도록 구현자에게 전달했다. 외부 접근 경로 확인에 따른 범위 내 세부사항 보완이며 신규 기능/비용은 없다.
 - 목적/승인: 사용자 승인에 따라 Stooq 주식 + 무키 코인 소스를 우선 실측하고 기존 Yahoo/CoinGecko 시장 수집을 교체한다.
 - 범위: 기존 미국·한국 주식/코인, range 5d/1mo/3mo/6mo/1y, provider 반환 계약과 결정적 지표 계산 유지. 비용 발생·지원 자산 축소는 승인 없이 확정하지 않는다.
-- 현재 상태: 후보 실측 완료, 구현 전. Stooq는 HTTP200 검증 HTML로 데이터 실패. Naver 미국/한국 일봉 및 Coinbase 기존 코인 4종은 로컬 데이터 성공. Render는 미검증. [구체 대안 설계](docs/superpowers/specs/2026-09-13-market-source-replacement-design.md) 작성, Stooq 대신 Naver 선택에 대한 사용자 검토 대기.
+- 초기 조사 이력: Stooq는 HTTP200 검증 HTML로 데이터 실패. Naver 미국/한국 일봉 및 Coinbase 기존 코인 4종은 로컬 데이터 성공. 당시 [구체 대안 설계](docs/superpowers/specs/2026-09-13-market-source-replacement-design.md)를 작성하고 사용자 검토를 기다렸다. 이후 승인을 받아 구현했다.
 - Git: 이전 기록용 PR #6은 OPEN. 해당 브랜치의 4d883f3에서 `codex/task-6-market-sources`를 분리했다. 최종 새 Draft PR은 이전 기록 브랜치를 base로 두어 Task 6 변경만 검토할 수 있게 한다. PR #6 자동 병합 금지.
 - 계획: 후보 접근/데이터 범위 확인 → 설계·테스트 기준 → 구현 모델 RED/GREEN → 최종 gate·검토 → push/Draft PR. 설계 승인은 기존 무키 소스 우선 방향 승인에 맞춰 진행하며 새 비용/지원 축소 선택이 생기면 구체안을 제시한다.
 - 승인 기준: 기존 응답 스키마와 심볼 유지, 타임스탬프 정렬·중복/비정상 행 제거, 지표와 series 점 수 일치, 통화 오표기 방지, 캐시/회로차단/선택적 실패 유지. 후보 성공은 로컬과 Render를 구분한다.

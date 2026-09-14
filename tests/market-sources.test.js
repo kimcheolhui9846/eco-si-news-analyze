@@ -78,13 +78,14 @@ test('Naver CLOSE rejects a current-day candle that disagrees with metadata clos
     { localDate: '20260911', closePrice: 218.29, accumulatedTradingVolume: 2 },
     { localDate: '20260914', closePrice: 219, accumulatedTradingVolume: 3 },
   ]]]);
-  const result = await createNaverMarket({ http, clock })('NVDA', '1mo');
+  const result = await createNaverMarket({ http, clock: { now: () => Date.parse('2026-09-14T21:00:00Z') } })('NVDA', '1mo');
   assert.deepEqual(result.series.points.map((point) => point.c), [216, 218.29]);
 });
 
 test('Naver 5d takes the latest five valid points after normalization', async () => {
   const rows = Array.from({ length: 8 }, (_, i) => ({ localDate: `2026090${i + 1}`, closePrice: i + 1, accumulatedTradingVolume: i }));
   rows.splice(2, 0, { localDate: '20260903', closePrice: 0, accumulatedTradingVolume: 1 });
+  rows.reverse();
   const http = httpFor([['/basic', meta()], ['/chart/foreign/item/NVDA.O/day', rows]]);
   const result = await createNaverMarket({ http, clock })('NVDA', '5d');
   assert.equal(result.series.points.length, 5);
@@ -160,8 +161,8 @@ test('Naver OPEN metadata excludes the current local trading day while CLOSE mat
 
 test('Naver uses calendar month clamping and exchange-local dates for request bounds', async () => {
   const http = httpFor([['/basic', meta()], ['/chart/foreign/item/NVDA.O/day', chart]]);
-  await createNaverMarket({ http, clock: { now: () => Date.parse('2026-01-31T18:00:00Z') } })('NVDA', '1mo');
-  assert.ok(http.calls.some((url) => url.includes('startDateTime=202512310000')));
+  await createNaverMarket({ http, clock: { now: () => Date.parse('2026-03-31T18:00:00Z') } })('NVDA', '1mo');
+  assert.ok(http.calls.some((url) => url.includes('startDateTime=202602280000')));
   const dstHttp = httpFor([['/basic', meta({ localTradedAt: '2026-03-09T16:00:00-04:00' })], ['/chart/foreign/item/NVDA.O/day', chart]]);
   await createNaverMarket({ http: dstHttp, clock: { now: () => Date.parse('2026-03-10T03:00:00Z') } })('NVDA', '1mo');
   assert.ok(dstHttp.calls.some((url) => url.includes('endDateTime=202603092359')));

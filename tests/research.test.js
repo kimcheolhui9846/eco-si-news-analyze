@@ -340,6 +340,9 @@ test('marketSeries가 분석 프롬프트에 들어가지 않는다', async () =
   const firstPoint = c.body.marketSeries.points[0];
   assert.equal(llm.calls[0].user.includes('marketSeries'), false,
     '시계열 값이 프롬프트에 들어갔다');
+  assert.equal(llm.calls[0].user.includes(JSON.stringify(c.body.marketSeries.points)), false);
+  assert.equal(llm.calls[0].user.includes(firstPoint.t), false,
+    '시계열 날짜가 분석 프롬프트에 들어갔다');
 });
 
 test('marketSeries 추가가 확인 토큰을 깨지 않는다', async () => {

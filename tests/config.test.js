@@ -13,7 +13,7 @@ test('숫자 환경변수를 숫자로 변환한다', () => {
 });
 
 test('market source hosts are present in the default external allowlist', () => {
-  const config = loadConfig({ MY_SECRET_PASSWORD: 'x', LLM_MODE: 'mock' });
+  const config = loadConfig({ MY_SECRET_PASSWORD: 'x', LLM_MODE: 'mock', EXTERNAL_ALLOWLIST: undefined });
   for (const host of ['api.stock.naver.com', 'm.stock.naver.com', 'api.exchange.coinbase.com']) assert.ok(config.externalAllowlist.includes(host), host);
 });
 

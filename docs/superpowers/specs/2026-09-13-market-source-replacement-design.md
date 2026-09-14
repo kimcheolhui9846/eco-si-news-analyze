@@ -1,6 +1,6 @@
 # 시장 데이터 소스 교체 설계
 
-- 상태: 실측 기반 대안 제안, 구현 전 사용자 설계 검토 대기.
+- 상태: 사용자 설계 승인 완료 ("ㄱㄱㄱ"), 구현 진행.
 - 승인된 목적: Render에서 실패하는 Yahoo/CoinGecko 차트 수집을 교체한다. 무키 소스를 우선하며 기존 미국·한국 주식과 코인을 유지한다.
 - 브랜치: codex/task-6-market-sources. base: codex/task-5-post-merge-verification (4d883f3). 이전 문서 PR #6은 별개이며 자동 병합하지 않는다.
 
@@ -50,7 +50,7 @@ NAVER metadata에서 NVDA.O의 symbolCode/거래소 NASDAQ 및 USD, TSM의 거�
 2. 미국 종목은 위 실측 매핑을 먼저 쓰고 `/stock/{code}/basic` metadata에서 symbolCode(대문자 정규화)=원본 티커, USD, 미국 NASDAQ/NYSE/AMEX 여부를 검사한다. 일반 영문/숫자 티커는 `{symbol}.O`와 `{symbol}` 두 후보를 고정 순서로 검사한다. 둘 다 일치하면서 서로 다른 자산이면 모호한 결과로 거부한다. punctuation 티커(BRK-B 등)는 하이픈을 임의 변환하지 않고 검증 실패 시 기존 Yahoo fallback으로 보낸다. 국내 metadata의 종목 코드와 시장(KOSPI/.KS, KOSDAQ/.KQ)도 일치해야 한다.
 3. 기간 지정 일봉 경로 `/chart/domestic/item/{code}/day` 또는 `/chart/foreign/item/{code}/day`를 사용한다. 단순 dayCandle의 약 110행에 의존하면 1y가 잘리므로 사용하지 않는다.
 4. localDate를 유효한 달력 날짜로 검사한다. 주식 시리즈 t는 거래일의 UTC 00:00 ISO로 정규화한 일별 레이블이며 실제 체결 시각으로 설명하지 않는다. 아래 종료일 판정으로 미완료 봉을 제외한다.
-5. 종가와 거래량을 정규화해 시리즈와 지표를 동일 배열에서 만든다. 통화는 검증된 metadata의 USD/KRW만 사용한다.
+5. 종가와 거래량을 정규화해 시리즈와 지표를 동일 배열에서 만든다. 해외 통화는 검증된 metadata의 USD만 사용한다. 국내는 `https://m.stock.naver.com/api/stock/{code}/basic`의 itemCode, stockExchangeType.code=KS/KQ, nationCode=KOR를 검증한 경우에만 KRW로 확정한다. 실제 국내 응답에는 currencyType이 없으며 해외 metadata 경로는 국내 코드에 409를 반환한다(구현 단계 실측). closePrice는 `259,500` 같은 구분자 문자열을 검증해 수치화한다.
 
 ### 코인
 
@@ -71,7 +71,7 @@ NAVER metadata에서 NVDA.O의 symbolCode/거래소 NASDAQ 및 USD, TSM의 거�
 ## 5. 실패·보안·운영
 
 - 모든 요청은 lib/http.js의 HTTPS 정확한 호스트 허용목록, 타임아웃, 응답 크기 제한, redirect 차단을 통한다. 새 API 키·쿠키·임의 URL 입력은 없다.
-- api.stock.naver.com, api.exchange.coinbase.com을 config와 .env.example 허용목록에 동기화한다. 운영 EXTERNAL_ALLOWLIST override가 있으면 새 호스트 반영 필요.
+- api.stock.naver.com, m.stock.naver.com(국내 metadata), api.exchange.coinbase.com을 config와 .env.example 허용목록에 동기화한다. 운영 EXTERNAL_ALLOWLIST override가 있으면 새 호스트 반영 필요.
 - 소스별 회로차단기를 분리한다. transport/timeout/잘못된 JSON·HTML 등의 상류 실패는 실패로 계산한다. 정상 JSON의 미지원 심볼·빈 데이터·가격 2개 미만·metadata 불일치는 중립 결과로 두어 임의의 잘못된 심볼이 다른 유효 종목의 회로를 열지 않게 한다. 기존 공통 HTTP 계층이 상태를 감추는 HTTP 오류는 기존 오류 계약을 유지하고 알려진 매핑 경로로 호출 수를 제한한다. fallback 회로는 새 소스 회로와 분리한다.
 - cache는 기존 계약대로 자산/심볼/기간을 분리한다. 제공자 metadata와 기간 분할은 반복 요청 비용을 제한하는 범위에서 캐시한다.
 - 기존 HTTP 오류는 upstream status를 제거하므로, 이번에는 HTTP 공통 계층 전체를 바꾸지 않는다. 외부 원문/민감정보를 로그에 노출하는 진단 확장은 별도 범위다.
@@ -91,4 +91,4 @@ NAVER metadata에서 NVDA.O의 symbolCode/거래소 NASDAQ 및 USD, TSM의 거�
 - 외부 교차 검토: DEGRADED. 현재 세션에서 Opus 5 실제 모델/쿼터, Gemini 무료 쿼터 미확인; Copilot CLI 없음. 외부 검토 성공 주장 없음.
 - 설계 자체 검토: 비용·키 없음은 실측한 공개 요청 범위의 사실이다. 장기 이용·Render 접근·Naver API 호환성 보장으로 확대하지 않는다.
 - native 보완 리뷰의 초기 major 의견(KOSDAQ 실제 기간 경로, 미국 전체 매핑, 완료 봉/기간 경계)을 반영해 실측과 정확한 규칙을 추가했다. 무지원 심볼을 기존 경로로 fallback해 지원 축소를 피하고, no-data 회로차단 중립 규칙도 명시했다. 재검토 APPROVE, 남은 blocker/major 없음. fallback은 미매핑 호환성에만 한정하며 신규 소스의 transport/malformed 실패를 숨기기 위해 호출하지 않는다.
-- 승인할 구체 범위: Stooq를 제외하고 Naver 주식 + Coinbase Exchange 코인으로 구현하는 대안, 최근 완료 일봉 종가 기준, Naver 비공식 인터페이스 의존 한계. 구현 코드 작성 전 사용자 확인 필요.
+- 승인된 구체 범위: Stooq를 제외하고 Naver 주식 + Coinbase Exchange 코인으로 구현, 최근 완료 일봉 종가 기준, Naver 비공식 인터페이스 의존 한계. 사용자 "ㄱㄱㄱ"로 구현 승인.

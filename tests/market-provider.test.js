@@ -36,6 +36,69 @@ const provider = (http, over = {}) => {
   });
 };
 
+test('neutral market results neither reset nor open a failing source circuit', async () => {
+  const outcomes = [new Error('down'), {}, new Error('down'), new Error('down')];
+  let calls = 0;
+  const http = { async get() {
+    const outcome = outcomes[calls++];
+    if (outcome instanceof Error) throw outcome;
+    return { text: JSON.stringify(outcome) };
+  } };
+  const p = provider(http);
+  for (let i = 0; i < 5; i += 1) assert.equal(await p.fetch({ symbol: 'NVDA', assetType: 'stock', range: '1mo' }), null);
+  assert.equal(calls, 4, 'the neutral response must not clear the first failure');
+});
+
+test('generic identity rejection or ambiguity permits legacy, transport failure does not', async () => {
+  for (const mode of ['unmatched', 'ambiguous', 'transport']) {
+    let legacyCalls = 0;
+    const http = { async get(url) {
+      if (url.includes('query1.finance.yahoo.com/v8')) {
+        legacyCalls += 1;
+        return { text: fixture('yahoo-chart-nvda.json') };
+      }
+      if (mode === 'transport') throw new Error('unreachable');
+      if (mode === 'unmatched') return { text: '{}' };
+      return { text: JSON.stringify({
+        symbolCode: 'IBM', currencyType: { code: 'USD' },
+        stockExchangeType: { name: url.includes('IBM.O') ? 'NASDAQ' : 'NYSE', nationCode: 'USA' },
+      }) };
+    } };
+    const result = await provider(http).fetch({ symbol: 'IBM', assetType: 'stock', range: '1mo' });
+    assert.equal(legacyCalls, mode === 'transport' ? 0 : 1, mode);
+    assert.equal(Boolean(result), mode !== 'transport', mode);
+  }
+});
+
+test('cached closing metadata caps later candles and expires with the supplied cache TTL', async () => {
+  const clock = makeClock(Date.parse('2026-09-14T22:00:00Z'));
+  let metadataCalls = 0;
+  const http = { async get(url) {
+    if (url.endsWith('/basic')) {
+      metadataCalls += 1;
+      return { text: JSON.stringify({
+        symbolCode: 'NVDA', currencyType: { code: 'USD' },
+        stockExchangeType: { name: 'NASDAQ', nationCode: 'USA' }, marketStatus: 'CLOSE',
+        localTradedAt: metadataCalls === 1 ? '2026-09-11T16:00:00-04:00' : '2026-09-14T16:00:00-04:00',
+        closePrice: metadataCalls === 1 ? '218' : '219',
+      }) };
+    }
+    return { text: JSON.stringify([
+      { localDate: '20260910', closePrice: 217 }, { localDate: '20260911', closePrice: 218 },
+      { localDate: '20260914', closePrice: 219 },
+    ]) };
+  } };
+  const p = provider(http, { clock });
+  await p.fetch({ symbol: 'NVDA', assetType: 'stock', range: '1mo' });
+  const cached = await p.fetch({ symbol: 'NVDA', assetType: 'stock', range: '1y' });
+  assert.equal(metadataCalls, 1);
+  assert.deepEqual(cached.series.points.map((point) => point.c), [217, 218]);
+  clock.advance(60001);
+  const refreshed = await p.fetch({ symbol: 'NVDA', assetType: 'stock', range: '1y' });
+  assert.equal(metadataCalls, 2);
+  assert.deepEqual(refreshed.series.points.map((point) => point.c), [217, 218, 219]);
+});
+
 const YAHOO = { 'query1.finance.yahoo.com/v8': fixture('yahoo-chart-nvda.json') };
 const KOREA = { 'query1.finance.yahoo.com/v8': fixture('yahoo-chart-005930ks.json') };
 const CRYPTO = { 'api.coingecko.com': fixture('coingecko-bitcoin.json') };
