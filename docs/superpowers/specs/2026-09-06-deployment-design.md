@@ -1,7 +1,7 @@
 # 배포 설계 — Render 무료 인스턴스
 
 - **작성일**: 2026-09-06
-- **상태**: 검토 대기
+- **상태**: 구현·최초 배포 완료, 2026-09-13 PR #5 병합. 병합 후 검증 상태는 루트 `HANDOFF.md` 참조.
 - **범위**: 호스팅 플랫폼 선택, 배포 정의(`render.yaml`), 환경변수, 빌드 명령, 한계 문서화
 - **선행**: Phase 1 (PR #1), Phase 2a (PR #2), Phase 3 (PR #3), Phase 2b (PR #4, 병합 대기)
 - **애플리케이션 코드는 바꾸지 않는다.**
@@ -219,7 +219,7 @@ services:
 | 순서 | 명령 | 기대 | 비용 |
 |---|---|---|---|
 | 1 | `curl <URL>/api/health` | `llmMode: live` | 0 |
-| 2 | `./scripts/verify-research.sh <URL>` | 통과 14 / 실패 0 | 0 |
+| 2 | `./scripts/verify-research.sh <URL>` | 통과 14 / 실패 0 | live 서버에서 유료 분석 1회 포함, 비용 가변 (LLM_MODE=mock 서버에서는 LLM 비용 0) |
 | 3 | `MY_SECRET_PASSWORD=<값> ./scripts/verify.sh <URL>` | 통과 9 / 실패 0, `degraded=false` | 약 $0.005 |
 | 4 | 브라우저 | 로그인 → 수집 → 승인 → 보고서 | 실행 시 약 $0.005 |
 

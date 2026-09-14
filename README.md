@@ -70,7 +70,7 @@ cd eco-si-news-analyze
 npm install
 ```
 
-Node.js 20 이상이 필요하다 (개발·검증은 24.18.0에서 했다).
+Node.js 22 이상이 필요하다 (개발·검증은 24.18.0에서 했다).
 
 ---
 

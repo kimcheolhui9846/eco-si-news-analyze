@@ -3,11 +3,23 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-10 (배포 완료·검증 완료 — 시장 차트 결함 1건 미해결)
-- **현재 브랜치**: `feature/deployment` (`main`에서 분기, 원격에 푸시됨)
+- **최종 갱신**: 2026-09-13 (PR #5 main 병합 및 인증 재검증 완료 — 시장 차트 실패 유지)
+- **현재 브랜치**: `codex/task-5-post-merge-verification` (병합된 main 기준 검증 기록)
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
+
+## 2026-09-13 병합 후 검증
+
+- 사용자 승인으로 [PR #5](https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/5)를 병합했다. 커밋: `8e16b308adee43c532bd6793cc83e1960433be54`.
+- 이번 실행의 계획·검증·검토 공백·미완료 항목은 [루트 HANDOFF.md](../HANDOFF.md)에 기록한다. 아래 2026-09-10 실측 결과는 과거 이력이며 이번 재검증 결과가 아니다.
+- 병합 전 배포 테스트 7/7, 전체 529 pass / 0 fail / 1 skip, 클라이언트 빌드 성공.
+- 처음에는 로컬 `.env` 비밀번호가 HTTP 403으로 거부됐으나 사용자 갱신 후 로그인 200 확인. 06:43:32 UTC health `200 ok/live`.
+- `verify.sh`: **9 pass / 0 fail**, `degraded=false`, `fabricatedUrlsRemoved=0`, model `gpt-4o-2024-08-06`. 로그인·견적·분석·출처·세션 연장·로그아웃 검증 통과.
+- `verify-research.sh`: **13 pass / 1 fail**, 기존 시장 데이터 미확보. 뉴스 8건·재무지표 6개·논문 5건·임상시험 5건 및 분석·언어 가드 통과. arXiv 소스 부분 실패도 관측됐으며 원인·지속성은 미확인.
+- 서버가 보고한 실제 분석 2회 비용 합계: **0.03379 USD** (0.02798 + 0.00581).
+- 사용자가 Render main 전환·Live·병합 커밋 `8e16b30`을 확인했다고 보고했다. 에이전트의 대시보드 직접 확인과 브라우저 UI 검증은 연결 도구 부재로 미수행. 기존 배포 브랜치는 보존했다.
+- 외부 교차 검토는 DEGRADED. 별도 native 보완 리뷰는 새로운 blocker/major 회귀 없음. 기존 프록시 제한과 시장 데이터 결함은 유지한다.
 
 ## 0. 처음 이어받는다면 — 빠른 지도
 
@@ -46,7 +58,7 @@ npm run build:client   # 프론트엔드 빌드 (client/dist는 gitignore)
 npm start              # 서버 기동 → http://localhost:3000  (.env를 읽는다)
 
 # 실네트워크 검증. 서버가 떠 있어야 한다
-./scripts/verify-research.sh [BASE_URL]   # 수집 경로 14항목. 비용 0
+./scripts/verify-research.sh [BASE_URL]   # 14항목. live 서버에서는 유료 분석 1회 포함(비용 가변). LLM_MODE=mock 서버에서는 LLM 비용 0
 MY_SECRET_PASSWORD=<값> ./scripts/verify.sh [BASE_URL]   # 실호출 1회 약 $0.005
 ./scripts/verify-kci.sh                   # KCI 계약 확인. 키가 있어야 의미 있다
 
@@ -85,7 +97,7 @@ MY_SECRET_PASSWORD=test-pw LLM_MODE=mock npm start
 | 배포 구현 (Task 1~2) | ✅ 완료 — `render.yaml`, `engines`, 테스트 7건, 문서 |
 | 배포 실행 (Task 3) | ✅ 완료 — https://eco-si-news-analyze.onrender.com |
 | 배포 검증 | 🟡 `verify.sh` **9/0 통과**, `verify-research.sh` **13/1** — 시장 차트만 실패 |
-| 배포 기록·PR (Task 4) | 🟡 문서 기록 완료. PR #5 병합 대기 |
+| 배포 기록·PR (Task 4) | PR #5 main 병합 완료 (2026-09-13). main Live/커밋 사용자 확인, API 재검증 9/0·13/1 |
 | **시장 차트 소스 교체** | 🔴 **다음 작업.** §2 참고 |
 
 **현재 테스트: 530 tests / 529 pass / 0 fail / 1 skip** (`npm test`)
@@ -94,7 +106,8 @@ skip 1건은 KCI 정상 응답 픽스처가 없어서다. 키를 받으면 해�
 ## 2. 다음에 할 일 — 시장 차트 소스 교체
 
 > **이어받는 사람에게.** 배포는 끝났고 앱은 살아 있다. 뉴스·재무·논문·실험·LLM 분석이
-> 배포 환경에서 전부 동작하는 것을 실측으로 확인했다. **단 하나, 시장 차트가 안 된다.**
+> 배포 환경에서 동작하는 것을 실측으로 확인했다. **시장 차트는 여전히 안 된다.**
+> 2026-09-13에는 arXiv 부분 실패도 관측됐다. 다른 소스로 논문 5건을 확보했으며 원인·지속성은 미확인이다.
 > 아래 조사는 이미 끝났으니 다시 하지 말 것.
 
 ### 배포 현황
@@ -103,8 +116,8 @@ skip 1건은 KCI 정상 응답 픽스처가 없어서다. 키를 받으면 해�
 - Render 무료 웹 서비스. Blueprint(`render.yaml`)로 생성
 - 대시보드에 직접 넣은 환경변수는 `MY_SECRET_PASSWORD`와 `OPENAI_API_KEY` 둘뿐이다.
   나머지는 `render.yaml`과 `lib/config.js` 기본값이 적용된다
-- **Render가 보고 있는 브랜치는 `feature/deployment`다.** PR #5를 병합한 뒤
-  대시보드에서 브랜치를 `main`으로 바꿔야 한다. 안 바꾸고 브랜치를 지우면 배포가 멈춘다
+- **2026-09-10 기록상 Render 추적 브랜치는 `feature/deployment`다.** PR #5는 2026-09-13 병합했다.
+  이후 사용자가 `main` 전환·Live·병합 커밋을 확인했다고 보고했다. 에이전트는 대시보드를 직접 확인하지 않았다.
 
 ### 실측 검증 결과 (2026-09-10)
 
@@ -193,7 +206,7 @@ createMarketProvider({ http, cache, clock, makeBreaker })
 
 ### 배포 후 남은 다른 일
 
-1. **PR #5 병합 → Render 브랜치를 `main`으로 변경** (위 배포 현황 참고)
+1. **main 전환·Live·커밋 사용자 확인 완료** — 에이전트의 브라우저 UI 검증은 연결 도구가 생기면 수행 (위 배포 현황 참고)
 2. **`trust proxy: 1`이 Render 프록시 깊이와 맞지 않는다** — §8 참고
 3. **KCI 키** — 배포 환경에서는 어차피 못 쓴다(고정 IP 없음). §8 참고
 ## 3. 핵심 문서
@@ -208,7 +221,7 @@ createMarketProvider({ http, cache, clock, makeBreaker })
 | `docs/superpowers/specs/2026-09-03-phase2b-research-connectors-design.md` | Phase 2b 설계 (승인됨) |
 | `docs/superpowers/plans/2026-09-04-phase2b-research-connectors.md` | Phase 2b 구현 계획 — 14개 태스크. Task 14(KCI 키)만 남음 |
 | `docs/superpowers/specs/2026-09-06-deployment-design.md` | 배포 설계 (승인됨) |
-| `docs/superpowers/plans/2026-09-06-render-deployment.md` | **배포 구현 계획 — 4개 태스크. Task 3부터 진행할 차례** |
+| `docs/superpowers/plans/2026-09-06-render-deployment.md` | 배포 구현·PR 병합 완료, main Live 사용자 확인 및 인증 API 재검증 완료. 차트 실패/UI 검증 공백 유지 |
 | `~/Desktop/claude-code-integrated-prompt.md` | 사용자 원본 요구사항 |
 
 ## 4. 반드시 지켜야 할 결정사항
