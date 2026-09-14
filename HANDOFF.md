@@ -3,7 +3,7 @@
 ## Current status
 - Objective: use OpenAlex without a key for Korean and English papers, with Crossref as a supplemental fallback; keep KCI optional for future.
 - Scope: research provider, allowlist/configuration, tests, README, and handoff. Market, auth, LLM, and UI behavior are out of scope.
-- Plan: design, TDD implementation, targeted/full tests, build, live keyless smoke, commit, push, and Draft PR delivery completed. Final review is PASS WITH NOTES pending user approval for merge/deploy.
+- Plan: design, TDD implementation, targeted/full tests, build, live keyless smoke, merge, deployment checks, and authenticated research verification completed. Final review is PASS WITH NOTES.
 
 ## Verification
 - RED: pre-implementation provider test failed with missing adapter modules.
@@ -14,8 +14,8 @@
 ## Review and risks
 - Astra planning and Luna implementation delegation were unavailable due usage limits; the user approved one-time GPT-5 replacement implementation. Cross-check status: DEGRADED.
 - KCI is called only when a KCI key is configured. External API availability and rate limits remain runtime risks.
-- Draft PR: https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/9 (OPEN, Draft, base main, head 9ffd1bd).
-- Merge/deploy update: PR #9 merged into main as e75f57d on 2026-09-14. Render production `/api/health` returned HTTP 200 with `status=ok` and `llmMode=live`; `/` returned 200; deployed JS/CSS assets returned 200; unauthenticated `/api/auth/session` returned 403. Authenticated research collection was not run because no credential was entered in this verification.
+- PR #9 merged into main as e75f57d on 2026-09-14. Render production `/api/health` returned HTTP 200 with `status=ok` and `llmMode=live`; `/` returned 200; deployed JS/CSS assets returned 200; unauthenticated `/api/auth/session` returned 403.
+- Authenticated production research check: login HTTP 200; Korean `/api/research/collect` HTTP 200; 5 research items; `languageRoute=ko`; `degraded=[]`; all five items reported `sourceName=OpenAlex`. No password or token was recorded.
 
 ---
 
