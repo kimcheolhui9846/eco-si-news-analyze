@@ -5,11 +5,22 @@ import {
   createResearchProvider, parseEuropePmc, parseArxiv, dedupeResearch,
   createTtlCache, createCircuitBreaker,
 } from '../server.js';
+import { parseOpenAlex } from '../lib/providers/openalex.js';
+import { parseCrossref } from '../lib/providers/crossref.js';
+import { buildOpenAlexUrl } from '../lib/providers/openalex.js';
+import { buildCrossrefUrl } from '../lib/providers/crossref.js';
 import { makeClock } from './helpers.js';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const PMC = fixture('europepmc-battery.json');
 const ARXIV = fixture('arxiv-battery.xml');
+const OPENALEX = JSON.stringify({ results: [
+  { id: 'W-OA-1', title: 'Battery recycling overview', publication_date: '2025-01-01', type: 'article', authorships: [] },
+  { id: 'W-OA-2', title: 'Battery recycling methods', publication_date: '2024-01-01', type: 'article', authorships: [] },
+] });
+const CROSSREF = JSON.stringify({ message: { items: [
+  { title: ['Crossref battery paper'], DOI: '10.1000/crossref-1', type: 'journal-article', published: { 'date-parts': [[2023]] } },
+] } });
 
 const makeHttp = (routes) => {
   const calls = [];
@@ -144,18 +155,18 @@ test('DOI가 없으면 제목으로 중복을 판정한다', () => {
 // ─── provider ───
 
 test('영어 질의는 두 소스를 모두 호출한다', async () => {
-  const http = makeHttp({ 'ebi.ac.uk': PMC, 'export.arxiv.org': ARXIV });
+  const http = makeHttp({ 'api.openalex.org': OPENALEX, 'ebi.ac.uk': PMC, 'export.arxiv.org': ARXIV, 'api.crossref.org': CROSSREF });
   const result = await provider(http).search({ query: 'battery recycling', limit: 5 });
 
   assert.ok(http.calls.some((u) => u.includes('ebi.ac.uk')));
   assert.ok(http.calls.some((u) => u.includes('export.arxiv.org')));
-  assert.deepEqual(result.sourcesUsed.sort(), ['Europe PMC', 'arXiv']);
+  assert.deepEqual(result.sourcesUsed.sort(), ['OpenAlex', 'Europe PMC', 'arXiv'].sort());
   assert.equal(result.items.length, 5);
   assert.equal(result.languageRoute.route, 'en');
 });
 
 test('한 소스가 실패해도 나머지로 진행한다', async () => {
-  const http = makeHttp({ 'ebi.ac.uk': new Error('down'), 'export.arxiv.org': ARXIV });
+  const http = makeHttp({ 'api.openalex.org': new Error('down'), 'ebi.ac.uk': new Error('down'), 'export.arxiv.org': ARXIV, 'api.crossref.org': new Error('down') });
   const result = await provider(http).search({ query: 'battery recycling', limit: 5 });
 
   assert.ok(result.items.length > 0);
@@ -164,48 +175,94 @@ test('한 소스가 실패해도 나머지로 진행한다', async () => {
 });
 
 test('모든 소스가 실패하면 빈 배열과 사유가 남는다', async () => {
-  const http = makeHttp({ 'ebi.ac.uk': new Error('down'), 'export.arxiv.org': new Error('down') });
+  const http = makeHttp({ 'api.openalex.org': new Error('down'), 'ebi.ac.uk': new Error('down'), 'export.arxiv.org': new Error('down'), 'api.crossref.org': new Error('down') });
   const result = await provider(http).search({ query: 'battery recycling', limit: 5 });
 
   assert.deepEqual(result.items, []);
-  assert.equal(result.degraded.length, 2);
+  assert.equal(result.degraded.length, 4);
 });
 
 test('limit을 넘겨 돌려주지 않는다', async () => {
-  const http = makeHttp({ 'ebi.ac.uk': PMC, 'export.arxiv.org': ARXIV });
+  const http = makeHttp({ 'api.openalex.org': OPENALEX, 'ebi.ac.uk': PMC, 'export.arxiv.org': ARXIV });
   const result = await provider(http).search({ query: 'battery recycling', limit: 2 });
   assert.equal(result.items.length, 2);
 });
 
 test('한국어 질의에는 영어 소스로 요청을 보내지 않는다', async () => {
   // 스펙 §1.5. 호출한 뒤 거르는 것이 아니라 요청 자체를 만들지 않는다.
-  const http = makeHttp({ 'ebi.ac.uk': PMC, 'export.arxiv.org': ARXIV });
+  const http = makeHttp({ 'api.openalex.org': OPENALEX, 'ebi.ac.uk': PMC, 'export.arxiv.org': ARXIV, 'api.crossref.org': CROSSREF });
   const result = await provider(http).search({ query: '배터리 재활용', limit: 5 });
 
-  assert.equal(http.calls.length, 0, '영어 소스로 나간 요청이 있으면 안 된다');
-  assert.deepEqual(result.items, []);
+  assert.equal(http.calls.some((url) => url.includes('ebi.ac.uk') || url.includes('export.arxiv.org')), false);
+  assert.ok(result.items.length > 0);
   assert.equal(result.languageRoute.route, 'ko');
 });
 
 test('한글이 섞인 질의도 영어 소스를 막는다', async () => {
-  const http = makeHttp({ 'ebi.ac.uk': PMC, 'export.arxiv.org': ARXIV });
+  const http = makeHttp({ 'api.openalex.org': OPENALEX, 'api.crossref.org': CROSSREF });
   await provider(http).search({ query: '삼성 battery', limit: 5 });
-  assert.equal(http.calls.length, 0);
+  assert.equal(http.calls.some((url) => url.includes('ebi.ac.uk') || url.includes('export.arxiv.org')), false);
 });
 
 test('KCI provider가 없으면 한국어 질의에 사유를 남긴다', async () => {
-  const http = makeHttp({});
+  const http = makeHttp({ 'api.openalex.org': OPENALEX, 'api.crossref.org': CROSSREF });
   const result = await provider(http).search({ query: '배터리 재활용', limit: 5 });
-  assert.ok(result.degraded.some((d) => d.source === 'KCI'));
+  assert.equal(result.degraded.some((d) => d.source === 'KCI'), false);
+  assert.ok(result.items.length > 0);
 });
 
 test('같은 질의를 두 번 부르면 두 번째는 캐시에서 온다', async () => {
-  const http = makeHttp({ 'ebi.ac.uk': PMC, 'export.arxiv.org': ARXIV });
+  const http = makeHttp({ 'api.openalex.org': OPENALEX, 'api.crossref.org': CROSSREF });
   const p = provider(http);
   await p.search({ query: 'battery recycling', limit: 5 });
   const before = http.calls.length;
   await p.search({ query: 'battery recycling', limit: 5 });
   assert.equal(http.calls.length, before, '캐시 히트면 추가 호출이 없다');
+});
+
+test('OpenAlex 응답을 기존 논문 계약으로 변환한다', () => {
+  const [item] = parseOpenAlex(JSON.stringify({ results: [{
+    id: 'https://openalex.org/W1', title: '배터리 재활용', doi: 'https://doi.org/10.1000/test', publication_date: '2025-03-02',
+    primary_location: { source: { display_name: 'Test Journal' }, landing_page_url: 'https://example.test/paper' },
+    authorships: [{ author: { display_name: '홍길동' } }], abstract_inverted_index: { 배터리: [0], 재활용: [1] }, type: 'article',
+  }] }));
+  assert.equal(item.sourceName, 'OpenAlex');
+  assert.equal(item.language, 'ko');
+  assert.equal(item.title, '배터리 재활용');
+  assert.equal(item.abstract, '배터리 재활용');
+  assert.equal(item.publishedAt, '2025-03-02T00:00:00.000Z');
+});
+
+test('Crossref 응답을 기존 논문 계약으로 변환한다', () => {
+  const [item] = parseCrossref(JSON.stringify({ message: { items: [{
+    title: ['Battery recycling'], abstract: '<jats:p>Summary</jats:p>', DOI: '10.1000/crossref', URL: 'https://doi.org/10.1000/crossref',
+    author: [{ given: 'A', family: 'Author' }], 'container-title': ['Journal'], published: { 'date-parts': [[2024, 4, 5]] }, type: 'journal-article',
+  }] } }));
+  assert.equal(item.sourceName, 'Crossref');
+  assert.equal(item.language, 'en');
+  assert.equal(item.abstract, 'Summary');
+  assert.equal(item.authors[0], 'A Author');
+});
+
+test('keyless source URL은 쿼리와 요청 상한을 인코딩한다', () => {
+  const openAlexUrl = new URL(buildOpenAlexUrl({ query: '배터리 재활용', limit: 100 }));
+  assert.equal(openAlexUrl.hostname, 'api.openalex.org');
+  assert.equal(openAlexUrl.searchParams.get('per-page'), '25');
+  assert.equal(openAlexUrl.searchParams.get('search'), '배터리 재활용');
+
+  const crossrefUrl = new URL(buildCrossrefUrl({ query: 'battery recycling', limit: 3, contactEmail: 'research@example.com' }));
+  assert.equal(crossrefUrl.hostname, 'api.crossref.org');
+  assert.equal(crossrefUrl.searchParams.get('rows'), '3');
+  assert.equal(crossrefUrl.searchParams.get('mailto'), 'research@example.com');
+});
+
+test('키 없는 한국어 검색은 OpenAlex와 Crossref를 사용한다', async () => {
+  const http = makeHttp({ 'api.openalex.org': JSON.stringify({ results: [{ id: 'W1', title: '한국 배터리 연구', publication_date: '2025-01-01', authorships: [] }] }), 'api.crossref.org': CROSSREF });
+  const result = await provider(http).search({ query: '배터리 재활용', limit: 5 });
+  assert.ok(result.items.length > 0);
+  assert.ok(http.calls.some((url) => url.includes('api.openalex.org')));
+  assert.ok(http.calls.some((url) => url.includes('api.crossref.org')));
+  assert.equal(http.calls.some((url) => url.includes('ebi.ac.uk') || url.includes('export.arxiv.org')), false);
 });
 
 // ─── provider 출력은 항상 스키마를 통과해야 한다 ───

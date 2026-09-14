@@ -137,6 +137,9 @@ OPENAI_API_KEY=sk-...
 | `MAX_RESEARCH_ITEMS` | `5` | 수집할 논문 수 상한 |
 | `MAX_EXPERIMENT_ITEMS` | `5` | 수집할 임상시험 수 상한 |
 | `KCI_API_KEY` | (빈 값) | **선택.** 국내 논문 검색용. 아래 설명 참고 |
+| `RESEARCH_CONTACT_EMAIL` | (빈 값) | **선택.** Crossref polite pool 연락 이메일 |
+
+**키 없는 논문 검색.** 한국어·영문 논문은 OpenAlex를 기본으로 조회하고, 결과가 부족하면 Crossref를 보조로 조회한다. 두 소스 모두 API 키 없이 사용할 수 있다. Crossref polite pool을 사용하려면 선택적으로 `RESEARCH_CONTACT_EMAIL`을 설정한다.
 
 **`KCI_API_KEY`에 대하여.** `open.kci.go.kr`에서 무료로 발급한다. 신청서에 **공인 IP**를
 적어야 하고 등록된 IP에서 온 요청만 받는다. IP는 여러 개 등록할 수 있다.

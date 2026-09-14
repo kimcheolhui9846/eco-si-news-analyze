@@ -170,7 +170,8 @@ test('KCI 키가 없어도 서버가 기동하고 나머지가 동작한다', as
 
   assert.equal(res.status, 200);
   assert.ok(res.body.newsList.length > 0);
-  assert.ok(res.body.collected.degraded.some((d) => /KCI API 키/.test(d.reason)));
+  assert.equal(res.body.collected.degraded.some((d) => d.source === 'KCI'), false);
+  assert.ok(Array.isArray(res.body.collected.research ?? []));
 });
 
 // ─── 비용과 확인 토큰 ───

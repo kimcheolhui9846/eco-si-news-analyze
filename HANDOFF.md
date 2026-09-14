@@ -1,3 +1,23 @@
+# Task 7 - Keyless research sources (2026-09-14)
+
+## Current status
+- Objective: use OpenAlex without a key for Korean and English papers, with Crossref as a supplemental fallback; keep KCI optional for future.
+- Scope: research provider, allowlist/configuration, tests, README, and handoff. Market, auth, LLM, and UI behavior are out of scope.
+- Plan: design, TDD implementation, targeted/full tests, build, live keyless smoke, commit, push, and Draft PR delivery completed. Final review is PASS WITH NOTES pending user approval for merge/deploy.
+
+## Verification
+- RED: pre-implementation provider test failed with missing adapter modules.
+- GREEN: focused research/config/collect tests passed (27/27, 11/11, 12/12).
+- Full gate: npm.cmd test passed 556 with 1 documented skip; npm.cmd run build:client passed (41 modules).
+- Live smoke: OpenAlex HTTP 200 (154 matches, 1 result); Crossref HTTP 200 (218494 matches, 1 result).
+
+## Review and risks
+- Astra planning and Luna implementation delegation were unavailable due usage limits; the user approved one-time GPT-5 replacement implementation. Cross-check status: DEGRADED.
+- KCI is called only when a KCI key is configured. External API availability and rate limits remain runtime risks.
+- Draft PR: https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/9 (OPEN, Draft, base main, head 9ffd1bd).
+
+---
+
 # HANDOFF
 
 ## Task 6 — 시장 데이터 소스 교체 (2026-09-13 착수)
