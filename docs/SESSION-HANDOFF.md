@@ -14,7 +14,8 @@
 현재 Task 6은 사용자 승인된 Naver 주식/Coinbase 4종 코인 일봉 교체를 진행한다.
 최초 구현의 테스트 14개 실패와 날짜/종목 검증 누락을 수정했다.
 최신 전체 테스트는 551 pass / 0 fail / 1 skip, 빌드와 실제 공개 데이터 13개 조합 수집이 통과했다.
-별도 native Astra 최종 리뷰는 PASS WITH NOTES(중대 결함 없음)이며 Draft PR 갱신 후 병합 승인을 받는다.
+별도 native Astra 최종 리뷰는 PASS WITH NOTES(중대 결함 없음)이다. Draft PR #7 갱신·push 후
+최종 전체 테스트도 551 pass / 0 fail / 1 skip, 빌드 PASS를 확인했다. 병합 승인을 기다린다.
 계획·최신 검증·리뷰는 [루트 HANDOFF.md](../HANDOFF.md)의 Task 6 항목을 따른다.
 새 소스의 Render 배포·검증은 아직 수행하지 않았다. 아래 내용은 Task 5 운영 검증 이력이다.
 
