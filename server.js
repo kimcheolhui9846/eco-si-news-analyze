@@ -75,8 +75,10 @@ export {
 } from './lib/providers/financial.js';
 export { hasHangul, routeForQuery } from './lib/providers/language.js';
 export {
-  createResearchProvider, parseEuropePmc, parseArxiv, dedupeResearch,
+  createResearchProvider, parseEuropePmc, parseArxiv, parseOpenAlex, parseCrossref, dedupeResearch,
 } from './lib/providers/papers.js';
+export { buildOpenAlexUrl } from './lib/providers/openalex.js';
+export { buildCrossrefUrl } from './lib/providers/crossref.js';
 export {
   createKciProvider, buildKciUrl, parseKciResponse, isIpRejection, redactKey, KCI_FIELD_NAMES,
 } from './lib/providers/kci.js';
@@ -296,7 +298,8 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
     cache: createTtlCache({ ttlMs: config.researchCacheTtlMs, maxEntries: 100, clock: now }),
     clock: now,
     makeBreaker: makeProviderBreaker,
-    kci: kciProvider,
+    kci: config.kciApiKey ? kciProvider : null,
+    contactEmail: config.researchContactEmail,
   });
 
   const experimentProvider = createExperimentProvider({
