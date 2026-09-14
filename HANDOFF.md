@@ -15,6 +15,7 @@
 - Astra planning and Luna implementation delegation were unavailable due usage limits; the user approved one-time GPT-5 replacement implementation. Cross-check status: DEGRADED.
 - KCI is called only when a KCI key is configured. External API availability and rate limits remain runtime risks.
 - Draft PR: https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/9 (OPEN, Draft, base main, head 9ffd1bd).
+- Merge/deploy update: PR #9 merged into main as e75f57d on 2026-09-14. Render production `/api/health` returned HTTP 200 with `status=ok` and `llmMode=live`; `/` returned 200; deployed JS/CSS assets returned 200; unauthenticated `/api/auth/session` returned 403. Authenticated research collection was not run because no credential was entered in this verification.
 
 ---
 
