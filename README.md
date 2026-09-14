@@ -193,7 +193,7 @@ MY_SECRET_PASSWORD=test-pw LLM_MODE=mock npm start
 
 Render 무료 인스턴스에 올린다. 설정은 저장소의 `render.yaml`이 단일 출처다.
 설계 근거는 `docs/superpowers/specs/2026-09-06-deployment-design.md`에 있다.
-
+https://eco-si-news-analyze.onrender.com/
 ### 절차
 
 1. [render.com](https://render.com)에서 GitHub 저장소를 연결한다 (비공개 저장소도 된다)
