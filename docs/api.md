@@ -177,7 +177,7 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | 값 | 소스 |
 |---|---|
 | `news` | Google 뉴스·연합뉴스·전자신문·Yahoo Finance |
-| `market` | Yahoo Finance 차트 / CoinGecko |
+| `market` | Naver 주식 일봉 / Coinbase Exchange BTC·ETH·SOL·XRP 일봉. 미매핑 심볼은 기존 Yahoo Finance / CoinGecko 경로 |
 | `financial` | SEC EDGAR XBRL companyconcept. **미국 상장사만** |
 | `research` | Europe PMC + arXiv (영문 질의) / KCI (한국어 질의) |
 | `experiments` | ClinicalTrials.gov v2. **영문 질의에서만** |
@@ -308,6 +308,16 @@ curl -X POST http://localhost:3000/api/auth/logout \
 사유는 `collected.languageRoute.reason`과 `collected.degraded`에 실려 나간다.
 
 ### `marketSeries` — 차트용 시계열
+
+Task 6의 Naver/Coinbase 경로는 완료된 일봉을 반환한다. `marketData.currentPrice`는
+마지막 완료 봉의 종가이며 `chartTrend`에 출처와 일봉 기준을 표시한다.
+Naver `5d`는 최근 완료 거래일 최대 5개, 나머지 범위는 거래소 현지 날짜에서
+1·3·6·12개월을 뺀 날부터다(월말 보정). Coinbase 범위는 완료된 UTC 일봉
+5·30·90·180·365일이며 현재 진행 중인 UTC 날짜는 제외한다.
+미매핑 심볼의 기존 경로는 기존 제공자의 시간·가격 기준을 유지한다.
+
+Naver의 `points[].t`는 현지 거래일을 UTC 자정으로 표현한 날짜 라벨이다.
+실제 거래 체결 시각이 아니다. Coinbase의 값은 UTC 일봉 시작 시각이다.
 
 프론트엔드가 차트를 그리는 데 쓴다. 시장 데이터를 못 가져왔으면 `marketData`와 함께 `undefined`다.
 
