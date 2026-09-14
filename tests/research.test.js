@@ -5,6 +5,8 @@ import request from 'supertest';
 import { bootstrap, makeClock, makeMockLlm, TEST_PASSWORD } from './helpers.js';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
+const NAVER_META = JSON.stringify({ reutersCode: 'NVDA.O', symbolCode: 'NVDA', currencyType: { code: 'USD' }, stockExchangeType: { name: 'NASDAQ', nationCode: 'USA' }, marketStatus: 'CLOSE', localTradedAt: '2026-08-30T16:00:00-04:00', closePrice: '218.29' });
+const NAVER_CHART = JSON.stringify([{ localDate: '20260828', closePrice: 217, accumulatedTradingVolume: 2 }, { localDate: '20260830', closePrice: 218.29, accumulatedTradingVolume: 3 }]);
 
 const ROUTES = {
   'news.google.com': fixture('google-news-ko.xml'),
@@ -13,6 +15,8 @@ const ROUTES = {
   'feeds.finance.yahoo.com': fixture('google-news-ko.xml'),
   'query1.finance.yahoo.com/v8': fixture('yahoo-chart-nvda.json'),
   'api.coingecko.com': fixture('coingecko-bitcoin.json'),
+  'api.stock.naver.com/stock/NVDA.O/basic': NAVER_META,
+  'api.stock.naver.com/chart/foreign/item/NVDA.O/day': NAVER_CHART,
 };
 
 const makeHttp = (routes = ROUTES) => {
@@ -52,7 +56,7 @@ const validReport = () => JSON.stringify({
 const setup = (over = {}) => {
   const http = over.http ?? makeHttp();
   const llm = over.llm ?? makeMockLlm(() => ({ content: validReport(), model: 'mock' }));
-  const ctx = bootstrap({ clock: over.clock ?? makeClock(), llm, http, env: over.env });
+  const ctx = bootstrap({ clock: over.clock ?? makeClock(Date.parse('2026-09-01T12:00:00Z')), llm, http, env: over.env });
   return { ...ctx, http, llm };
 };
 
@@ -196,7 +200,7 @@ test('수집 후 newsList를 변조하면 확인 토큰이 통하지 않는다',
 
 test('시장 데이터가 실패해도 뉴스만으로 200을 반환한다', async () => {
   // ROUTES의 '...yahoo.com/v8' 키를 지우지 않으면 그쪽이 먼저 매칭돼 성공해버린다.
-  const { 'query1.finance.yahoo.com/v8': _removed, ...rest } = ROUTES;
+  const { 'query1.finance.yahoo.com/v8': _removed, 'api.stock.naver.com/stock/NVDA.O/basic': _metaRemoved, 'api.stock.naver.com/chart/foreign/item/NVDA.O/day': _chartRemoved, ...rest } = ROUTES;
   const http = makeHttp({ ...rest, 'query1.finance.yahoo.com': new Error('다운') });
   const { app } = setup({ http });
   const token = await login(app);
@@ -312,7 +316,7 @@ test('collect 응답에 marketSeries가 포함된다', async () => {
 });
 
 test('시장 데이터를 못 가져오면 marketSeries도 없다', async () => {
-  const { 'query1.finance.yahoo.com/v8': _removed, ...rest } = ROUTES;
+  const { 'query1.finance.yahoo.com/v8': _removed, 'api.stock.naver.com/stock/NVDA.O/basic': _metaRemoved, 'api.stock.naver.com/chart/foreign/item/NVDA.O/day': _chartRemoved, ...rest } = ROUTES;
   const http = makeHttp({ ...rest, 'query1.finance.yahoo.com': new Error('다운') });
   const { app } = setup({ http });
   const token = await login(app);
@@ -334,8 +338,11 @@ test('marketSeries가 분석 프롬프트에 들어가지 않는다', async () =
     .send({ newsList: c.body.newsList, marketData: c.body.marketData });
 
   const firstPoint = c.body.marketSeries.points[0];
-  assert.equal(llm.calls[0].user.includes(String(firstPoint.c)), false,
+  assert.equal(llm.calls[0].user.includes('marketSeries'), false,
     '시계열 값이 프롬프트에 들어갔다');
+  assert.equal(llm.calls[0].user.includes(JSON.stringify(c.body.marketSeries.points)), false);
+  assert.equal(llm.calls[0].user.includes(firstPoint.t), false,
+    '시계열 날짜가 분석 프롬프트에 들어갔다');
 });
 
 test('marketSeries 추가가 확인 토큰을 깨지 않는다', async () => {

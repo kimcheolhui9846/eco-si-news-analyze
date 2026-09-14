@@ -3,13 +3,21 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-13 (PR #5 main 병합 및 인증 재검증 완료 — 시장 차트 실패 유지)
-- **현재 브랜치**: `codex/task-5-post-merge-verification` (병합된 main 기준 검증 기록)
+- **최종 갱신**: 2026-09-14 (Task 6 시장 데이터 소스 교체 구현 검증 중)
+- **현재 브랜치**: `codex/task-6-market-sources` (Task 5 기록 브랜치 기반, Draft PR #7)
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
 
 ## 2026-09-13 병합 후 검증
+
+현재 Task 6은 사용자 승인된 Naver 주식/Coinbase 4종 코인 일봉 교체를 진행한다.
+최초 구현의 테스트 14개 실패와 날짜/종목 검증 누락을 수정했다.
+최신 전체 테스트는 551 pass / 0 fail / 1 skip, 빌드와 실제 공개 데이터 13개 조합 수집이 통과했다.
+별도 native Astra 최종 리뷰는 PASS WITH NOTES(중대 결함 없음)이다. Draft PR #7 갱신·push 후
+최종 전체 테스트도 551 pass / 0 fail / 1 skip, 빌드 PASS를 확인했다. 병합 승인을 기다린다.
+계획·최신 검증·리뷰는 [루트 HANDOFF.md](../HANDOFF.md)의 Task 6 항목을 따른다.
+새 소스의 Render 배포·검증은 아직 수행하지 않았다. 아래 내용은 Task 5 운영 검증 이력이다.
 
 - 사용자 승인으로 [PR #5](https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/5)를 병합했다. 커밋: `8e16b308adee43c532bd6793cc83e1960433be54`.
 - 이번 실행의 계획·검증·검토 공백·미완료 항목은 [루트 HANDOFF.md](../HANDOFF.md)에 기록한다. 아래 2026-09-10 실측 결과는 과거 이력이며 이번 재검증 결과가 아니다.

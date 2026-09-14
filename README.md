@@ -126,7 +126,7 @@ OPENAI_API_KEY=sk-...
 | `CORS_ORIGIN` | `http://localhost:3000` | **현재 미사용** — 동일 출처라 CORS 미들웨어를 붙이지 않았다 |
 | `EXTERNAL_TIMEOUT_MS` | `10000` | 외부 API 타임아웃 |
 | `MAX_EXTERNAL_RESPONSE_BYTES` | `2000000` | 외부 응답 크기 상한 |
-| `EXTERNAL_ALLOWLIST` | (11개 호스트) | **허용목록. 여기 없는 호스트로는 요청이 나가지 않는다** |
+| `EXTERNAL_ALLOWLIST` | (`lib/config.js` 기본값) | **허용목록. 여기 없는 호스트로는 요청이 나가지 않는다** |
 | `PROVIDER_BREAKER_THRESHOLD` / `_COOLDOWN_MS` | `3` / `60000` | provider별 회로 차단기 |
 | `NEWS_CACHE_TTL_MS` | `300000` | 뉴스 피드 캐시 |
 | `MARKET_CACHE_TTL_MS` | `60000` | 시장 차트 캐시 |
@@ -221,9 +221,9 @@ Render 무료 인스턴스에 올린다. 설정은 저장소의 `render.yaml`이
 2. **15분 유휴 후 정지한다.** 다시 깨우는 데 약 1분
 3. **KCI를 쓸 수 없다.** 아웃바운드 IP가 유동이라 허용목록에 등록할 수 없다.
    한국어 검색어의 논문은 사유와 함께 비어 나간다
-3-1. **시장 차트가 동작하지 않는다.** Yahoo 차트 API와 CoinGecko가 데이터센터 IP를
-   거부한다(2026-09-10 실측). 뉴스·재무·논문·실험·분석은 모두 정상이다.
-   시세 소스 교체가 예정돼 있다 — `docs/SESSION-HANDOFF.md` §2 참고
+3-1. **기존 배포의 시장 차트 수집 실패.** Yahoo 차트 API와 CoinGecko 접근 실패가
+   운영 검증에서 관측됐다. Task 6은 Naver/Coinbase로 교체하며, 새 소스의 Render 동작은
+   아직 검증하지 않았다. 최신 검증 상태는 [`HANDOFF.md`](HANDOFF.md)를 참고한다.
 4. **월 750 instance-hours.** 개인 사용에는 넉넉하지만 계속 깨워 두면 한도에 붙는다
 5. **인스턴스를 늘리면 안 된다.** 이유는 `docs/architecture.md` 참고
 6. **비밀번호 하나가 유일한 인증이고 공개 인터넷에 노출된다**
@@ -395,8 +395,16 @@ rate limit 3종(IP·세션·로그인), 동시 실행 세마포어, TTL+LRU 캐�
 |---|---|---|
 | 뉴스 (검색) | Google News RSS (한국어·영어) | 불필요 |
 | 뉴스 (주제) | 연합뉴스·전자신문 RSS, Yahoo Finance 티커 RSS | 불필요 |
-| 주식 시세 | Yahoo Finance chart | 불필요 |
-| 코인 시세 | CoinGecko | 불필요 |
+| 주식 시세 | Naver 일봉 (매핑되지 않은 심볼은 기존 Yahoo Finance 경로) | 불필요 |
+| 코인 시세 | Coinbase Exchange BTC/ETH/SOL/XRP 일봉 (그 외 기존 CoinGecko 경로) | 불필요 |
+
+Task 6의 새 소스는 완료된 일봉 종가를 사용한다. Coinbase 가격은 해당 거래소의 USD 가격이며,
+기존 CoinGecko 집계 가격과 차이가 날 수 있다. 응답의 `chartTrend`에 출처와 기준을 표시한다.
+지원되는 새 소스가 실패하면 시장 자료 없이 부분 결과를 반환한다.
+
+운영 환경에서 `EXTERNAL_ALLOWLIST`를 직접 설정했다면 기존 호스트와 함께
+`api.stock.naver.com`, `m.stock.naver.com`, `api.exchange.coinbase.com`을 포함해야 한다.
+환경변수를 생략하면 코드 기본 허용목록을 사용한다.
 
 ### 피드 추가·변경
 
@@ -426,7 +434,7 @@ rate limit 3종(IP·세션·로그인), 동시 실행 세마포어, TTL+LRU 캐�
 
 사전에 없으면 요청에 `symbol`을 직접 넣으면 된다.
 
-> **Yahoo Finance는 비공식 엔드포인트다.** 문서화된 공개 API가 아니라 예고 없이
+> **Naver 주식과 기존 Yahoo Finance 경로는 비공식 엔드포인트다.** 예고 없이
 > 바뀌거나 차단될 수 있다. 개인 리서치 용도의 저빈도 호출을 전제로 하며,
 > 상용 서비스로 전환한다면 정식 시장 데이터 API로 교체해야 한다.
 
