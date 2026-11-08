@@ -9,6 +9,13 @@
 
 ---
 
+## 2026-11-09 B: 분석 품질 게이트 (설계 완료, 검토 대기)
+
+- 브랜치 `feature/analysis-quality-gate` — `feature/sector-baskets-opendart`(Draft PR #12)에서 땄다. PR #12 병합 후 기준을 main으로 바꾼다.
+- 설계: `docs/superpowers/specs/2026-11-09-analysis-quality-gate-design.md`(커밋 daea6b5). 결정적 검사기(`lib/quality/`) + `meta.quality` + `instrumentComparison` 스키마 + 오프라인 평가 세트(`npm run eval`). LLM 추가 호출 없음.
+- 다음: 사용자 설계 검토 → 구현 계획(writing-plans) → 서브에이전트 주도 실행.
+- 사용자는 로컬 `.env`의 `EXTERNAL_ALLOWLIST`를 `.env.example` 값으로 맞췄다(2026-11-09 확인, 17개 호스트 모두 포함).
+
 ## 2026-11-08 분야 묶음 + OpenDART (Task 10 대기)
 
 - 브랜치 `feature/sector-baskets-opendart`. 설계: `docs/superpowers/specs/2026-11-08-sector-baskets-opendart-design.md`, 계획: `docs/superpowers/plans/2026-11-08-sector-baskets-opendart.md`.
