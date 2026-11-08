@@ -1,6 +1,24 @@
-{ "name": "브리핑 제목·날짜가 원본과 다름", "context": "single", "base": "single",
-  "override": { "newsBriefing": [
-    { "sourceId": "S1", "title": "엔비디아 실적 쇼크", "source": "연합뉴스", "publishedAt": "2026-09-01T00:00:00.000Z",
-      "keyPoints": "매출 증가", "marketImplication": "의미", "needsVerification": "확인" }
-  ] },
-  "expect": { "mustFix": ["citations"], "maxScore": 90 } }
+{
+  "name": "브리핑 제목·날짜가 원본과 달라도 감점하지 않음",
+  "context": "single",
+  "base": "single",
+  "override": {
+    "newsBriefing": [
+      {
+        "sourceId": "S1",
+        "title": "엔비디아 실적 쇼크",
+        "source": "연합뉴스",
+        "publishedAt": "2026-09-01T00:00:00.000Z",
+        "keyPoints": "매출 증가",
+        "marketImplication": "의미",
+        "needsVerification": "확인"
+      }
+    ]
+  },
+  "expect": {
+    "mustNotFlag": [
+      "citations"
+    ],
+    "minScore": 100
+  }
+}

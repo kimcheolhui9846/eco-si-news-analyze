@@ -53,8 +53,16 @@ test('브리핑의 제목·출처·작성일을 원본으로 덮어쓴다', () =
     { newsBriefing: [brief('S1', { title: '엔비디아 실적 쇼크', publishedAt: '2026-09-01' })] }, { sources: SOURCES });
   assert.equal(out.newsBriefing[0].title, '엔비디아 3분기 실적 발표');
   assert.equal(out.newsBriefing[0].publishedAt, '2026-08-30T09:00:00.000Z');
-  assert.equal(issues.length, 1, '항목당 한 건');
-  assert.ok(issues[0].message.includes('제목'));
+  assert.deepEqual(issues, []);
+});
+
+test('서버가 복원한 브리핑 제목의 [T1]은 다시 고치지 않는다', () => {
+  const sources = new Map([['S1', { title: '[T1] 롤드컵 우승', source: '연합뉴스', publishedAt: '' }]]);
+  const { analysis: out, issues } = checkCitations(
+    { newsBriefing: [{ sourceId: 'S1', title: '모델 제목', source: '연합뉴스', publishedAt: '',
+      keyPoints: '핵심', marketImplication: '의미', needsVerification: '확인' }] }, { sources });
+  assert.equal(out.newsBriefing[0].title, '[T1] 롤드컵 우승');
+  assert.deepEqual(issues, []);
 });
 
 test('null 작성일 원본은 빈 문자열로 맞춘다', () => {

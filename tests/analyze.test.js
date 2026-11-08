@@ -252,9 +252,9 @@ test('품질 게이트가 브리핑 메타데이터와 면책 문구를 바로�
   assert.equal(res.body.analysis.disclaimer, DISCLAIMER);
   const q = res.body.meta.quality;
   assert.equal(q.limited, false);
-  assert.ok(q.fixed >= 2);
+  assert.ok(q.fixed >= 1);
   const checks = q.issues.map((i) => i.check);
-  assert.ok(checks.includes('citations'));
+  assert.ok(!checks.includes('citations'));
   assert.ok(checks.includes('disclaimer'));
   assert.equal(q.score, Math.max(0, 100 - 10 * q.fixed - 5 * q.warnings));
 });

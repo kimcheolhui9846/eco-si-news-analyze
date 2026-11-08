@@ -362,6 +362,18 @@ test('buildUserPrompt: 분야 묶음 안내는 데이터 구획 밖에 둔다', 
   assert.ok(afterData.includes('instrumentComparison'));
 });
 
+test('buildUserPrompt: 분야가 아니어도 종목이 2개 이상이면 비교를 요구한다', () => {
+  const user = buildUserPrompt({
+    items: ITEMS, collectedAt: '2026-11-08T00:00:00Z', instruments: [sectorInst('A'), sectorInst('B')],
+  });
+  const afterData = user.slice(user.indexOf(DATA_END));
+  assert.ok(afterData.includes('instrumentComparison'));
+  assert.ok(afterData.includes('종목 간 비교'));
+  assert.ok(!user.includes('분야 묶음:'));
+  const single = buildUserPrompt({ items: ITEMS, collectedAt: '2026-11-08T00:00:00Z', instruments: [sectorInst('A')] });
+  assert.ok(!single.includes('종목 간 비교'));
+});
+
 test('buildUserPrompt: 분야 묶음이라도 종목이 2개 미만이면 비교를 요구하지 않는다', () => {
   for (const instruments of [undefined, [], [sectorInst('A')]]) {
     const user = buildUserPrompt({ items: ITEMS, collectedAt: '2026-11-08T00:00:00Z', sector: '반도체', instruments });

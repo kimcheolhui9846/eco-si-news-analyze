@@ -19,6 +19,14 @@ test('buildQualityContext는 출처 Map과 자료 유무를 만든다', () => {
   assert.deepEqual(ctx.has, { financial: true, research: false, experiments: false });
 });
 
+test('buildQualityContext는 시장 데이터가 있는 종목만 비교 대상으로 삼는다', () => {
+  const ctx = buildQualityContext({
+    sources: SOURCES,
+    instruments: [...INSTRUMENTS, { symbol: 'AMD', name: 'AMD', assetType: 'stock', market: 'US' }],
+  });
+  assert.deepEqual(ctx.instruments, [{ symbol: 'NVDA', name: 'NVIDIA' }]);
+});
+
 test('깨끗한 응답은 100점이고 이슈가 없다', () => {
   const ctx = buildQualityContext({ sources: SOURCES, instruments: INSTRUMENTS });
   const clean = {
