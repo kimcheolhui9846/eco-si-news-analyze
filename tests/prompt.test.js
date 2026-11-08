@@ -174,6 +174,8 @@ test('본문이 있는 자료는 전문 여부를 구분해 표시한다', () =>
 // ─── Phase 2b: 재무·논문·실험 구획 ───
 
 const FINANCIAL = {
+  source: 'sec',
+  corpCode: null,
   symbol: 'NVDA',
   cik: '0001045810',
   entityName: 'NVIDIA CORP',

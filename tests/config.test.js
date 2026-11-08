@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { loadConfig } from '../server.js';
-import { bootstrap, makeClock } from './helpers.js';
+import { bootstrap, makeClock, BASE_ENV } from './helpers.js';
 
 test('숫자 환경변수를 숫자로 변환한다', () => {
   const cfg = loadConfig({
@@ -77,4 +77,12 @@ test('허용목록 기본값에 Phase 2b 호스트가 들어 있다', () => {
   for (const host of hosts) {
     assert.ok(config.externalAllowlist.includes(host), `${host}이(가) 허용목록에 없다`);
   }
+});
+
+test('OpenDART 키는 선택이고 허용 목록에 OpenDART 도메인이 있다', () => {
+  const config = loadConfig({ ...BASE_ENV, EXTERNAL_ALLOWLIST: undefined, OPENDART_API_KEY: undefined, DART_CACHE_TTL_MS: undefined });
+  assert.equal(config.opendartApiKey, '');
+  assert.equal(config.dartCacheTtlMs, 21_600_000);
+  assert.ok(config.externalAllowlist.includes('opendart.fss.or.kr'));
+  assert.equal(loadConfig({ ...BASE_ENV, OPENDART_API_KEY: 'k' }).opendartApiKey, 'k');
 });

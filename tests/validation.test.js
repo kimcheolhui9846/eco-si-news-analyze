@@ -311,6 +311,7 @@ test('정규화된 결과의 해시가 재정규화 후에도 같다', async () 
 const NEWS = [validArticle()];
 
 const FINANCIAL = {
+  source: 'sec', corpCode: null,
   symbol: 'NVDA', cik: '0001045810', entityName: 'NVIDIA CORP',
   filingUrl: 'https://www.sec.gov/Archives/edgar/data/1045810/000104581026000075/0001045810-26-000075-index.htm',
   metrics: [{
