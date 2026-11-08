@@ -1,0 +1,8 @@
+{
+  "sources": {
+    "S1": { "title": "엔비디아 3분기 실적 발표", "source": "연합뉴스", "publishedAt": "2026-08-30T09:00:00.000Z" },
+    "S2": { "title": "데이터센터 수요 확대 전망", "source": "전자신문", "publishedAt": "2026-08-31T09:00:00.000Z" }
+  },
+  "instruments": [{ "symbol": "NVDA", "name": "NVIDIA" }],
+  "has": { "financial": false, "research": false, "experiments": false }
+}

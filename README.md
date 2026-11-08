@@ -519,6 +519,21 @@ npm test
 MY_SECRET_PASSWORD=your-password ./scripts/verify.sh
 ```
 
+### 분석 품질 평가 세트
+
+```bash
+npm run eval
+```
+
+LLM을 부르지 않는다. `eval/cases/*.json`의 고정 응답에 품질 게이트(`lib/quality/`)를 돌려 기대와 대조하고, 케이스별 통과 여부·검사기별 적중·평균 점수를 출력한다. 실패가 있으면 종료 코드 1이다. `npm test`도 같은 케이스를 돌린다(`tests/eval.test.js`).
+
+실제 분석 응답을 케이스로 추가하는 방법:
+
+1. 응답 JSON의 `analysis`와, 같은 요청의 출처 목록(`sources`)을 저장한다.
+2. 개인 정보·키·세션 토큰이 없는지 확인하고, 있으면 지운다.
+3. `eval/cases/NN-이름.json`을 만든다. `context`에는 `sources`를 `{ "S1": { "title", "source", "publishedAt" } }` 형태로, `instruments`를 `[{ "symbol", "name" }]`로, `has`를 자료 유무로 적는다. `response`에 `analysis`를 넣는다.
+4. `expect`에 기대(`mustFix`, `mustWarn`, `mustNotFlag`, `minScore`, `maxScore`)를 적고 `npm run eval`로 확인한다.
+
 ---
 
 ## GitHub workflow

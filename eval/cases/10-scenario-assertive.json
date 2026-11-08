@@ -1,0 +1,3 @@
+{ "name": "단정적 방향 예측", "context": "single", "base": "single",
+  "override": { "trendAnalysis": "실적 발표 이후 주가는 반드시 상승할 것이다[S1]." },
+  "expect": { "mustWarn": ["scenarios"], "maxScore": 95 } }

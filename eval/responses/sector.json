@@ -1,0 +1,35 @@
+{
+  "summary": "반도체 대표 종목 중 엔비디아의 데이터센터 매출 증가가 두드러진다[S1]. 수요 확대 전망도 있다[S2].",
+  "newsBriefing": [
+    {
+      "sourceId": "S1", "title": "엔비디아 3분기 실적 발표", "source": "연합뉴스",
+      "publishedAt": "2026-08-30T09:00:00.000Z", "keyPoints": "데이터센터 부문 매출 증가",
+      "marketImplication": "AI 가속기 수요가 실적에 반영되고 있다", "needsVerification": "부문별 이익률은 기사에 없다"
+    },
+    {
+      "sourceId": "S2", "title": "데이터센터 수요 확대 전망", "source": "전자신문",
+      "publishedAt": "2026-08-31T09:00:00.000Z", "keyPoints": "클라우드 업체 투자 확대 전망",
+      "marketImplication": "메모리 수요에도 영향을 줄 수 있다", "needsVerification": "메모리 업체 언급은 없다"
+    }
+  ],
+  "trendAnalysis": "네 종목의 시세 흐름은 엇갈린다. 뉴스는 엔비디아에 집중되어 있어 나머지 종목과의 인과관계는 판단하기 어렵다[S1].",
+  "scenarios": [
+    {
+      "type": "기본 시나리오", "premise": "AI 가속기 수요가 유지된다", "indicatorsToWatch": "엔비디아 데이터센터 매출, HBM 출하",
+      "possibleDirection": "가속기와 메모리 업체 모두 수요 혜택을 볼 수 있다", "invalidationCondition": "데이터센터 매출이 두 분기 연속 줄면 무효",
+      "cautions": "메모리 업체 자료는 뉴스에 없다"
+    }
+  ],
+  "risks": ["수요가 한 업체에 집중되어 있다[S1]"],
+  "monitoringIndicators": ["HBM 출하량", "파운드리 가동률"],
+  "instrumentComparison": [
+    { "symbol": "NVDA", "name": "NVIDIA", "positioning": "AI 가속기 설계", "keyDifference": "뉴스와 재무 자료가 가장 많다[F1]" },
+    { "symbol": "TSM", "name": "TSMC", "positioning": "파운드리", "keyDifference": "재무 자료가 없다" },
+    { "symbol": "005930.KS", "name": "삼성전자", "positioning": "메모리·파운드리", "keyDifference": "관련 뉴스가 없다" },
+    { "symbol": "000660.KS", "name": "SK하이닉스", "positioning": "메모리(HBM)", "keyDifference": "관련 뉴스가 없다" }
+  ],
+  "financialSummary": { "available": "자료 있음", "periodBasis": "NVIDIA 최근 분기 제출 서류", "notes": "NVIDIA 매출 지표만 제공됐다[F1]." },
+  "researchSummary": { "available": "자료 부족", "maturity": "자료 부족", "notes": "제공된 자료가 없습니다." },
+  "experimentSummary": { "available": "자료 부족", "evidenceLevel": "자료 부족", "notes": "제공된 자료가 없습니다." },
+  "disclaimer": "본 분석은 제공된 자료를 기반으로 한 정보 제공 목적의 분석이며, 특정 금융상품의 매수·매도 또는 투자 수익을 보장하는 투자 권유가 아닙니다."
+}

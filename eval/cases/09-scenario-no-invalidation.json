@@ -1,0 +1,6 @@
+{ "name": "무효화 조건 누락", "context": "single", "base": "single",
+  "override": { "scenarios": [
+    { "type": "기본 시나리오", "premise": "수요 유지", "indicatorsToWatch": "매출", "possibleDirection": "개선 가능",
+      "invalidationCondition": "자료 부족", "cautions": "단일 분기" }
+  ] },
+  "expect": { "mustWarn": ["scenarios"], "maxScore": 95 } }
