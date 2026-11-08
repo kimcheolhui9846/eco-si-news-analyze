@@ -69,3 +69,18 @@ test('loadDirectory: 형식이 틀리면 경고하고 그 목록만 비운다', 
   assert.deepEqual(d.size, { us: 1, kr: 0 });
   assert.equal(warnings.length, 1);
 });
+
+test('findInQuery: 흔한 약어와 한 글자 단어는 티커로 보지 않는다', () => {
+  const d = createDirectory({
+    us: [
+      ['IT', '0000749251', 'GARTNER INC'],
+      ['EU', '0001500881', 'enCore Energy Corp.'],
+      ['A', '0001090872', 'AGILENT TECHNOLOGIES INC'],
+      ['PLTR', '0001321655', 'Palantir Technologies Inc.'],
+    ],
+  });
+  assert.equal(d.findInQuery('IT 업계 전망'), null);
+  assert.equal(d.findInQuery('EU 규제'), null);
+  assert.equal(d.findInQuery('오늘 A 등급'), null);
+  assert.equal(d.findInQuery('PLTR 실적')?.symbol, 'PLTR');
+});
