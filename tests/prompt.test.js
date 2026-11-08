@@ -349,14 +349,24 @@ test('buildUserPrompt: 종목마다 시장 한 줄, 재무 블록에 출처 ID�
   assert.ok(user.includes('(OpenDART, 출처 ID: F2)'));
 });
 
+const sectorInst = (symbol) => ({ symbol, name: symbol, assetType: 'stock', market: 'US', marketData: MD2(symbol) });
+
 test('buildUserPrompt: 분야 묶음 안내는 데이터 구획 밖에 둔다', () => {
   const user = buildUserPrompt({
     items: ITEMS, collectedAt: '2026-11-08T00:00:00Z', sector: '반도체',
-    instruments: [{ symbol: 'A', name: 'A', assetType: 'stock', market: 'US', marketData: MD2('A') }],
+    instruments: [sectorInst('A'), sectorInst('B')],
   });
   const afterData = user.slice(user.indexOf(DATA_END));
-  assert.ok(afterData.includes("'반도체' 분야 대표 종목 1개"));
+  assert.ok(afterData.includes("'반도체' 분야 대표 종목 2개"));
   assert.ok(afterData.includes('종목 간 비교'));
+});
+
+test('buildUserPrompt: 분야 묶음이라도 종목이 2개 미만이면 비교를 요구하지 않는다', () => {
+  for (const instruments of [undefined, [], [sectorInst('A')]]) {
+    const user = buildUserPrompt({ items: ITEMS, collectedAt: '2026-11-08T00:00:00Z', sector: '반도체', instruments });
+    assert.ok(!user.includes('분야 묶음:'), `종목 ${instruments?.length ?? 0}개`);
+    assert.ok(!user.includes('종목 간 비교'), `종목 ${instruments?.length ?? 0}개`);
+  }
 });
 
 test('buildUserPrompt: 종목이 없으면 시장·재무가 자료 부족', () => {
