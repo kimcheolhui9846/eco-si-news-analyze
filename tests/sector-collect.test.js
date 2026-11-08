@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import request from 'supertest';
 import { createDirectory } from '../server.js';
-import { bootstrap, makeClock, makeMockLlm, TEST_PASSWORD } from './helpers.js';
+import {
+  analysisBody, bootstrap, makeClock, makeMockLlm, TEST_PASSWORD,
+} from './helpers.js';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const DART = fixture('dart-samsung-q3.json');
@@ -85,11 +87,10 @@ test('분석 요청에 같은 규칙으로 되돌려 보내면 확인 토큰이 
     .set('Authorization', `Bearer ${token}`)
     .send({ query: '반도체 업황', include: ['news', 'market', 'financial'] });
 
-  const instruments = c.body.instruments.filter((i) => i.marketData || i.financial).map(({ series, ...rest }) => rest);
   const res = await request(app).post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', c.body.confirmToken)
-    .send({ newsList: c.body.newsList, instruments, sector: '반도체' });
+    .send(analysisBody(c.body));
 
   assert.equal(res.status, 200, JSON.stringify(res.body));
   assert.ok(llm.calls[0].user.includes("'반도체' 분야 대표 종목"));

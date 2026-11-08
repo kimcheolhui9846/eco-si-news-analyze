@@ -3,20 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import request from 'supertest';
 import { createDirectory } from '../server.js';
-import { bootstrap, makeClock, makeMockLlm, TEST_PASSWORD } from './helpers.js';
-
-/** 수집 응답을 분석 요청으로 되돌린다. 클라이언트와 같은 규칙이다. */
-const analysisBody = (c) => {
-  const body = { newsList: c.newsList };
-  const instruments = (c.instruments ?? [])
-    .filter((i) => i.marketData || i.financial)
-    .map(({ series, ...rest }) => rest);
-  if (instruments.length) body.instruments = instruments;
-  if (c.collected?.resolution?.sector) body.sector = c.collected.resolution.sector;
-  if (c.research?.length) body.research = c.research;
-  if (c.experiments?.length) body.experiments = c.experiments;
-  return body;
-};
+import {
+  analysisBody, bootstrap, makeClock, makeMockLlm, TEST_PASSWORD,
+} from './helpers.js';
 
 // 실제 data/ 스냅샷에 의존하지 않도록 디렉터리를 주입한다.
 const DIRECTORY = createDirectory({
@@ -326,9 +315,9 @@ test('같은 수집 요청을 두 번 하면 외부 호출이 늘지 않는다',
   assert.equal(http.calls.length, before);
 });
 
-// ─── marketSeries (Phase 3) ───
+// ─── 차트 시계열 instruments[].series (Phase 3) ───
 
-test('collect 응답에 marketSeries가 포함된다', async () => {
+test('collect 응답의 instruments[0].series에 시계열이 실린다', async () => {
   const { app } = setup();
   const token = await login(app);
   const res = await collect(app, token);
@@ -338,7 +327,7 @@ test('collect 응답에 marketSeries가 포함된다', async () => {
   assert.equal(typeof res.body.instruments[0].series.indicators.changePct, 'number');
 });
 
-test('시장 데이터를 못 가져오면 marketSeries도 없다', async () => {
+test('시장 데이터를 못 가져오면 instruments[0].series도 없다', async () => {
   const { 'query1.finance.yahoo.com/v8': _removed, 'api.stock.naver.com/stock/NVDA.O/basic': _metaRemoved, 'api.stock.naver.com/chart/foreign/item/NVDA.O/day': _chartRemoved, ...rest } = ROUTES;
   const http = makeHttp({ ...rest, 'query1.finance.yahoo.com': new Error('다운') });
   const { app } = setup({ http });
@@ -349,7 +338,7 @@ test('시장 데이터를 못 가져오면 marketSeries도 없다', async () => 
   assert.equal(res.body.instruments[0].series, undefined);
 });
 
-test('marketSeries가 분석 프롬프트에 들어가지 않는다', async () => {
+test('instruments[0].series가 분석 프롬프트에 들어가지 않는다', async () => {
   // 숫자 수십 쌍을 넣으면 토큰만 늘고, chartTrend 문장이 이미 요약하고 있다.
   const { app, llm } = setup();
   const token = await login(app);
@@ -368,7 +357,7 @@ test('marketSeries가 분석 프롬프트에 들어가지 않는다', async () =
     '시계열 날짜가 분석 프롬프트에 들어갔다');
 });
 
-test('marketSeries 추가가 확인 토큰을 깨지 않는다', async () => {
+test('instruments[0].series가 확인 토큰을 깨지 않는다', async () => {
   // cacheKey에 영향을 주면 collect가 발급한 토큰이 analyze에서 거부된다.
   const { app } = setup();
   const token = await login(app);

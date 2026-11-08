@@ -3,20 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import request from 'supertest';
 import { createDirectory } from '../server.js';
-import { bootstrap, makeClock, makeMockLlm, TEST_PASSWORD } from './helpers.js';
-
-/** 수집 응답을 분석 요청으로 되돌린다. 클라이언트와 같은 규칙이다. 빈 자료는 넣지 않는다. */
-const analysisBody = (c) => {
-  const body = { newsList: c.newsList };
-  const instruments = (c.instruments ?? [])
-    .filter((i) => i.marketData || i.financial)
-    .map(({ series, ...rest }) => rest);
-  if (instruments.length) body.instruments = instruments;
-  if (c.collected?.resolution?.sector) body.sector = c.collected.resolution.sector;
-  if (c.research?.length) body.research = c.research;
-  if (c.experiments?.length) body.experiments = c.experiments;
-  return body;
-};
+import {
+  analysisBody, bootstrap, makeClock, makeMockLlm, TEST_PASSWORD,
+} from './helpers.js';
 
 // 실제 data/ 스냅샷에 의존하지 않도록 디렉터리를 주입한다.
 const DIRECTORY = createDirectory({
@@ -139,7 +128,7 @@ test('다섯 가지를 모두 선택하면 세 자료가 응답에 실린다', a
   assert.equal(res.body.collected.financialMetricCount, res.body.instruments[0].financial.metrics.length);
 });
 
-test('한국 종목은 CIK가 없어 재무가 빠지고 사유가 남는다', async () => {
+test('OpenDART 키가 없으면 한국 종목 재무가 빠지고 사유가 남는다', async () => {
   // 로컬 .env의 OpenDART 키와 무관하게 "한국 재무를 못 가져온다" 상황을 고정한다.
   const { app } = boot({ env: { OPENDART_API_KEY: '' } });
   const agent = request.agent(app);
