@@ -64,7 +64,7 @@ Render 운영 사이트에서 "반도체", "AI"로 검색하면 시장·재무 �
 | 모듈 | 책임 |
 |---|---|
 | `lib/providers/sectors.js` | `SECTOR_BASKETS`와 `lookupSector(query)`. 검색어를 단어로 나눠 키워드와 대조한다(일치 규칙은 §4.3). |
-| `lib/providers/directory.js` | 회사명·티커 → `{ symbol, name, assetType, market: 'US'\|'KR', cik?, corpCode? }`. 아래 스냅샷 두 개를 기동 시 한 번 읽는다. |
+| `lib/providers/directory.js` | 회사명·티커 → `{ symbol, name, assetType, market: 'US'\|'KR'\|'CRYPTO', cik?, corpCode? }`. 코인은 디렉터리가 아니라 분야 사전·별칭에서 오며 `market: 'CRYPTO'`다. 아래 스냅샷 두 개를 기동 시 한 번 읽는다. |
 | `data/us-tickers.json` | SEC `company_tickers.json` 스냅샷(티커, 영문명, CIK). 저장소에 커밋한다. |
 | `data/kr-listed.json` | OpenDART `corpCode.xml`에서 상장사(`stock_code`가 있는 항목)만 거른 스냅샷(회사명, 종목코드, corp_code, 시장 구분). 저장소에 커밋한다. |
 | `scripts/refresh-directory.js` | 두 스냅샷을 다시 받는다. 사람이 수동으로 실행한다. OpenDART 목록은 ZIP이므로 압축 해제 라이브러리를 **devDependency**로만 쓴다. |
@@ -146,7 +146,8 @@ collected.resolution: {
 
 ### 분석 요청 (`POST /api/analyze`)
 
-- 스키마: `instruments: array(max 4)`. 원소는 `{ symbol, name, marketData?, financial? }`이며 `series`는 받지 않는다.
+- 스키마: `instruments: array(1..4)`. 원소는 `{ symbol, name, assetType, market, marketData?, financial? }`이며 `series`는 받지 않는다.
+  시세와 재무가 모두 없는 종목은 분석 입력에서 뺀다. 남는 종목이 없으면 필드 자체를 싣지 않는다.
 - `cacheKey`에 `instruments`를 넣는다. 견적 자료와 실행 자료가 다르면 확인 토큰이 막는 기존 보호를 유지한다.
 
 ### 프롬프트와 출처
