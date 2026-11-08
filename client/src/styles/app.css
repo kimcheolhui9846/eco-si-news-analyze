@@ -215,3 +215,16 @@ a { color: var(--accent); }
 .table-scroll { overflow-x: auto; }
 .comparison td span + span { display: block; }
 .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+
+/* ─── 품질 검사 결과 ─── */
+.quality-line { margin: 0; font-weight: 600; cursor: default; }
+.quality-badge summary { cursor: pointer; }
+.quality-issues { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.4rem; }
+.quality-issue { display: flex; gap: 0.5rem; align-items: baseline; }
+.quality-tag { flex: none; font-size: 0.75rem; padding: 0.1rem 0.45rem; border-radius: 999px; border: 1px solid currentColor; }
+.quality-issue.fixed .quality-tag { opacity: 0.75; }
+.quality-issue.warning .quality-tag { font-weight: 600; }
+
+/* ─── 종목별 비교 분석 ─── */
+.instrument-insight { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.instrument-insight p { margin: 0.25rem 0 0; }
