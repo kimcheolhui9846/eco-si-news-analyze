@@ -1,0 +1,12 @@
+{
+  "source": "fixture",
+  "fetchedAt": "2026-11-08T00:00:00.000Z",
+  "rows": [
+    ["NVDA", "0001045810", "NVIDIA CORP"],
+    ["AAPL", "0000320193", "Apple Inc."],
+    ["GM", "0001467858", "General Motors Co"],
+    ["PLTR", "0001321655", "Palantir Technologies Inc."],
+    ["AI", "0001577526", "C3.ai, Inc."],
+    ["TSM", "0001046179", "TAIWAN SEMICONDUCTOR MANUFACTURING CO LTD"]
+  ]
+}
