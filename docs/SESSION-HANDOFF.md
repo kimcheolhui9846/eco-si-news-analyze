@@ -9,11 +9,16 @@
 
 ---
 
-## 2026-11-09 B: 분석 품질 게이트 (설계 완료, 검토 대기)
+## 2026-11-09 B: 분석 품질 게이트 (구현·리뷰·실호출 검증 완료, 푸시 전)
 
-- 브랜치 `feature/analysis-quality-gate` — `feature/sector-baskets-opendart`(Draft PR #12)에서 땄다. PR #12 병합 후 기준을 main으로 바꾼다.
-- 설계: `docs/superpowers/specs/2026-11-09-analysis-quality-gate-design.md`(커밋 daea6b5). 결정적 검사기(`lib/quality/`) + `meta.quality` + `instrumentComparison` 스키마 + 오프라인 평가 세트(`npm run eval`). LLM 추가 호출 없음.
-- 다음: 사용자 설계 검토 → 구현 계획(writing-plans) → 서브에이전트 주도 실행.
+- 브랜치 `feature/analysis-quality-gate` — `feature/sector-baskets-opendart`(Draft PR #12)에서 땄다. PR #12 병합 후 기준을 main으로 바꾼다. **아직 푸시하지 않았다.**
+- 설계: `docs/superpowers/specs/2026-11-09-analysis-quality-gate-design.md`, 계획: `docs/superpowers/plans/2026-11-09-analysis-quality-gate.md`.
+- 구현: `lib/quality/`(citations·availability·disclaimer·scenarios·comparison + `assessQuality`), `server.js` 분석 경로 연결(`meta.quality`, 캐시 포함), 응답 스키마 `instrumentComparison`, `eval/`(`npm run eval`, 16케이스), 화면 `QualityBadge`·`InstrumentInsight`.
+- 계획 대비 사용자 승인 변경: ① 단정 표현 정규식 보정(한다체 권유, 목표가는 통화 단위 필수, 부정·과거 수익률 제외, 무효화 조건 빈 값 확대), 종목 심볼 대소문자 무시. ② 최종 리뷰 후: 브리핑 제목·출처·날짜는 서버 값으로 **조용히** 덮어쓰고 감점하지 않음, 복원된 제목의 `[T1]` 등은 건드리지 않음, 비교 검사 종목은 시세가 있는 종목만, 분야가 아니어도 2종목 이상이면 비교 지시.
+- 검증: `npm test` 709 / 708 pass / 0 fail / 1 skip, `npm run eval` 16/16, `npm run build:client` 성공(Task 8).
+- 실호출(gpt-4o, 로컬 live, 2회 합계 약 $0.025): 엔비디아 100점(교정·경고 0), 반도체 100점, `instrumentComparison` 4종목 모두 채움. 두 응답을 eval 케이스 15·16으로 추가(커밋 fb8f594).
+- 관찰: 반도체 비교에서 삼성전자·SK하이닉스의 "핵심 차이"에 재무 자료 없이(OpenDART 키 없음) 사업 구조를 서술했다. 수치·사실 대조는 이번 범위 밖(설계 "범위 밖" 참고).
+- 남은 사소 항목(최종 리뷰에서 병합 후로 미룸): 분석 비교 지시의 종목 수가 시세 없는 종목까지 센다(1/4만 시세 있으면 요청 후 비움), "목표주가 15만원" 미검출, eval 러너 main-guard 경로 비교, 검사기 예외 무로그, 스펙의 "초기 케이스(13개)" 표기.
 - 사용자는 로컬 `.env`의 `EXTERNAL_ALLOWLIST`를 `.env.example` 값으로 맞췄다(2026-11-09 확인, 17개 호스트 모두 포함).
 
 ## 2026-11-08 분야 묶음 + OpenDART (Task 10 대기)
