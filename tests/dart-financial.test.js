@@ -100,7 +100,7 @@ test('fetch: 정상 응답이면 재무와 공시 링크를 돌려주고 캐시�
   assert.ok(http.calls[0].includes('reprt_code=11014'));
 });
 
-test('fetch: 결과가 분석 스키마를 통과한다', { skip: 'Task 7에서 분석 스키마에 instruments가 생기면 활성화' }, async () => {
+test('fetch: 결과가 분석 스키마를 통과한다', async () => {
   const { financial } = await provider(makeHttp(() => FIXTURE)).fetch({ corpCode: '00126380', symbol: '005930.KS', name: '삼성전자' });
   const schema = buildAnalyzeSchema(loadConfig(BASE_ENV));
   const parsed = schema.safeParse({

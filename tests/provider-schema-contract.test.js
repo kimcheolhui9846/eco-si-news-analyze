@@ -91,5 +91,5 @@ test('재무 provider 출력이 분석 스키마를 통과한다', async () => {
   });
 
   const financial = await provider.fetch({ cik: '0001045810', symbol: 'NVDA' });
-  accept({ financial });
+  accept({ instruments: [{ symbol: 'NVDA', name: 'NVIDIA', assetType: 'stock', market: 'US', financial }] });
 });

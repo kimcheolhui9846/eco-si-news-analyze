@@ -156,7 +156,8 @@ test('항목이 자기 타입을 가지면 그것을 쓴다', () => {
 
 test('논문·실험·재무가 각자 타입으로 출처에 실린다', () => {
   const sources = buildExtraSources({
-    research: [PAPER], experiments: [TRIAL], financial: FINANCIAL,
+    research: [PAPER], experiments: [TRIAL],
+    instruments: [{ symbol: 'NVDA', name: 'NVIDIA', financial: FINANCIAL }],
     collectedAt: '2026-09-04T00:00:00.000Z',
   });
 
@@ -173,7 +174,8 @@ test('화이트리스트에 논문과 실험 URL이 들어간다', () => {
   // 넣지 않으면 stripFabricatedUrls가 진짜 출처를 위조로 오판한다.
   const list = collectUrlWhitelist({
     items: [{ url: 'https://a.example/1' }],
-    research: [PAPER], experiments: [TRIAL], financial: FINANCIAL,
+    research: [PAPER], experiments: [TRIAL],
+    instruments: [{ symbol: 'NVDA', name: 'NVIDIA', financial: FINANCIAL }],
   });
 
   assert.ok(list.has('https://doi.org/10.1/abc'));
@@ -190,4 +192,25 @@ test('논문 URL이 위조로 제거되지 않는다', () => {
   );
   assert.equal(removed, 0);
   assert.match(value.report, /https:\/\/doi\.org\/10\.1\/abc/);
+});
+
+test('buildExtraSources: 종목별 재무 출처를 F1..Fn으로 만든다', () => {
+  const finOf = (name, source, url) => ({ source, symbol: name, cik: null, corpCode: null, entityName: name, filingUrl: url, metrics: [{ filed: '2026-11-14' }], derived: [], degraded: [] });
+  const sources = buildExtraSources({
+    collectedAt: '2026-11-08T00:00:00Z',
+    instruments: [
+      { symbol: 'NVDA', name: 'NVIDIA', financial: finOf('NVIDIA', 'sec', 'https://www.sec.gov/x') },
+      { symbol: '005930.KS', name: '삼성전자', financial: finOf('삼성전자', 'dart', 'https://dart.fss.or.kr/dsaf001/main.do?rcpNo=1') },
+    ],
+  });
+  assert.deepEqual(sources.map((s) => [s.sourceId, s.source, s.title]), [
+    ['F1', 'SEC EDGAR', 'NVIDIA SEC 제출 서류'],
+    ['F2', 'OpenDART', '삼성전자 DART 공시'],
+  ]);
+});
+
+test('collectUrlWhitelist: DART 공시 링크를 포함한다', () => {
+  const url = 'https://dart.fss.or.kr/dsaf001/main.do?rcpNo=1';
+  const urls = collectUrlWhitelist({ instruments: [{ financial: { filingUrl: url, metrics: [{}] } }] });
+  assert.ok(urls.has(url));
 });

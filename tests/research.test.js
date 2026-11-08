@@ -2,7 +2,27 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import request from 'supertest';
+import { createDirectory } from '../server.js';
 import { bootstrap, makeClock, makeMockLlm, TEST_PASSWORD } from './helpers.js';
+
+/** 수집 응답을 분석 요청으로 되돌린다. 클라이언트와 같은 규칙이다. */
+const analysisBody = (c) => {
+  const body = { newsList: c.newsList };
+  const instruments = (c.instruments ?? [])
+    .filter((i) => i.marketData || i.financial)
+    .map(({ series, ...rest }) => rest);
+  if (instruments.length) body.instruments = instruments;
+  if (c.collected?.resolution?.sector) body.sector = c.collected.resolution.sector;
+  if (c.research?.length) body.research = c.research;
+  if (c.experiments?.length) body.experiments = c.experiments;
+  return body;
+};
+
+// 실제 data/ 스냅샷에 의존하지 않도록 디렉터리를 주입한다.
+const DIRECTORY = createDirectory({
+  us: [['NVDA', '0001045810', 'NVIDIA CORP']],
+  kr: [['삼성전자', '005930', '00126380']],
+});
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const NAVER_META = JSON.stringify({ reutersCode: 'NVDA.O', symbolCode: 'NVDA', currencyType: { code: 'USD' }, stockExchangeType: { name: 'NASDAQ', nationCode: 'USA' }, marketStatus: 'CLOSE', localTradedAt: '2026-08-30T16:00:00-04:00', closePrice: '218.29' });
@@ -56,7 +76,9 @@ const validReport = () => JSON.stringify({
 const setup = (over = {}) => {
   const http = over.http ?? makeHttp();
   const llm = over.llm ?? makeMockLlm(() => ({ content: validReport(), model: 'mock' }));
-  const ctx = bootstrap({ clock: over.clock ?? makeClock(Date.parse('2026-09-01T12:00:00Z')), llm, http, env: over.env });
+  const ctx = bootstrap({
+    clock: over.clock ?? makeClock(Date.parse('2026-09-01T12:00:00Z')), llm, http, env: over.env, directory: DIRECTORY,
+  });
   return { ...ctx, http, llm };
 };
 
@@ -104,8 +126,8 @@ test('뉴스와 시장 데이터를 모두 반환한다', async () => {
 
   assert.equal(res.status, 200, JSON.stringify(res.body.error));
   assert.ok(res.body.newsList.length > 0);
-  assert.ok(res.body.marketData.assetName);
-  assert.ok(res.body.marketData.chartTrend.length > 20);
+  assert.ok(res.body.instruments[0].marketData.assetName);
+  assert.ok(res.body.instruments[0].marketData.chartTrend.length > 20);
 });
 
 test('수집 메타데이터를 반환한다', async () => {
@@ -113,8 +135,8 @@ test('수집 메타데이터를 반환한다', async () => {
   const token = await login(app);
   const res = await collect(app, token);
 
-  assert.equal(res.body.collected.resolvedSymbol, 'NVDA');
-  assert.equal(res.body.collected.symbolSource, 'explicit');
+  assert.equal(res.body.collected.resolution.symbols[0], 'NVDA');
+  assert.equal(res.body.collected.resolution.kind, 'explicit');
   assert.ok(Array.isArray(res.body.collected.feedsUsed));
   assert.equal(typeof res.body.collected.newsCount, 'number');
   assert.equal(typeof res.body.collected.headlineOnlyCount, 'number');
@@ -137,8 +159,8 @@ test('symbol 없이 한글 회사명만으로 별칭 해석된다', async () => 
   const token = await login(app);
   const res = await collect(app, token, { query: '삼성전자 반도체 실적' });
 
-  assert.equal(res.body.collected.resolvedSymbol, '005930.KS');
-  assert.equal(res.body.collected.symbolSource, 'alias');
+  assert.equal(res.body.collected.resolution.symbols[0], '005930.KS');
+  assert.equal(res.body.collected.resolution.kind, 'company');
 });
 
 // ─── 분석 엔진 연결 ───
@@ -151,7 +173,7 @@ test('수집 결과를 그대로 분석에 넘길 수 있다', async () => {
   const analyzed = await request(app).post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', c.body.confirmToken)
-    .send({ newsList: c.body.newsList, marketData: c.body.marketData });
+    .send(analysisBody(c.body));
 
   assert.equal(analyzed.status, 200, JSON.stringify(analyzed.body.error));
   assert.equal(llm.calls.length, 1);
@@ -168,7 +190,7 @@ test('contentKind가 붙은 newsList를 분석 스키마가 거부하지 않는�
   const analyzed = await request(app).post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', c.body.confirmToken)
-    .send({ newsList: c.body.newsList, marketData: c.body.marketData });
+    .send(analysisBody(c.body));
 
   assert.notEqual(analyzed.status, 400);
 });
@@ -190,7 +212,7 @@ test('수집 후 newsList를 변조하면 확인 토큰이 통하지 않는다',
   const res = await request(app).post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', c.body.confirmToken)
-    .send({ newsList: tampered, marketData: c.body.marketData });
+    .send({ ...analysisBody(c.body), newsList: tampered });
 
   assert.equal(res.status, 428);
   assert.equal(llm.calls.length, 0);
@@ -207,7 +229,7 @@ test('시장 데이터가 실패해도 뉴스만으로 200을 반환한다', asy
   const res = await collect(app, token);
 
   assert.equal(res.status, 200);
-  assert.equal(res.body.marketData, undefined);
+  assert.equal(res.body.instruments[0].marketData, undefined);
   assert.ok(res.body.collected.degraded.some((d) => d.provider === 'market'));
 });
 
@@ -217,7 +239,8 @@ test('심볼을 해석하지 못하면 뉴스만 수집한다', async () => {
   const res = await collect(app, token, { query: '알수없는주제입니다' });
 
   assert.equal(res.status, 200);
-  assert.equal(res.body.collected.symbolSource, 'unresolved');
+  assert.equal(res.body.collected.resolution.kind, 'unresolved');
+  assert.deepEqual(res.body.instruments, []);
 });
 
 test('모든 뉴스 피드가 실패하면 502를 반환한다', async () => {
@@ -282,7 +305,7 @@ test('RSS에 심어진 지시문이 데이터 구획에 갇힌다', async () => 
   await request(app).post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', c.body.confirmToken)
-    .send({ newsList: c.body.newsList, marketData: c.body.marketData });
+    .send(analysisBody(c.body));
 
   assert.ok(llm.calls.length > 0, 'LLM이 호출되지 않아 검증할 수 없다');
   const call = llm.calls[0];
@@ -310,9 +333,9 @@ test('collect 응답에 marketSeries가 포함된다', async () => {
   const token = await login(app);
   const res = await collect(app, token);
 
-  assert.ok(res.body.marketSeries, 'marketSeries가 없다');
-  assert.ok(res.body.marketSeries.points.length > 1);
-  assert.equal(typeof res.body.marketSeries.indicators.changePct, 'number');
+  assert.ok(res.body.instruments[0].series, 'marketSeries가 없다');
+  assert.ok(res.body.instruments[0].series.points.length > 1);
+  assert.equal(typeof res.body.instruments[0].series.indicators.changePct, 'number');
 });
 
 test('시장 데이터를 못 가져오면 marketSeries도 없다', async () => {
@@ -323,7 +346,7 @@ test('시장 데이터를 못 가져오면 marketSeries도 없다', async () => 
   const res = await collect(app, token);
 
   assert.equal(res.status, 200);
-  assert.equal(res.body.marketSeries, undefined);
+  assert.equal(res.body.instruments[0].series, undefined);
 });
 
 test('marketSeries가 분석 프롬프트에 들어가지 않는다', async () => {
@@ -335,12 +358,12 @@ test('marketSeries가 분석 프롬프트에 들어가지 않는다', async () =
   await request(app).post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', c.body.confirmToken)
-    .send({ newsList: c.body.newsList, marketData: c.body.marketData });
+    .send(analysisBody(c.body));
 
-  const firstPoint = c.body.marketSeries.points[0];
+  const firstPoint = c.body.instruments[0].series.points[0];
   assert.equal(llm.calls[0].user.includes('marketSeries'), false,
     '시계열 값이 프롬프트에 들어갔다');
-  assert.equal(llm.calls[0].user.includes(JSON.stringify(c.body.marketSeries.points)), false);
+  assert.equal(llm.calls[0].user.includes(JSON.stringify(c.body.instruments[0].series.points)), false);
   assert.equal(llm.calls[0].user.includes(firstPoint.t), false,
     '시계열 날짜가 분석 프롬프트에 들어갔다');
 });
@@ -354,7 +377,7 @@ test('marketSeries 추가가 확인 토큰을 깨지 않는다', async () => {
   const res = await request(app).post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', c.body.confirmToken)
-    .send({ newsList: c.body.newsList, marketData: c.body.marketData });
+    .send(analysisBody(c.body));
 
   assert.equal(res.status, 200, JSON.stringify(res.body.error));
 });

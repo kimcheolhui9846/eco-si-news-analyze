@@ -92,36 +92,35 @@ test('기사 안의 허용되지 않은 필드를 거부한다', () => {
   assert.equal(result.success, false);
 });
 
+/** 종목 하나에 marketData를 실은 분석 요청. */
+const withMarket = (marketData) => ({
+  newsList: [validArticle()],
+  instruments: [{ symbol: 'NVDA', name: '엔비디아', assetType: 'stock', market: 'US', marketData }],
+});
+
 test('marketData는 선택이지만 있으면 형식을 검증한다', () => {
   assert.equal(parse({ newsList: [validArticle()] }).success, true);
 
-  assert.equal(parse({
-    newsList: [validArticle()],
-    marketData: {
-      assetName: '엔비디아', currentPrice: '182.50',
-      priceChange: '+2.3%', chartTrend: '20일 이동평균 상회',
-    },
-  }).success, true);
+  assert.equal(parse(withMarket({
+    assetName: '엔비디아', currentPrice: '182.50',
+    priceChange: '+2.3%', chartTrend: '20일 이동평균 상회',
+  })).success, true);
 
-  assert.equal(parse({ newsList: [validArticle()], marketData: '엔비디아' }).success, false);
-  assert.equal(parse({ newsList: [validArticle()], marketData: [] }).success, false);
+  assert.equal(parse(withMarket('엔비디아')).success, false);
+  assert.equal(parse(withMarket([])).success, false);
 });
 
 test('marketData의 가격은 숫자와 문자열을 모두 받는다', () => {
-  const result = parse({
-    newsList: [validArticle()],
-    marketData: { assetName: '엔비디아', currentPrice: 182.5, priceChange: 2.3, chartTrend: '상승' },
-  });
+  const result = parse(withMarket(
+    { assetName: '엔비디아', currentPrice: 182.5, priceChange: 2.3, chartTrend: '상승' },
+  ));
   assert.equal(result.success, true, JSON.stringify(result.error?.issues));
 });
 
 test('marketData의 허용되지 않은 필드를 거부한다', () => {
-  const result = parse({
-    newsList: [validArticle()],
-    marketData: {
-      assetName: 'x', currentPrice: '1', priceChange: '1%', chartTrend: 'y', prompt: '해킹',
-    },
-  });
+  const result = parse(withMarket({
+    assetName: 'x', currentPrice: '1', priceChange: '1%', chartTrend: 'y', prompt: '해킹',
+  }));
   assert.equal(result.success, false);
 });
 
@@ -338,7 +337,10 @@ const TRIAL = {
 };
 
 test('provider가 만든 재무 자료를 그대로 통과시킨다', () => {
-  const parsed = schema.safeParse({ newsList: NEWS, financial: FINANCIAL });
+  const parsed = schema.safeParse({
+    newsList: NEWS,
+    instruments: [{ symbol: 'NVDA', name: 'NVIDIA', assetType: 'stock', market: 'US', financial: FINANCIAL }],
+  });
   assert.equal(parsed.success, true, JSON.stringify(parsed.error?.issues));
 });
 
@@ -398,4 +400,22 @@ test('수집 스키마가 알려지지 않은 include 값을 거부한다', () =
   const collectSchema = buildResearchSchema(loadConfig(BASE_ENV));
   assert.equal(collectSchema.safeParse({ query: '엔비디아', include: ['news', 'market'] }).success, true);
   assert.equal(collectSchema.safeParse({ query: '엔비디아', include: ['everything'] }).success, false);
+});
+
+const NEWS_ONE = [{ title: 't', content: 'c', source: 's', url: 'https://a.example/1', publishedAt: '2026-11-01T00:00:00Z' }];
+const MD = { assetName: 'NVDA', currentPrice: '100 USD', priceChange: '1%', chartTrend: '상승' };
+
+test('분석 스키마는 instruments 1~4개와 sector를 받는다', () => {
+  const schema = buildAnalyzeSchema(loadConfig(BASE_ENV));
+  const inst = (symbol) => ({ symbol, name: symbol, assetType: 'stock', market: 'US', marketData: MD });
+  assert.equal(schema.safeParse({ newsList: NEWS_ONE, instruments: [inst('A')], sector: '반도체' }).success, true);
+  assert.equal(schema.safeParse({ newsList: NEWS_ONE, instruments: ['A', 'B', 'C', 'D', 'E'].map(inst) }).success, false);
+  assert.equal(schema.safeParse({ newsList: NEWS_ONE, instruments: [] }).success, false);
+});
+
+test('분석 스키마는 series와 최상위 marketData를 거부한다', () => {
+  const schema = buildAnalyzeSchema(loadConfig(BASE_ENV));
+  const withSeries = { symbol: 'A', name: 'A', assetType: 'stock', market: 'US', marketData: MD, series: { points: [] } };
+  assert.equal(schema.safeParse({ newsList: NEWS_ONE, instruments: [withSeries] }).success, false);
+  assert.equal(schema.safeParse({ newsList: NEWS_ONE, marketData: MD }).success, false);
 });

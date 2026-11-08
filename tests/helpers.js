@@ -32,6 +32,6 @@ export const BASE_ENV = {
   BUDGET_FILE: '',
 };
 
-export function bootstrap({ env = {}, clock, llm, http, extraRoutes } = {}) {
-  return createApp({ env: { ...BASE_ENV, ...env }, clock, llm, http, extraRoutes });
+export function bootstrap({ env = {}, clock, llm, http, extraRoutes, directory } = {}) {
+  return createApp({ env: { ...BASE_ENV, ...env }, clock, llm, http, extraRoutes, directory });
 }
