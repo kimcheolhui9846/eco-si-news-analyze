@@ -73,7 +73,7 @@ issue 형태:
 
 | 파일 | check | 동작 |
 |---|---|---|
-| `citations.js` | `citations` | ① `newsBriefing`에서 `sourceId`가 `sources`에 없는 항목을 제거한다(fixed). ② 같은 `sourceId`가 다시 나오면 첫 항목만 남긴다(fixed). ③ 남은 항목의 title·source·publishedAt이 원본과 다르면 원본으로 덮어쓴다(항목당 fixed 1건). ④ 모든 문자열 값에서 `[...]` 안의 ID 토큰(`/\b[SPTFM]\d+\b/`)을 각각 판정해 없는 ID를 `출처 미확인`으로 바꾼다. `[S1, S9]`는 `[S1, 출처 미확인]`이 된다(바뀐 토큰마다 fixed 1건이 아니라 경로당 fixed 1건). ⑤ 검증 뒤 `newsBriefing`이 0건이 됐고 원래 1건 이상이었다면 warning 1건을 더한다. |
+| `citations.js` | `citations` | ① `newsBriefing`에서 `sourceId`가 `sources`에 없는 항목을 제거한다(fixed). ② 같은 `sourceId`가 다시 나오면 첫 항목만 남긴다(fixed). ③ 남은 항목의 title·source·publishedAt은 항상 원본 값으로 조용히 덮어쓴다(issue를 남기지 않고 점수에도 반영하지 않는다). 모델이 날짜 형식 등을 달리 쓰는 것은 정상이기 때문이다. ④ 모든 문자열 값에서 `[...]` 안의 ID 토큰(`/\b[SPTFM]\d+\b/`)을 각각 판정해 없는 ID를 `출처 미확인`으로 바꾼다. `[S1, S9]`는 `[S1, 출처 미확인]`이 된다(바뀐 토큰마다 fixed 1건이 아니라 경로당 fixed 1건). ⑤ 검증 뒤 `newsBriefing`이 0건이 됐고 원래 1건 이상이었다면 warning 1건을 더한다. |
 | `availability.js` | `availability` | `financialSummary`·`researchSummary`·`experimentSummary` 각각에 대해, 자료가 없는데 `'자료 있음'`이면 `available`·`periodBasis`/`maturity`/`evidenceLevel`을 `'자료 부족'`으로, `notes`를 `'제공된 자료가 없습니다.'`로 바꾼다(fixed). 자료가 있는데 `'자료 부족'`이면 warning만 남긴다. |
 | `disclaimer.js` | `disclaimer` | `disclaimer`를 `DISCLAIMER`(SYSTEM_PROMPT의 고정 문구와 같은 상수)로 덮어쓴다. 원문과 다를 때만 fixed 1건. |
 | `scenarios.js` | `scenarios` | 시나리오마다 `invalidationCondition`이 비었거나 공백·`'자료 부족'`뿐이면 warning. 모든 문자열 값에서 단정 표현 정규식이 맞으면 경로당 warning 1건. 고치지 않는다. |
@@ -138,7 +138,7 @@ mock 응답에는 `instrumentComparison: []`를 넣는다. mock의 disclaimer는
   1. clean-single: 깨끗한 단일 종목 응답 → 점수 100, 아무 검사도 걸리지 않음
   2. clean-sector: 깨끗한 분야 묶음 응답(4종목 비교) → 점수 100
   3. unknown-briefing-source: 없는 `S9` 브리핑 항목 → citations fixed
-  4. briefing-metadata-drift: 날짜·제목이 원본과 다름 → citations fixed
+  4. briefing-metadata-drift: 날짜·제목이 원본과 달라도 감점하지 않음 → citations 미적중
   5. unknown-inline-citation: 본문 `[S1, S9]`, `[M1]` → citations fixed
   6. availability-fabricated: 재무 자료 없음 + `'자료 있음'` → availability fixed
   7. availability-missed: 논문 자료 있음 + `'자료 부족'` → availability warning

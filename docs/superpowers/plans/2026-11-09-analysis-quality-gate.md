@@ -101,8 +101,7 @@ test('브리핑의 제목·출처·작성일을 원본으로 덮어쓴다', () =
     { newsBriefing: [brief('S1', { title: '엔비디아 실적 쇼크', publishedAt: '2026-09-01' })] }, { sources: SOURCES });
   assert.equal(out.newsBriefing[0].title, '엔비디아 3분기 실적 발표');
   assert.equal(out.newsBriefing[0].publishedAt, '2026-08-30T09:00:00.000Z');
-  assert.equal(issues.length, 1, '항목당 한 건');
-  assert.ok(issues[0].message.includes('제목'));
+  assert.deepEqual(issues, [], '조용히 덮어쓴다');
 });
 
 test('null 작성일 원본은 빈 문자열로 맞춘다', () => {
@@ -215,13 +214,9 @@ function checkBriefing(list, sources, issues) {
     }
     seen.add(id);
     const original = sources.get(id);
-    const drifted = BRIEF_FIELDS.filter((f) => String(item[f] ?? '') !== String(original[f] ?? ''));
+    // 제목·출처·작성일은 서버 값으로 조용히 맞춘다(issue 없음).
     const fixed = { ...item };
-    for (const f of drifted) fixed[f] = String(original[f] ?? '');
-    if (drifted.length > 0) {
-      issues.push(issue('citations', 'fixed',
-        `브리핑 ${id}의 ${drifted.map((f) => FIELD_LABEL[f]).join('·')}을(를) 원본 출처 값으로 바로잡았습니다.`, path));
-    }
+    for (const f of BRIEF_FIELDS) fixed[f] = String(original[f] ?? '');
     kept.push(fixed);
   });
   if (kept.length === 0 && list.length > 0) {

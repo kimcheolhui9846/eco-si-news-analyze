@@ -633,7 +633,7 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
 
 | check | 내용 |
 |---|---|
-| `citations` | `newsBriefing`의 출처 ID가 실제 출처인지, 제목·출처·작성일이 원본과 같은지. 본문 `[S9]`처럼 없는 출처 ID는 `출처 미확인`으로 바꾼다. |
+| `citations` | `newsBriefing`의 출처 ID가 실제 출처인지, 제목·출처·작성일은 원본 값으로 조용히 맞춘다(교정 건수에 넣지 않음). 없는/중복 출처만 교정으로 센다. 본문 `[S9]`처럼 없는 출처 ID는 `출처 미확인`으로 바꾼다. |
 | `availability` | 재무·논문·실험 요약의 `available`이 실제 입력 자료와 맞는지. |
 | `disclaimer` | 면책 문구를 표준 문구로 고정한다. |
 | `scenarios` | 무효화 조건 누락, 단정적 가격·방향 예측이나 매매 권유 표현(경고만). |
@@ -647,14 +647,13 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
   "warnings": 1,
   "limited": false,
   "issues": [
-    { "check": "citations", "severity": "fixed", "message": "브리핑 S1의 작성일을(를) 원본 출처 값으로 바로잡았습니다.", "path": "newsBriefing[0]" },
+    { "check": "citations", "severity": "fixed", "message": "제공되지 않은 출처 ID 인용을 \"출처 미확인\"으로 바꿨습니다.", "path": "summary" },
     { "check": "scenarios", "severity": "warning", "message": "시나리오에 무효화 조건이 없습니다. ...", "path": "scenarios[1].invalidationCondition" }
   ]
 }
 ```
 
 `score = max(0, 100 - 10·fixed - 5·warnings)`. 캐시 히트도 같은 값을 돌려준다.
-
 
 ### `degraded: true`일 때의 응답 형태
 
