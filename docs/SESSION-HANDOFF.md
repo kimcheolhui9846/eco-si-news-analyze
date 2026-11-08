@@ -9,14 +9,16 @@
 
 ---
 
-## 2026-11-08 분야 묶음 + OpenDART (진행 중)
+## 2026-11-08 분야 묶음 + OpenDART (Task 10 대기)
 
 - 브랜치 `feature/sector-baskets-opendart`. 설계: `docs/superpowers/specs/2026-11-08-sector-baskets-opendart-design.md`, 계획: `docs/superpowers/plans/2026-11-08-sector-baskets-opendart.md`.
 - 완료: Task 1~9 (해석기·분야 사전·DART provider·종목별 수집·스키마·프롬프트·화면·배포 설정·검증 스크립트·문서).
 - 남은 일: **Task 10** — OpenDART 키 발급 후 `scripts/refresh-directory.js`로 `data/kr-listed.json` 생성·커밋, DART 실검증(`OPENDART_EXPECTED=1 ./scripts/verify-research.sh`), Render에 `OPENDART_API_KEY` 입력 후 배포 검증.
 - **Task 10 전에 사용자가 할 일**: 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 `opendart.fss.or.kr`를 추가한다(`.env`가 코드 기본값을 덮어쓴다). Render는 코드 기본값을 쓰므로 `OPENDART_API_KEY`만 넣으면 된다.
 - 알려진 환경 문제: 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 Naver·Coinbase 호스트(`api.stock.naver.com`, `m.stock.naver.com`, `api.exchange.coinbase.com`)도 없어, 그대로 서버를 띄우면 모든 종목 시세가 "가져오지 못했습니다"로 빠진다(9-14 Task 6 이후 계속). `.env.example`의 값으로 맞추면 해결된다.
-- 최신 `npm test`: 624 tests / 623 pass / 0 fail / 1 skip. `tests/deployment.test.js` 7/7.
+- 최종 브랜치 리뷰(전체 diff) 반영 커밋 5개: 흔한 영단어(news, target, quantum…)가 미국 단일어 회사명으로 잡혀 분야 묶음을 가로채던 문제 수정(단일어 회사명은 대문자로 시작해야 하고 `COMMON_ENGLISH_WORDS`에 없어야 함, 실제 스냅샷 회귀 테스트 `tests/resolve-real-snapshot.test.js`), 분석 스키마 `sector`를 분야 이름 enum으로 제한, 비교 지시는 종목 2개 이상일 때만, 종목별 오류 격리(try/catch), `verify-research.sh`의 수집 응답 코드 확인. 부작용: 소문자 `general motors`는 GM으로 해석되지 않는다(대문자 `General Motors`는 됨). `palantir`/`팔란티어` 별칭 추가.
+- Task 10 때 함께 할 일(최종 리뷰 권고): `refresh-directory.js`의 KR XML 엔티티(`&amp;` 등) 디코딩, 생성된 `kr-listed.json`의 3자 이상 회사명이 흔한 한국어 뉴스 단어와 겹치는지 점검, Render(고정 IP 없음)에서 OpenDART가 `012`(IP 불허)를 주는지 확인, 가능하면 KS/KQ 시장 구분 저장.
+- 최신 `npm test`: 642 tests / 641 pass / 0 fail / 1 skip. `npm run build:client` 성공.
 - 로컬 실네트워크 검증(`LLM_MODE=mock`, `EXTERNAL_ALLOWLIST`를 `.env.example` 값으로 명령행 지정): `verify-research.sh` **19 pass / 0 fail**.
   - `[OK] 반도체 → 분야 묶음`, `[OK] 반도체 → 종목 4개`, `[OK] 반도체 → 시세 확보 종목 수 (기대 4, 실제 4)`, `[OK] 엔비디아 → SEC 재무`, `[OK] 메타버스 → META 아님`.
   - degraded: TSM 재무("SEC 제출 서류에서 재무지표를 찾지 못했습니다", TSM은 20-F/외국 발행사), 005930.KS·000660.KS 재무("OPENDART_API_KEY가 설정되지 않았습니다"). 시세는 TSM 포함 4종목 모두 확보.
