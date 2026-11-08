@@ -580,6 +580,7 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
     ],
     "risks": ["..."],
     "monitoringIndicators": ["..."],
+    "instrumentComparison": [{ "symbol": "NVDA", "name": "NVIDIA", "positioning": "...", "keyDifference": "..." }],
     "disclaimer": "본 분석은 ... 투자 권유가 아닙니다."
   },
   "sources": [
@@ -600,12 +601,15 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
     "duplicatesRemoved": 0,
     "estimatedInputTokens": 842,
     "fabricatedUrlsRemoved": 0,
+    "quality": { "score": 100, "fixed": 0, "warnings": 0, "limited": false, "issues": [] },
     "cached": false,
     "degraded": false,
     "model": "gpt-4o"
   }
 }
 ```
+
+`instrumentComparison`은 분석 종목이 2개 이상일 때만 채워진다. 하나 이하면 빈 배열이다.
 
 ### `meta` 필드의 의미
 
@@ -616,11 +620,41 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
 | `duplicatesRemoved` | 제목 또는 URL 중복으로 제외된 기사 수 |
 | `estimatedInputTokens` | 문자수 기반 **근사치**. 정확한 토큰 수가 아니다 |
 | `fabricatedUrlsRemoved` | LLM이 만들어낸, 입력에 없던 URL을 제거한 건수 |
+| `quality` | 결정적 품질 검사 결과. 아래 "품질 검사" 참고. |
 | `cached` | `true`면 이전 동일 요청의 결과를 재사용한 것 (LLM 미호출) |
 | `degraded` | `true`면 구조화 출력이 실패해 Markdown 폴백으로 응답한 것 |
 | `model` | 실제 사용된 모델명 |
 | `actualCostUsd` | 실제 응답 길이로 다시 계산한 비용. 캐시 히트면 `0` |
 | `budget` | 이 호출 반영 후의 예산 상태 (`GET /api/budget`과 같은 형태) |
+
+### 품질 검사 (`meta.quality`)
+
+서버는 LLM 응답을 받은 뒤 LLM을 다시 부르지 않고 다음을 검사한다. 교정할 수 있는 것은 교정하고(`fixed`), 교정할 수 없는 것은 경고한다(`warning`).
+
+| check | 내용 |
+|---|---|
+| `citations` | `newsBriefing`의 출처 ID가 실제 출처인지, 제목·출처·작성일이 원본과 같은지. 본문 `[S9]`처럼 없는 출처 ID는 `출처 미확인`으로 바꾼다. |
+| `availability` | 재무·논문·실험 요약의 `available`이 실제 입력 자료와 맞는지. |
+| `disclaimer` | 면책 문구를 표준 문구로 고정한다. |
+| `scenarios` | 무효화 조건 누락, 단정적 가격·방향 예측이나 매매 권유 표현(경고만). |
+| `comparison` | `instrumentComparison`이 입력 종목과 맞는지. |
+| `structure` | Markdown 폴백이라 검증이 제한됨(`limited: true`). |
+
+```json
+"quality": {
+  "score": 85,
+  "fixed": 1,
+  "warnings": 1,
+  "limited": false,
+  "issues": [
+    { "check": "citations", "severity": "fixed", "message": "브리핑 S1의 작성일을(를) 원본 출처 값으로 바로잡았습니다.", "path": "newsBriefing[0]" },
+    { "check": "scenarios", "severity": "warning", "message": "시나리오에 무효화 조건이 없습니다. ...", "path": "scenarios[1].invalidationCondition" }
+  ]
+}
+```
+
+`score = max(0, 100 - 10·fixed - 5·warnings)`. 캐시 히트도 같은 값을 돌려준다.
+
 
 ### `degraded: true`일 때의 응답 형태
 
