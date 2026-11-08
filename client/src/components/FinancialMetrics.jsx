@@ -27,7 +27,7 @@ export default function FinancialMetrics({ financial, collected }) {
       ) : (
         <>
           <p className="muted small">
-            {financial.entityName ?? financial.symbol} · SEC EDGAR
+            {financial.entityName ?? financial.symbol} · {financial.source === 'dart' ? 'OpenDART' : 'SEC EDGAR'}
           </p>
 
           <table className="metrics">
@@ -61,7 +61,7 @@ export default function FinancialMetrics({ financial, collected }) {
           {financial.filingUrl && (
             <p className="small">
               <a href={financial.filingUrl} target="_blank" rel="noreferrer noopener">
-                제출 서류 보기
+                {financial.source === 'dart' ? '공시 원문 보기' : '제출 서류 보기'}
               </a>
             </p>
           )}

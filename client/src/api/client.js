@@ -71,13 +71,16 @@ export function createApiClient({ fetchImpl = fetch } = {}) {
       return call('/api/research/collect', { method: 'POST', body });
     },
 
-    analyze: ({ newsList, marketData, financial, research, experiments, confirmToken }) => {
-      // 받은 자료를 그대로 되돌려 보낸다. 한 글자만 바뀌어도 cacheKey가
-      // 달라져 확인 토큰이 428로 거부된다. 빈 자료는 필드를 아예 넣지 않는다 —
-      // 서버가 해시를 계산할 때 쓰는 규칙과 같아야 한다.
+    analyze: ({ newsList, instruments, sector, research, experiments, confirmToken }) => {
+      // 받은 자료를 그대로 되돌려 보낸다. 서버 lib/instruments.js의 toAnalysisInstruments와
+      // 같은 규칙이어야 cacheKey가 일치한다: 시세·재무가 모두 없는 종목은 빼고 series는 지운다.
+      // 빈 자료는 필드를 아예 넣지 않는다.
       const body = { newsList };
-      if (marketData) body.marketData = marketData;
-      if (financial) body.financial = financial;
+      const analysisInstruments = (instruments ?? [])
+        .filter((i) => i.marketData || i.financial)
+        .map(({ series, ...rest }) => rest);
+      if (analysisInstruments.length) body.instruments = analysisInstruments;
+      if (sector) body.sector = sector;
       if (research?.length) body.research = research;
       if (experiments?.length) body.experiments = experiments;
       return call('/api/analyze/news', {

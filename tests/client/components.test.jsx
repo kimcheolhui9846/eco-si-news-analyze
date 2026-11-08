@@ -110,7 +110,7 @@ test('빈 목록에도 죽지 않는다', () => {
 
 test('수집 요약에 제목만 개수를 드러낸다', () => {
   render(<SourceSummary collected={{
-    collectedAt: '2026-09-03T01:00:00.000Z', resolvedSymbol: 'NVDA', symbolSource: 'alias',
+    collectedAt: '2026-09-03T01:00:00.000Z', resolution: { kind: 'company', symbols: ['NVDA'] },
     feedsUsed: ['google-news-ko'], newsCount: 8, duplicatesRemoved: 1,
     headlineOnlyCount: 5, degraded: [],
   }} />);
@@ -121,7 +121,7 @@ test('수집 요약에 제목만 개수를 드러낸다', () => {
 
 test('degraded가 있으면 무엇이 빠졌는지 보여준다', () => {
   render(<SourceSummary collected={{
-    collectedAt: '2026-09-03T01:00:00.000Z', resolvedSymbol: null, symbolSource: 'unresolved',
+    collectedAt: '2026-09-03T01:00:00.000Z', resolution: { kind: 'unresolved', symbols: [] },
     feedsUsed: [], newsCount: 3, duplicatesRemoved: 0, headlineOnlyCount: 0,
     degraded: [{ provider: 'market', reason: '심볼을 해석하지 못했습니다.' }],
   }} />);

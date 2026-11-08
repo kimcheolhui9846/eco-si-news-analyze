@@ -70,7 +70,7 @@ test('빈 symbol은 보내지 않는다', async () => {
 test('분석은 확인 토큰을 헤더에 싣는다', async () => {
   const f = makeFetch({ body: { analysis: {} } });
   await createApiClient({ fetchImpl: f }).analyze({
-    newsList: [{ title: 'a' }], marketData: { assetName: 'X' }, confirmToken: 'ct_abc',
+    newsList: [{ title: 'a' }], instruments: [{ symbol: 'X', name: 'X', assetType: 'stock', market: 'US', marketData: { assetName: 'X' } }], confirmToken: 'ct_abc',
   });
 
   assert.equal(f.calls[0].opts.headers['X-Confirm-Token'], 'ct_abc');
@@ -84,18 +84,18 @@ test('분석 본문에 newsList가 수정 없이 실린다', async () => {
   }];
   const f = makeFetch({ body: {} });
 
-  await createApiClient({ fetchImpl: f }).analyze({ newsList, marketData: undefined, confirmToken: 'ct' });
+  await createApiClient({ fetchImpl: f }).analyze({ newsList, instruments: undefined, confirmToken: 'ct' });
 
   assert.deepEqual(JSON.parse(f.calls[0].opts.body).newsList, newsList);
 });
 
-test('marketData가 없으면 본문에서 뺀다', async () => {
+test('instruments가 비면 본문에서 뺀다', async () => {
   const f = makeFetch({ body: {} });
   await createApiClient({ fetchImpl: f }).analyze({
-    newsList: [{ title: 'a' }], marketData: undefined, confirmToken: 'ct',
+    newsList: [{ title: 'a' }], instruments: [], confirmToken: 'ct',
   });
 
-  assert.equal('marketData' in JSON.parse(f.calls[0].opts.body), false);
+  assert.equal('instruments' in JSON.parse(f.calls[0].opts.body), false);
 });
 
 test('에러 응답을 ApiCallError로 바꾼다', async () => {

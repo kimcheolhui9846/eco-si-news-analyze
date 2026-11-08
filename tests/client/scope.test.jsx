@@ -38,7 +38,7 @@ test('체크를 끄면 그 값이 빠진다', () => {
 
 test('각 항목에 한 줄 설명이 붙는다', () => {
   render(<ScopePicker value={['news']} onChange={() => {}} />);
-  assert.ok(screen.getByText(/미국 상장사만/));
+  assert.ok(screen.getByText(/미국\(SEC\)·한국\(OpenDART\) 상장사/));
   assert.ok(screen.getByText(/표본 수·연구 단계는 제공되지 않음/));
   assert.ok(screen.getByText(/ClinicalTrials\.gov/));
 });

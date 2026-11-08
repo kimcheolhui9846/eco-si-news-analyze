@@ -16,20 +16,23 @@ const COLLECTED = {
     { title: '제목만 기사', content: '제목만 기사', source: 'IT조선',
       url: 'https://b.com/2', publishedAt: '2026-09-02T00:00:00.000Z', contentKind: 'headline' },
   ],
-  marketData: {
-    assetName: 'NVDA', currentPrice: '224.41 USD',
-    priceChange: '5.23%', chartTrend: '상승했습니다.',
-  },
-  marketSeries: {
-    symbol: 'NVDA',
-    currency: 'USD',
-    points: Array.from({ length: 22 }, (_, i) => ({
-      t: `2026-08-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`, c: 200 + i, v: 1,
-    })),
-    indicators: { ma5: 218, ma20: 219, high: 221, low: 200, changePct: 5.23, volatilityPct: 2.8, points: 22 },
-  },
+  instruments: [{
+    symbol: 'NVDA', name: 'NVIDIA', assetType: 'stock', market: 'US',
+    marketData: {
+      assetName: 'NVDA', currentPrice: '224.41 USD',
+      priceChange: '5.23%', chartTrend: '상승했습니다.',
+    },
+    series: {
+      symbol: 'NVDA',
+      currency: 'USD',
+      points: Array.from({ length: 22 }, (_, i) => ({
+        t: `2026-08-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`, c: 200 + i, v: 1,
+      })),
+      indicators: { ma5: 218, ma20: 219, high: 221, low: 200, changePct: 5.23, volatilityPct: 2.8, points: 22 },
+    },
+  }],
   collected: {
-    collectedAt: '2026-09-03T01:00:00.000Z', resolvedSymbol: 'NVDA', symbolSource: 'explicit',
+    collectedAt: '2026-09-03T01:00:00.000Z', resolution: { kind: 'explicit', symbols: ['NVDA'] },
     feedsUsed: ['google-news-ko'], newsCount: 2, duplicatesRemoved: 0,
     headlineOnlyCount: 1, degraded: [],
   },
@@ -110,7 +113,7 @@ test('승인 버튼을 누르면 확인 토큰과 함께 콜백이 불린다', (
 
   assert.equal(got.confirmToken, 'ct_abc');
   assert.deepEqual(got.newsList, COLLECTED.newsList, 'newsList가 변형됐다');
-  assert.deepEqual(got.marketData, COLLECTED.marketData);
+  assert.deepEqual(got.instruments, COLLECTED.instruments);
 });
 
 test('처리 중이면 승인 버튼이 비활성화된다', () => {
@@ -129,8 +132,7 @@ test('수집된 자료 목록을 보여준다', () => {
 
 test('보고서 화면이 차트를 맨 위에 둔다', () => {
   const { container } = render(
-    <ReportPage report={emptyReport()} series={COLLECTED.marketSeries}
-      marketData={COLLECTED.marketData} onNewSearch={() => {}} />,
+    <ReportPage report={emptyReport()} instruments={COLLECTED.instruments} onNewSearch={() => {}} />,
   );
 
   const cards = [...container.querySelectorAll('.card')];
@@ -140,7 +142,7 @@ test('보고서 화면이 차트를 맨 위에 둔다', () => {
 test('보고서 화면에 면책 문구가 있다', () => {
   render(
     <ReportPage report={emptyReport({ analysis: { disclaimer: '투자 권유가 아닙니다.' } })}
-      series={undefined} marketData={undefined} onNewSearch={() => {}} />,
+      instruments={[]} onNewSearch={() => {}} />,
   );
 
   assert.ok(screen.getByText(/투자 권유가 아닙니다/));
@@ -149,7 +151,7 @@ test('보고서 화면에 면책 문구가 있다', () => {
 test('새 검색 버튼이 콜백을 부른다', () => {
   let clicked = false;
   render(
-    <ReportPage report={emptyReport()} series={undefined} marketData={undefined}
+    <ReportPage report={emptyReport()} instruments={[]}
       onNewSearch={() => { clicked = true; }} />,
   );
 

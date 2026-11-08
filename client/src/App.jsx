@@ -40,14 +40,14 @@ export default function App({ api = defaultApi }) {
   };
 
   const approve = async ({
-    newsList, marketData, financial, research, experiments, confirmToken,
+    newsList, instruments, sector, research, experiments, confirmToken,
   }) => {
     setStep('analyzing');
     setError(null);
     try {
       // 받은 자료를 그대로 넘긴다. 한 글자만 바뀌어도 확인 토큰이 428로 거부된다.
       const result = await api.analyze({
-        newsList, marketData, financial, research, experiments, confirmToken,
+        newsList, instruments, sector, research, experiments, confirmToken,
       });
       setReport(result);
       setStep('report');
@@ -93,9 +93,7 @@ export default function App({ api = defaultApi }) {
       {step === 'report' && (
         <ReportPage
           report={report}
-          series={collected?.marketSeries}
-          marketData={collected?.marketData}
-          financial={collected?.financial}
+          instruments={collected?.instruments}
           research={collected?.research}
           experiments={collected?.experiments}
           collectedMeta={collected?.collected}
