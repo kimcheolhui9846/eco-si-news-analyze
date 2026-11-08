@@ -132,6 +132,8 @@ OPENAI_API_KEY=sk-...
 | `MARKET_CACHE_TTL_MS` | `60000` | 시장 차트 캐시 |
 | `RESEARCH_RATE_WINDOW_MS` / `_MAX` | `900000` / `60` | 수집 rate limit |
 | `FINANCIAL_CACHE_TTL_MS` | `86400000` | SEC 재무지표 캐시. 분기 실적은 하루에 여러 번 바뀌지 않는다 |
+| `OPENDART_API_KEY` | (비어 있음) | 선택. 한국 상장사 재무(OpenDART). 비어 있으면 한국 재무만 사유와 함께 빠진다. 허용목록에 `opendart.fss.or.kr` 필요 |
+| `DART_CACHE_TTL_MS` | `21600000` | OpenDART 재무 캐시(6시간) |
 | `RESEARCH_CACHE_TTL_MS` | `3600000` | 논문 캐시 |
 | `EXPERIMENT_CACHE_TTL_MS` | `3600000` | 임상시험 캐시 |
 | `MAX_RESEARCH_ITEMS` | `5` | 수집할 논문 수 상한 |

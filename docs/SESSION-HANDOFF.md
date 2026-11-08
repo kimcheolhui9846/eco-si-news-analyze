@@ -9,6 +9,20 @@
 
 ---
 
+## 2026-11-08 분야 묶음 + OpenDART (진행 중)
+
+- 브랜치 `feature/sector-baskets-opendart`. 설계: `docs/superpowers/specs/2026-11-08-sector-baskets-opendart-design.md`, 계획: `docs/superpowers/plans/2026-11-08-sector-baskets-opendart.md`.
+- 완료: Task 1~9 (해석기·분야 사전·DART provider·종목별 수집·스키마·프롬프트·화면·배포 설정·검증 스크립트·문서).
+- 남은 일: **Task 10** — OpenDART 키 발급 후 `scripts/refresh-directory.js`로 `data/kr-listed.json` 생성·커밋, DART 실검증(`OPENDART_EXPECTED=1 ./scripts/verify-research.sh`), Render에 `OPENDART_API_KEY` 입력 후 배포 검증.
+- **Task 10 전에 사용자가 할 일**: 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 `opendart.fss.or.kr`를 추가한다(`.env`가 코드 기본값을 덮어쓴다). Render는 코드 기본값을 쓰므로 `OPENDART_API_KEY`만 넣으면 된다.
+- 알려진 환경 문제: 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 Naver·Coinbase 호스트(`api.stock.naver.com`, `m.stock.naver.com`, `api.exchange.coinbase.com`)도 없어, 그대로 서버를 띄우면 모든 종목 시세가 "가져오지 못했습니다"로 빠진다(9-14 Task 6 이후 계속). `.env.example`의 값으로 맞추면 해결된다.
+- 최신 `npm test`: 624 tests / 623 pass / 0 fail / 1 skip. `tests/deployment.test.js` 7/7.
+- 로컬 실네트워크 검증(`LLM_MODE=mock`, `EXTERNAL_ALLOWLIST`를 `.env.example` 값으로 명령행 지정): `verify-research.sh` **19 pass / 0 fail**.
+  - `[OK] 반도체 → 분야 묶음`, `[OK] 반도체 → 종목 4개`, `[OK] 반도체 → 시세 확보 종목 수 (기대 4, 실제 4)`, `[OK] 엔비디아 → SEC 재무`, `[OK] 메타버스 → META 아님`.
+  - degraded: TSM 재무("SEC 제출 서류에서 재무지표를 찾지 못했습니다", TSM은 20-F/외국 발행사), 005930.KS·000660.KS 재무("OPENDART_API_KEY가 설정되지 않았습니다"). 시세는 TSM 포함 4종목 모두 확보.
+  - 삼성전자 재무 출처는 키가 없어 "없음"(참고 출력). `.env` 그대로 한 첫 실행은 17 pass / 2 fail(시세 전부 미확보, 위 허용목록 문제).
+
+
 ## 2026-09-13 병합 후 검증
 
 현재 Task 6은 사용자 승인된 Naver 주식/Coinbase 4종 코인 일봉 교체를 진행한다.
@@ -268,7 +282,7 @@ createMarketProvider({ http, cache, clock, makeBreaker })
 
 ## 6. 환경 정보
 
-- 작업 디렉터리: `C:\Users\00\Desktop\eco_si_news_analyze`
+- 작업 디렉터리: `D:\eco_si_news_analyze` (2026-10-02에 `C:\Users\00\Desktop\`에서 옮김)
 - Node v24.18.0 / npm 11.16.0 / Windows 11, PowerShell + Git Bash
 - git 신원: `kim cheol hui <144594976+kimcheolhui9846@users.noreply.github.com>`
 - `gh` CLI 인증됨 (`kimcheolhui9846`)

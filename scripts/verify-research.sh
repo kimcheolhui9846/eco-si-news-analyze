@@ -67,11 +67,11 @@ CODE=$(curl -sS -o "$TMP/collect.json" -w '%{http_code}' \
 check "수집 응답 코드" "200" "$CODE"
 
 NEWS=$(field 'v.newsList ? v.newsList.length : 0' < "$TMP/collect.json")
-HAS_MARKET=$(field 'v.marketData ? 1 : 0' < "$TMP/collect.json")
+HAS_MARKET=$(field 'v.instruments && v.instruments[0] && v.instruments[0].marketData ? 1 : 0' < "$TMP/collect.json")
 HEADLINE_ONLY=$(field 'v.collected ? v.collected.headlineOnlyCount : "?"' < "$TMP/collect.json")
 FEEDS=$(field 'v.collected ? v.collected.feedsUsed.join(",") : ""' < "$TMP/collect.json")
 DEGRADED=$(field 'v.collected ? JSON.stringify(v.collected.degraded) : "[]"' < "$TMP/collect.json")
-TREND=$(field 'v.marketData ? v.marketData.chartTrend.slice(0,70) : "(없음)"' < "$TMP/collect.json")
+TREND=$(field 'v.instruments && v.instruments[0] && v.instruments[0].marketData ? v.instruments[0].marketData.chartTrend.slice(0,70) : "(없음)"' < "$TMP/collect.json")
 
 if [ "${NEWS:-0}" -gt 0 ]; then
   echo "  [OK] 뉴스 $NEWS건 수집"
@@ -87,7 +87,7 @@ echo "  (참고) 추세: $TREND..."
 
 RESEARCH=$(field 'v.research ? v.research.length : 0' < "$TMP/collect.json")
 TRIALS=$(field 'v.experiments ? v.experiments.length : 0' < "$TMP/collect.json")
-FIN=$(field 'v.financial ? v.financial.metrics.length : 0' < "$TMP/collect.json")
+FIN=$(field 'v.instruments ? v.instruments.reduce((n,i)=>n+(i.financial?i.financial.metrics.length:0),0) : 0' < "$TMP/collect.json")
 INCLUDED=$(field 'v.collected ? v.collected.included.join(",") : ""' < "$TMP/collect.json")
 
 check "수집 범위" "news,market,financial,research,experiments" "$INCLUDED"
@@ -115,8 +115,9 @@ CONFIRM=$(field 'v.confirmToken' < "$TMP/collect.json")
 node -e "
   const c = require(process.argv[1]);
   const body = { newsList: c.newsList };
-  if (c.marketData) body.marketData = c.marketData;
-  if (c.financial) body.financial = c.financial;
+  const inst = (c.instruments || []).filter(i => i.marketData || i.financial).map(({ series, ...rest }) => rest);
+  if (inst.length) body.instruments = inst;
+  if (c.collected && c.collected.resolution && c.collected.resolution.sector) body.sector = c.collected.resolution.sector;
   if (c.research && c.research.length) body.research = c.research;
   if (c.experiments && c.experiments.length) body.experiments = c.experiments;
   require('fs').writeFileSync(process.argv[2], JSON.stringify(body), 'utf8');
@@ -210,6 +211,32 @@ if [ "${TRIALS2:-0}" -gt 0 ]; then
 else
   echo "  [FAIL] 임상시험 0건"
   FAIL=$((FAIL + 1))
+fi
+
+collect_query() {
+  node -e "require('fs').writeFileSync(process.argv[1], JSON.stringify({ query: process.argv[2], lang: 'ko', maxNews: 5, include: ['news','market','financial'] }), 'utf8');" "$TMP/q.json" "$1"
+  curl -sS -o "$TMP/q-out.json" -w '%{http_code}' -X POST "$BASE/api/research/collect"     -H 'Content-Type: application/json; charset=utf-8' -H "Authorization: Bearer $TOKEN"     --data-binary @"$TMP/q.json"
+}
+
+echo "8. 분야 묶음과 회사 해석 (수집만, LLM 비용 없음)"
+collect_query '반도체 업황' > /dev/null
+check "반도체 → 분야 묶음" "sector" "$(field 'v.collected.resolution.kind' < "$TMP/q-out.json")"
+check "반도체 → 종목 4개" "4" "$(field 'v.instruments.length' < "$TMP/q-out.json")"
+check "반도체 → 시세 확보 종목 수" "4" "$(field 'v.instruments.filter(i => i.marketData).length' < "$TMP/q-out.json")"
+echo "  (참고) 시세 없는 종목: $(field 'v.instruments.filter(i => !i.marketData).map(i => i.symbol).join(",")' < "$TMP/q-out.json") | degraded: $(field 'JSON.stringify(v.collected.degraded)' < "$TMP/q-out.json")"
+
+collect_query '엔비디아 실적' > /dev/null
+check "엔비디아 → SEC 재무" "sec" "$(field 'v.instruments[0].financial ? v.instruments[0].financial.source : ""' < "$TMP/q-out.json")"
+
+collect_query '메타버스 시장' > /dev/null
+check "메타버스 → META 아님" "unresolved" "$(field 'v.collected.resolution.kind' < "$TMP/q-out.json")"
+
+collect_query '삼성전자 실적' > /dev/null
+DART_SRC=$(field 'v.instruments[0].financial ? v.instruments[0].financial.source : ""' < "$TMP/q-out.json")
+if [ -n "${OPENDART_EXPECTED:-}" ]; then
+  check "삼성전자 → DART 재무" "dart" "$DART_SRC"
+else
+  echo "  (참고) 삼성전자 재무 출처: ${DART_SRC:-없음} — OPENDART_EXPECTED=1이면 dart를 요구한다"
 fi
 
 echo ""

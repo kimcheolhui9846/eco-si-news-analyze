@@ -163,7 +163,7 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | 필드 | 필수 | 제약 |
 |---|---|---|
 | `query` | ✅ | 1~200자. 뉴스 검색어이자 심볼 해석의 근거 |
-| `symbol` | ❌ | 1~32자. 없으면 자동 해석을 시도한다 |
+| `symbol` | ❌ | 1~32자. 있으면 그 티커 하나만 쓴다. 없으면 `query`에서 회사·분야를 해석한다 |
 | `assetType` | ❌ | `stock` \| `crypto`. 기본 `stock` |
 | `lang` | ❌ | `ko` \| `en`. 기본 `ko`. 어느 피드를 쓸지 결정한다 |
 | `range` | ❌ | `5d` \| `1mo` \| `3mo` \| `6mo` \| `1y`. 기본 `1mo` |
@@ -177,19 +177,24 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | 값 | 소스 |
 |---|---|
 | `news` | Google 뉴스·연합뉴스·전자신문·Yahoo Finance |
-| `market` | Naver 주식 일봉 / Coinbase Exchange BTC·ETH·SOL·XRP 일봉. 미매핑 심볼은 기존 Yahoo Finance / CoinGecko 경로 |
-| `financial` | SEC EDGAR XBRL companyconcept. **미국 상장사만** |
+| `market` | 종목마다 Naver 주식 일봉 / Coinbase Exchange BTC·ETH·SOL·XRP 일봉. 미매핑 심볼은 기존 Yahoo Finance / CoinGecko 경로 |
+| `financial` | 종목마다 SEC EDGAR XBRL(미국 상장사) 또는 OpenDART 주요계정(한국 상장사, `OPENDART_API_KEY` 필요) |
 | `research` | Europe PMC + arXiv (영문 질의) / KCI (한국어 질의) |
 | `experiments` | ClinicalTrials.gov v2. **영문 질의에서만** |
 
 목록에 없는 필드는 `400 INVALID_REQUEST`로 거부된다.
 
-### 심볼 해석 4단계
+### 종목 해석
 
-1. `symbol`이 있으면 그대로 쓴다 (`symbolSource: "explicit"`)
-2. 없으면 내장 별칭 사전을 본다 (`"alias"`) — **한글 회사명은 이 경로로만 해석된다**
-3. 별칭에 없고 질의가 ASCII면 Yahoo 검색을 시도한다 (`"search"`)
-4. 모두 실패하면 뉴스만 수집한다 (`"unresolved"`) — 오류가 아니다
+`resolveInstruments`가 `query`에서 최대 4개(`MAX_INSTRUMENTS`)의 종목을 고른다. 결과는 `collected.resolution.kind`에 실린다.
+
+1. `symbol`이 있으면 그 티커 하나 (`explicit`)
+2. 질의에 회사명·티커가 있으면 그 회사 (`company`). 회사명과 분야가 함께 있으면 회사가 우선한다
+3. 질의에 분야 키워드가 있으면 그 분야의 대표 종목 묶음 (`sector`)
+4. 모두 실패하면 뉴스·논문만 수집한다 (`unresolved`) — 오류가 아니다. `instruments`는 `[]`
+
+일치 규칙: 단어가 키와 같거나 "키 + 조사"일 때만 일치한다("메타버스"는 META가 아니다).
+미국 티커 대조는 대문자로 입력된 단어에만 하고, 분야 키워드와 같은 단어("AI" 등)는 티커로 보지 않는다.
 
 ### 응답 `200`
 
@@ -206,27 +211,35 @@ curl -X POST http://localhost:3000/api/auth/logout \
       "contentKind": "headline"
     }
   ],
-  "marketData": {
-    "assetName": "NVDA",
-    "currentPrice": "224.41 USD",
-    "priceChange": "5.23%",
-    "chartTrend": "해당 기간(22개 거래일) 종가는 5.23% 상승했습니다. ..."
-  },
-  "marketSeries": {
-    "symbol": "NVDA",
-    "currency": "USD",
-    "points": [
-      { "t": "2026-08-04T13:30:00.000Z", "c": 206.64, "v": 12345600 }
-    ],
-    "indicators": {
-      "ma5": 218.68, "ma20": 219.03, "high": 227.98, "low": 206.64,
-      "changePct": 5.23, "volatilityPct": 2.80, "points": 22
+  "instruments": [
+    {
+      "symbol": "NVDA", "name": "NVIDIA", "assetType": "stock", "market": "US",
+      "marketData": {
+        "assetName": "NVDA",
+        "currentPrice": "224.41 USD",
+        "priceChange": "5.23%",
+        "chartTrend": "해당 기간(22개 거래일) 종가는 5.23% 상승했습니다. ..."
+      },
+      "series": {
+        "symbol": "NVDA",
+        "currency": "USD",
+        "points": [
+          { "t": "2026-08-04T13:30:00.000Z", "c": 206.64, "v": 12345600 }
+        ],
+        "indicators": {
+          "ma5": 218.68, "ma20": 219.03, "high": 227.98, "low": 206.64,
+          "changePct": 5.23, "volatilityPct": 2.80, "points": 22
+        }
+      },
+      "financial": { "source": "sec", "...": "아래 financial 참고" }
     }
-  },
+  ],
   "collected": {
     "collectedAt": "2026-09-03T01:20:00.000Z",
-    "resolvedSymbol": "NVDA",
-    "symbolSource": "explicit",
+    "resolution": {
+      "kind": "explicit",
+      "symbols": ["NVDA"]
+    },
     "feedsUsed": ["google-news-ko", "yonhap-economy", "etnews", "yahoo-headline-NVDA"],
     "newsCount": 8,
     "duplicatesRemoved": 0,
@@ -248,8 +261,9 @@ curl -X POST http://localhost:3000/api/auth/logout \
 
 | 필드 | 의미 |
 |---|---|
-| `resolvedSymbol` | 실제로 쓰인 티커. 해석 실패 시 `null` |
-| `symbolSource` | `explicit` \| `alias` \| `search` \| `unresolved` |
+| `resolution.kind` | `explicit` \| `company` \| `sector` \| `unresolved` |
+| `resolution.sector` | `kind`가 `sector`일 때만. 분야명(예: `반도체`) |
+| `resolution.symbols` | 해석된 종목 티커 목록(최대 4개). `unresolved`면 `[]` |
 | `feedsUsed` | 자료를 **하나 이상 준** 피드의 id |
 | `newsCount` | 중복 제거 후 실제 자료 수 |
 | `headlineOnlyCount` | **제목만 확보된 자료 수.** 분석 깊이의 한계를 나타낸다 |
@@ -257,8 +271,22 @@ curl -X POST http://localhost:3000/api/auth/logout \
 | `languageRoute` | 어떤 소스를 왜 불렀는지. `{ route, useEnglishPapers, useKci, useTrials, reason }` |
 | `researchCount` | 논문 수 |
 | `experimentCount` | 임상시험 수 |
-| `financialMetricCount` | 확보한 재무지표 개수 |
-| `degraded` | 실패했거나 빠진 provider와 사유 |
+| `financialMetricCount` | 전 종목 합계 재무지표 개수 |
+| `degraded` | 실패했거나 빠진 provider와 사유. 종목 단위 항목에는 `symbol`이 붙는다 |
+
+### `instruments[]`
+
+종목 하나의 시세·차트·재무를 묶은 배열이다. `marketData`, `marketSeries`, `financial` 단수 필드는 없다.
+
+| 필드 | 의미 |
+|---|---|
+| `symbol` `name` `assetType` `market` | 종목 식별. `market`은 `US` 등 |
+| `marketData` | 시세 요약. 못 가져왔으면 필드 없음 |
+| `series` | 화면 차트용 시계열(아래 참고). 분석 요청에는 보내지 않는다 |
+| `financial` | 재무. `source`가 `sec` 또는 `dart`. 없으면 필드 없음 |
+
+종목 하나가 실패해도 나머지로 진행하며, 사유는 `collected.degraded`에 `{ provider, symbol, reason }`로 실린다.
+`OPENDART_API_KEY`가 없으면 DART를 부르지 않고 한국 종목에 "API 키 미설정" 사유만 남는다.
 
 ### `financial` · `research` · `experiments`
 
@@ -269,6 +297,7 @@ curl -X POST http://localhost:3000/api/auth/logout \
 ```json
 {
   "financial": {
+    "source": "sec", "corpCode": null,
     "symbol": "NVDA", "cik": "0001045810", "entityName": "NVIDIA CORP",
     "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/.../...-index.htm",
     "metrics": [{ "concept": "Revenues", "label": "매출", "value": 96221000000,
@@ -307,7 +336,7 @@ curl -X POST http://localhost:3000/api/auth/logout \
 
 사유는 `collected.languageRoute.reason`과 `collected.degraded`에 실려 나간다.
 
-### `marketSeries` — 차트용 시계열
+### `instruments[].series` — 차트용 시계열
 
 Task 6의 Naver/Coinbase 경로는 완료된 일봉을 반환한다. `marketData.currentPrice`는
 마지막 완료 봉의 종가이며 `chartTrend`에 출처와 일봉 기준을 표시한다.
@@ -319,7 +348,7 @@ Naver `5d`는 최근 완료 거래일 최대 5개, 나머지 범위는 거래소
 Naver의 `points[].t`는 현지 거래일을 UTC 자정으로 표현한 날짜 라벨이다.
 실제 거래 체결 시각이 아니다. Coinbase의 값은 UTC 일봉 시작 시각이다.
 
-프론트엔드가 차트를 그리는 데 쓴다. 시장 데이터를 못 가져왔으면 `marketData`와 함께 `undefined`다.
+프론트엔드가 차트를 그리는 데 쓴다. 시장 데이터를 못 가져왔으면 `marketData`와 함께 필드가 없다.
 
 | 필드 | 의미 |
 |---|---|
@@ -330,7 +359,7 @@ Naver의 `points[].t`는 현지 거래일을 UTC 자정으로 표현한 날짜 �
 
 `points.length`는 `indicators.points`와 항상 같다 — 차트와 이동평균이 어긋나지 않게 하기 위함이다.
 
-**`marketSeries`는 분석 프롬프트에 포함되지 않는다.** 숫자 수십 쌍은 토큰만 늘리고 `chartTrend` 문장이 이미 그 내용을 요약한다. `cacheKey`에도 영향을 주지 않으므로 확인 토큰 흐름이 그대로 유지된다.
+**`series`는 분석 프롬프트에 포함되지 않는다.** 숫자 수십 쌍은 토큰만 늘리고 `chartTrend` 문장이 이미 그 내용을 요약한다. `cacheKey`에도 영향을 주지 않으므로 확인 토큰 흐름이 그대로 유지된다.
 
 ### 부분 실패
 
@@ -338,9 +367,10 @@ Naver의 `points[].t`는 현지 거래일을 UTC 자정으로 표현한 날짜 �
 |---|---|
 | 일부 피드 실패 | 나머지로 진행. `degraded`에 기록 |
 | **모든 뉴스 피드 실패** | `502 COLLECTION_FAILED` — 뉴스가 없으면 분석이 성립하지 않는다 |
-| 시장 데이터 실패 | `marketData` 없이 `200`. `degraded`에 기록 |
-| 심볼 해석 실패 | 위와 같음 |
-| 재무: CIK 없음 | `financial` 없이 `200`. 미국 상장사가 아니거나 사전에 없는 종목 |
+| 일부 종목 시세 실패 | 그 종목만 `marketData` 없이 `200`. `degraded`에 `symbol`과 사유 기록 |
+| 종목 해석 실패 | `instruments: []`, `resolution.kind: "unresolved"`. 뉴스·논문 분석은 계속된다 |
+| 재무: 대상 아님 | `financial` 없이 `200`. 코인이거나 SEC·DART에 없는 종목 |
+| 재무: DART 키 없음·오류 | 한국 종목 `financial` 없이 `200`. 사유는 `degraded`. 키 값은 응답·로그에 남지 않는다 |
 | 재무: 일부 개념 없음 | 있는 지표만. 없는 것은 `financial.degraded`에 개념명 |
 | 논문: 한 소스 실패 | 나머지 소스로 진행 |
 | 논문·실험 전부 실패 | 해당 필드 없이 `200`. 뉴스가 있으면 분석은 계속된다 |
@@ -352,15 +382,15 @@ Naver의 `points[].t`는 현지 거래일을 UTC 자정으로 표현한 날짜 �
 `confirmToken`을 `X-Confirm-Token` 헤더에 담아 `/api/analyze/news`를 호출한다. 별도의 `estimate` 호출이 필요 없다.
 
 ```bash
-curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: application/json'   -H "Authorization: Bearer $TOKEN"   -H "X-Confirm-Token: $CONFIRM"   -d '{"newsList": [...], "marketData": {...}}'
+curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: application/json'   -H "Authorization: Bearer $TOKEN"   -H "X-Confirm-Token: $CONFIRM"   -d '{"newsList": [...], "instruments": [...]}'
 ```
 
 **수집 응답의 자료를 하나라도 고치면 확인 토큰이 통하지 않는다** (`428`).
-`newsList`·`marketData`뿐 아니라 `financial`·`research`·`experiments`도 `cacheKey`에 들어간다.
+`newsList`·`instruments`·`sector`·`research`·`experiments`가 `cacheKey`에 들어간다.
 작은 자료로 견적을 받고 큰 자료로 실행하는 것을 막기 위한 의도된 동작이다.
 
-특히 **빈 배열을 넣지 말 것.** 수집 응답에 `research`가 없었다면 분석 요청에도 넣지 않아야 한다.
-`{"research": []}`를 보내면 해시가 달라져 `428`이 난다.
+특히 **빈 배열을 넣지 말 것.** 수집 응답에 `research`가 없었거나 `instruments`에 시세·재무가 모두 없다면 분석 요청에도 넣지 않아야 한다.
+`{"research": []}`나 `{"instruments": []}`를 보내면 해시가 달라져 `428`이 난다.
 
 전체 시나리오는 `scripts/verify-research.sh`가 자동 검증한다.
 
@@ -470,12 +500,18 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
       "publishedAt": "2026-08-30T09:00:00Z"
     }
   ],
-  "marketData": {
-    "assetName": "엔비디아",
-    "currentPrice": "182.50",
-    "priceChange": "+2.3%",
-    "chartTrend": "20일 이동평균 상회"
-  },
+  "instruments": [
+    {
+      "symbol": "NVDA", "name": "NVIDIA", "assetType": "stock", "market": "US",
+      "marketData": {
+        "assetName": "엔비디아",
+        "currentPrice": "182.50",
+        "priceChange": "+2.3%",
+        "chartTrend": "20일 이동평균 상회"
+      }
+    }
+  ],
+  "sector": "반도체",
   "analysisPeriod": "최근 3개월"
 }
 ```
@@ -490,14 +526,14 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
 | `newsList[].source` | ✅ | 문자열 | 1~200자 |
 | `newsList[].url` | ✅ | 문자열 | **`http`/`https`만 허용**, 2048자 이하 |
 | `newsList[].publishedAt` | ✅ | 문자열 | `Date.parse` 가능한 날짜 |
-| `marketData` | ❌ | 객체 | 있으면 아래 4개 필드 모두 필요 |
-| `marketData.assetName` | 조건부 | 문자열 | 1~200자 |
-| `marketData.currentPrice` | 조건부 | 문자열 \| 숫자 | 문자열이면 64자 이하 |
-| `marketData.priceChange` | 조건부 | 문자열 \| 숫자 | 문자열이면 64자 이하 |
-| `marketData.chartTrend` | 조건부 | 문자열 | 1~`MAX_TREND_CHARS`(1000)자 |
+| `instruments` | ❌ | 배열 | 1~4개. 시세·재무가 모두 없는 종목은 빼고, 남는 종목이 없으면 필드를 싣지 않는다 |
+| `instruments[].symbol` `name` `assetType` `market` | 조건부 | 문자열 | 종목 식별. 수집 응답 그대로 |
+| `instruments[].marketData` | ❌ | 객체 | 있으면 `assetName`(1~200자), `currentPrice`·`priceChange`(문자열이면 64자 이하), `chartTrend`(1~`MAX_TREND_CHARS`(1000)자) 모두 필요 |
+| `instruments[].financial` | ❌ | 객체 | 수집 응답 그대로. `source`는 `sec` \| `dart` |
+| `instruments[]`의 `series` | — | — | **받지 않는다.** 보내면 `400` |
+| `sector` | ❌ | 문자열 | 40자 이하. `collected.resolution.sector`를 그대로 넣는다. 있으면 프롬프트에 분야 묶음 안내가 붙는다 |
 | `newsList[].contentKind` | ❌ | 문자열 | `headline` \| `summary` \| `full`. 없으면 `full`로 간주 |
 | `analysisPeriod` | ❌ | 문자열 | 200자 이하 |
-| `financial` | ❌ | 객체 | `/api/research/collect`가 준 값 **그대로** |
 | `research` | ❌ | 배열 | `MAX_RESEARCH_ITEMS`(5) 이하. 수집 응답 그대로 |
 | `experiments` | ❌ | 배열 | `MAX_EXPERIMENT_ITEMS`(5) 이하. 수집 응답 그대로 |
 
@@ -654,12 +690,15 @@ curl -X POST http://localhost:3000/api/analyze/news \
       "url": "https://example.com/article/1",
       "publishedAt": "2026-08-30T09:00:00Z"
     }],
-    "marketData": {
-      "assetName": "엔비디아",
-      "currentPrice": "182.50",
-      "priceChange": "+2.3%",
-      "chartTrend": "20일 이동평균 상회"
-    }
+    "instruments": [{
+      "symbol": "NVDA", "name": "NVIDIA", "assetType": "stock", "market": "US",
+      "marketData": {
+        "assetName": "엔비디아",
+        "currentPrice": "182.50",
+        "priceChange": "+2.3%",
+        "chartTrend": "20일 이동평균 상회"
+      }
+    }]
 }
 ```
 
