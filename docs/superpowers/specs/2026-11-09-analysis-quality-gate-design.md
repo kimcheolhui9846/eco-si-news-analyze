@@ -46,7 +46,7 @@ parseAnalysis
 
 ### 검사 컨텍스트
 
-`buildQualityContext({ items, researchItems, experimentItems, instruments, sector })`가 만든다. 모두 서버가 이미 가진 값이다.
+`buildQualityContext({ sources, instruments, sector })`가 만든다. `sources`는 서버가 응답용으로 이미 만든 출처 배열(`buildSources` + `buildExtraSources`)이다. `has`는 type이 `financial`·`research`·`experiment`인 출처가 있는지로 정한다.
 
 ```
 {
@@ -86,10 +86,11 @@ issue 형태:
 - `확실히\s*(상승|하락|오른|내린|오를|내릴)`
 - `(상승|하락)할\s*것이\s*(확실|분명)`
 - `목표\s*(주가|가격|가)\s*[:은는]?\s*[\d,]+`
-- `(매수|매도)\s*(하세요|하십시오|를\s*추천|을\s*추천|추천)`
+- `(매수|매도)\s*(을|를)?\s*(추천|권유|권고)(합니다|드립니다|해요)`
+- `(매수|매도)\s*하(세요|십시오)`
 - `100\s*%\s*(상승|하락|수익)`
 
-"반드시 확인해야 할 지표"처럼 방향어가 붙지 않은 "반드시"는 잡지 않는다.
+"반드시 확인해야 할 지표"처럼 방향어가 붙지 않은 "반드시"와 "매수를 추천하지 않습니다" 같은 부정은 잡지 않는다.
 
 ### 품질 보고서
 
@@ -122,18 +123,18 @@ mock 응답에는 `instrumentComparison: []`를 넣는다. mock의 disclaimer는
 
 ## 화면 (client)
 
-- `QualityBadge.jsx`: 리포트 상단 요약 아래. 한 줄 "검증 92점 · 교정 1건 · 경고 1건". `<details>`로 펼치면 issue 목록이 나오고, 각 항목에 "교정됨" 또는 "확인 필요" 표시와 message가 붙는다. issue가 0건이면 "자동 검증 통과". `limited`면 "검증 제한" 문구를 덧붙인다. `meta.quality`가 없으면(옛 응답) 아무것도 그리지 않는다.
+- `QualityBadge.jsx`: 리포트 분석 영역 맨 위(`InsightReport` 바로 앞). 한 줄 "검증 92점 · 교정 1건 · 경고 1건". `<details>`로 펼치면 issue 목록이 나오고, 각 항목에 "교정됨" 또는 "확인 필요" 표시와 message가 붙는다. issue가 0건이면 "자동 검증 통과". `limited`면 "검증 제한" 문구를 덧붙인다. `meta.quality`가 없으면(옛 응답) 아무것도 그리지 않는다.
 - `InstrumentInsight.jsx`: `analysis.instrumentComparison`이 1건 이상일 때만, 기존 `InstrumentComparison`(수치 비교표) 아래에 종목별 positioning·keyDifference를 보여 준다.
 
 ## 평가 세트
 
-- `eval/cases/*.json`: `{ name, description, context, degraded?, response, expect }`
+- `eval/cases/*.json`: `{ name, context, contextOverride?, base?, override?, response?, degraded?, expect }`. `context`가 문자열이면 `eval/contexts/<이름>.json`, `base`가 있으면 `eval/responses/<이름>.json`에 `override`를 최상위 키 단위로 덮어쓴다.
   - `context`는 직렬화 가능한 형태다(`sources`는 객체, `instruments`·`sector`·`has` 그대로). 러너가 Map으로 바꾼다.
   - `expect`: `{ minScore?, maxScore?, mustFix?: [check], mustWarn?: [check], mustNotFlag?: [check] }`
 - `eval/run.js`(`lib/quality`만 쓴다): 모든 케이스를 실행해 케이스별 통과 여부, 검사기별 적중 수, 평균 점수를 출력한다. 실패가 하나라도 있으면 종료 코드 1.
 - `package.json`: `"eval": "node eval/run.js"`.
 - `tests/eval.test.js`: 같은 케이스를 node:test로 돌려 `npm test`에도 포함한다.
-- 초기 케이스(12개):
+- 초기 케이스(13개):
   1. clean-single: 깨끗한 단일 종목 응답 → 점수 100, 아무 검사도 걸리지 않음
   2. clean-sector: 깨끗한 분야 묶음 응답(4종목 비교) → 점수 100
   3. unknown-briefing-source: 없는 `S9` 브리핑 항목 → citations fixed
@@ -144,8 +145,9 @@ mock 응답에는 `instrumentComparison: []`를 넣는다. mock의 disclaimer는
   8. disclaimer-altered → disclaimer fixed
   9. scenario-no-invalidation → scenarios warning
   10. scenario-assertive: "반드시 상승할 것" → scenarios warning
-  11. scenario-not-assertive: "반드시 확인해야 할 지표" → scenarios는 걸리지 않음
+  11. scenario-not-assertive: "반드시 확인해야 할 지표", "매수를 추천하지 않습니다" → scenarios는 걸리지 않음
   12. comparison-mismatch: 입력에 없는 종목 1개 + 누락 1개 → comparison fixed와 warning
+  13. degraded-report: Markdown 폴백의 없는 출처 ID → citations fixed, structure warning
 - README에 실제 응답을 케이스로 추가하는 절차를 적는다. 응답에서 개인 정보·키를 확인하고 지운 뒤 넣는다.
 
 ## 테스트
