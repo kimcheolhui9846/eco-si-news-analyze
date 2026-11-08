@@ -84,3 +84,31 @@ test('findInQuery: 흔한 약어와 한 글자 단어는 티커로 보지 않는
   assert.equal(d.findInQuery('오늘 A 등급'), null);
   assert.equal(d.findInQuery('PLTR 실적')?.symbol, 'PLTR');
 });
+
+test('findInQuery: 흔한 영어 단어와 겹치는 한 단어 회사명은 잡지 않는다', () => {
+  const d = createDirectory({
+    us: [
+      ['NWSA', '0001564708', 'News Corp'],
+      ['TGT', '0000027419', 'TARGET CORP'],
+      ['SNOW', '0001640147', 'Snowflake Inc.'],
+    ],
+  });
+  assert.equal(d.findInQuery('AI news'), null);
+  assert.equal(d.findInQuery('semiconductor news'), null);
+  assert.equal(d.findInQuery('2차전지 target'), null);
+  // 대문자로 써도 흔한 단어 목록에 있으면 잡지 않는다.
+  assert.equal(d.findInQuery('Target 실적'), null);
+});
+
+test('findInQuery: 한 단어 회사명은 첫 글자를 대문자로 쓴 경우에만 잡는다', () => {
+  const d = createDirectory({ us: [['SNOW', '0001640147', 'Snowflake Inc.']] });
+  assert.equal(d.findInQuery('Snowflake 실적')?.symbol, 'SNOW');
+  assert.equal(d.findInQuery('Snowflake의 실적')?.symbol, 'SNOW');
+  assert.equal(d.findInQuery('snowflake 실적'), null);
+});
+
+test('findInQuery: 모든 단어가 흔한 단어인 여러 단어 이름은 첫 글자 대문자일 때만 잡는다', () => {
+  const d = createDirectory({ us: [['QUBT', '0001758009', 'Quantum Computing Inc.']] });
+  assert.equal(d.findInQuery('quantum computing 전망'), null);
+  assert.equal(d.findInQuery('Quantum Computing 주가')?.symbol, 'QUBT');
+});
