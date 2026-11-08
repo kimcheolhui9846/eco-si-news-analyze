@@ -18,15 +18,35 @@ test('무효화 조건이 비었거나 자료 부족이면 경고한다', () => 
   assert.equal(analysis.scenarios.length, 4, '고치지 않는다');
 });
 
+test('무효화 조건이 사실상 비어 있으면 경고한다', () => {
+  for (const v of ['자료 부족.', '해당 없음', '-', 'N/A']) {
+    const { issues } = checkScenarios({ scenarios: [scenario({ invalidationCondition: v })] });
+    assert.equal(issues.length, 1, v);
+    assert.equal(issues[0].path, 'scenarios[0].invalidationCondition', v);
+  }
+});
+
 test('단정 표현은 경로당 한 건 경고한다', () => {
   const assertive = [
-    '주가는 반드시 상승할 것이다', '확실히 오를 종목', '하락할 것이 분명하다', '목표주가 150,000',
-    '목표가는 200', '지금 매수하세요', '매수를 추천합니다', '100% 수익',
+    '주가는 반드시 상승할 것이다', '확실히 오를 종목', '하락할 것이 분명하다', '목표주가 150,000원',
+    '목표가는 200달러', '지금 매수하세요', '매수를 추천합니다', '100% 수익',
+    '매수를 추천한다', '매도해야 한다', '반드시 오르는 종목',
   ];
   for (const text of assertive) {
     const { issues } = checkScenarios({ trendAnalysis: text });
     assert.equal(issues.length, 1, text);
     assert.equal(issues[0].path, 'trendAnalysis');
+  }
+});
+
+test('가격이 아닌 목표·부정·과거 수익률은 걸리지 않는다', () => {
+  const benign = [
+    '성장 목표가 3가지다', '중기 목표가 2027년까지 달성된다', '주가가 반드시 상승하지는 않는다',
+    '작년에 100% 상승했다', '1,100% 상승한 종목',
+  ];
+  for (const text of benign) {
+    const { issues } = checkScenarios({ trendAnalysis: text });
+    assert.deepEqual(issues, [], text);
   }
 });
 

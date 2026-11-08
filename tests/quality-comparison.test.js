@@ -24,6 +24,16 @@ test('이름은 입력 종목 이름으로 조용히 맞춘다', () => {
   assert.deepEqual(issues, []);
 });
 
+test('소문자 종목 코드도 입력 종목으로 맞춰 유지한다', () => {
+  const lower = [
+    entry('nvda', 'x'), entry('tsm', 'x'), entry('005930.ks', 'x'), entry('000660.ks', 'x'),
+  ];
+  const { analysis, issues } = checkComparison({ instrumentComparison: lower }, { instruments: FOUR });
+  assert.deepEqual(analysis.instrumentComparison.map((e) => e.symbol), FOUR.map((i) => i.symbol));
+  assert.deepEqual(analysis.instrumentComparison.map((e) => e.name), FOUR.map((i) => i.name));
+  assert.deepEqual(issues, []);
+});
+
 test('중복 종목은 첫 항목만 남긴다', () => {
   const list = [...FOUR.map((i) => entry(i.symbol)), entry('NVDA')];
   const { analysis, issues } = checkComparison({ instrumentComparison: list }, { instruments: FOUR });
