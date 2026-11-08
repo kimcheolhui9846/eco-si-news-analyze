@@ -9,9 +9,17 @@
 
 ---
 
-## 2026-11-09 B: 분석 품질 게이트 (구현·리뷰·실호출 검증 완료, 푸시 전)
+## 2026-11-09 C1: CS 기술 동향 브리핑 (설계 완료, 검토 대기)
 
-- 브랜치 `feature/analysis-quality-gate` — `feature/sector-baskets-opendart`(Draft PR #12)에서 땄다. PR #12 병합 후 기준을 main으로 바꾼다. **아직 푸시하지 않았다.**
+- 브랜치 `feature/cs-briefing` — `feature/analysis-quality-gate`(Draft PR #13)에서 땄다.
+- 설계: `docs/superpowers/specs/2026-11-09-cs-briefing-design.md`. `mode: 'cs'` 프로필 구조(분석 실행부 `lib/analysis-runner.js` 추출 + `lib/modes/{invest,cs}.js`), 출처 5종(arXiv cs.*, HN Algolia, 기존 뉴스, 연구 블로그 RSS 9~10개, GitHub 검색), CS 응답 스키마·품질 검사·`CsReportPage`.
+- 후속 C2: 논문 한 편 전문 분석(`mode: 'paper'`). 사용자가 "좀 더 딥하게 세부 분석"으로 요청, "논문 한 편 전문 분석"을 선택.
+- PR #13: https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/13 (기준 `feature/sector-baskets-opendart`, #12 병합 후 main으로 변경).
+- 다음: 사용자 설계 검토 → 구현 계획 → 서브에이전트 주도 실행.
+
+## 2026-11-09 B: 분석 품질 게이트 (완료, Draft PR #13)
+
+- 브랜치 `feature/analysis-quality-gate` — `feature/sector-baskets-opendart`(Draft PR #12)에서 땄다. PR #12 병합 후 기준을 main으로 바꾼다. 푸시 완료, Draft PR #13.
 - 설계: `docs/superpowers/specs/2026-11-09-analysis-quality-gate-design.md`, 계획: `docs/superpowers/plans/2026-11-09-analysis-quality-gate.md`.
 - 구현: `lib/quality/`(citations·availability·disclaimer·scenarios·comparison + `assessQuality`), `server.js` 분석 경로 연결(`meta.quality`, 캐시 포함), 응답 스키마 `instrumentComparison`, `eval/`(`npm run eval`, 16케이스), 화면 `QualityBadge`·`InstrumentInsight`.
 - 계획 대비 사용자 승인 변경: ① 단정 표현 정규식 보정(한다체 권유, 목표가는 통화 단위 필수, 부정·과거 수익률 제외, 무효화 조건 빈 값 확대), 종목 심볼 대소문자 무시. ② 최종 리뷰 후: 브리핑 제목·출처·날짜는 서버 값으로 **조용히** 덮어쓰고 감점하지 않음, 복원된 제목의 `[T1]` 등은 건드리지 않음, 비교 검사 종목은 시세가 있는 종목만, 분야가 아니어도 2종목 이상이면 비교 지시.
