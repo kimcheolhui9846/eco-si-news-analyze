@@ -103,3 +103,25 @@ test('relevanceName: 종목이 하나일 때만 자산명을 준다', () => {
 test('UNRESOLVED_REASON은 입력 예시를 담는다', () => {
   assert.match(UNRESOLVED_REASON, /반도체/);
 });
+
+test('한 종목에서 예외가 나도 다른 종목은 진행하고 그 종목은 빈 결과와 사유를 남긴다', async () => {
+  const { instruments, degraded } = await collectInstruments({
+    instruments: [{ ...NVDA, symbol: 'BOOM' }, SAMSUNG], wantMarket: true, wantFinancial: true, range: '1mo',
+    ...deps({
+      market: {
+        fetch: async ({ symbol }) => {
+          if (symbol === 'BOOM') throw new Error('https://example.test/?apikey=secret');
+          return marketResult(symbol);
+        },
+      },
+    }),
+  });
+  assert.deepEqual(instruments[0], { symbol: 'BOOM', name: 'NVIDIA', assetType: 'stock', market: 'US' });
+  assert.ok(instruments[1].marketData);
+  assert.equal(instruments[1].financial.source, 'dart');
+  assert.deepEqual(degraded, [
+    { provider: 'market', symbol: 'BOOM', reason: '시장 데이터를 가져오지 못했습니다.' },
+    { provider: 'financial', symbol: 'BOOM', reason: '재무 자료를 처리하지 못했습니다.' },
+  ]);
+  assert.ok(!JSON.stringify(degraded).includes('secret'));
+});
