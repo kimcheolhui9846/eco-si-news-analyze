@@ -1,0 +1,149 @@
+{
+  "name": "실제 응답: 엔비디아 단일 종목",
+  "description": "2026-11-09 gpt-4o 실제 응답(로컬 live 검증). 품질 게이트가 정상 응답을 감점하지 않는지 확인한다.",
+  "context": {
+    "sources": {
+      "S1": {
+        "title": "Revolution Medicines' Pancreatic Cancer Drug Nearly Doubled Survival. Is the High-Flying Stock Still a Buy?",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:35:00.000Z"
+      },
+      "S2": {
+        "title": "Intel Stock Has Gone Nowhere in 8 Years. Why This Time Could Be Different",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:29:58.000Z"
+      },
+      "S3": {
+        "title": "Anthropic’s $1.5 Trillion IPO Could Expose the Biggest Risk Facing the AI Boom",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:23:46.000Z"
+      },
+      "S4": {
+        "title": "Anthropic’s $895 Billion AI Gamble Could Become Wall Street’s Next Debt Nightmare",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:20:41.000Z"
+      },
+      "S5": {
+        "title": "Top 5 stocks to watch this week",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:20:25.000Z"
+      },
+      "F1": {
+        "title": "엔비디아 SEC 제출 서류",
+        "source": "SEC EDGAR",
+        "publishedAt": "2026-08-26"
+      }
+    },
+    "instruments": [
+      {
+        "symbol": "NVDA",
+        "name": "엔비디아"
+      }
+    ],
+    "has": {
+      "financial": true,
+      "research": false,
+      "experiments": false
+    }
+  },
+  "response": {
+    "summary": "이번 리포트는 최근 금융 데이터 및 뉴스 분석을 통해 시장에 미치는 영향을 탐구합니다. 특히, 혁신적인 의약품 개발과 AI 투자 리스크, 기술 기업의 성장 및 변화 가능성에 초점을 맞춥니다. 또한, 엔비디아(NVDA)의 최근 주가 하락과 관련된 재무지표를 분석하고, 시장 전반의 변동성을 평가합니다.",
+    "newsBriefing": [
+      {
+        "sourceId": "S1",
+        "title": "Revolution Medicines' Pancreatic Cancer Drug Nearly Doubled Survival. Is the High-Flying Stock Still a Buy?",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:35:00.000Z",
+        "keyPoints": "Revolution Medicines는 아직 수익을 내지는 못하지만, 블록버스터 잠재력이 있는 약물을 보유하고 있습니다.",
+        "marketImplication": "약물의 효과가 기대 수준을 초과하면 시장에서 긍정적으로 작용할 수 있습니다.",
+        "needsVerification": "기사 요약에 기반한 분석이므로, 주식 매수 여부 판단에는 추가적인 정보가 필요합니다."
+      },
+      {
+        "sourceId": "S2",
+        "title": "Intel Stock Has Gone Nowhere in 8 Years. Why This Time Could Be Different",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:29:58.000Z",
+        "keyPoints": "Intel은 최근 15년간 가장 강력한 데이터 센터 성장을 기록했으나, 주가는 절반으로 하락했습니다.",
+        "marketImplication": "강력한 성장에도 불구하고 주가가 하락한 이유는 재무 리스크와 고객사의 불확실성 때문입니다.",
+        "needsVerification": "기사 요약 기반 정보만으로는 향후 주식 반등 가능성을 확신하기 어렵습니다."
+      },
+      {
+        "sourceId": "S3",
+        "title": "Anthropic’s $1.5 Trillion IPO Could Expose the Biggest Risk Facing the AI Boom",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:23:46.000Z",
+        "keyPoints": "Anthropic의 IPO가 AI 시장의 가장 큰 위험 요소를 보여줄 수 있으며, 부채 문제가 특히 큽니다.",
+        "marketImplication": "회의적인 투자 관점에서는 AI 부문의 재무 리스크가 중요한 변수입니다.",
+        "needsVerification": "요약 기반의 분석으로 추가적인 금융 내역 검토가 필요합니다."
+      },
+      {
+        "sourceId": "S4",
+        "title": "Anthropic’s $895 Billion AI Gamble Could Become Wall Street’s Next Debt Nightmare",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:20:41.000Z",
+        "keyPoints": "Anthropic의 IPO는 계약에 의한 상당한 금융 위험을 공개했으며, 일부 주는 이미 리액션을 보였습니다.",
+        "marketImplication": "대규모 투자로 인해 추가적인 시장 반응과 주가 변동성이 예상됩니다.",
+        "needsVerification": "기사 요약에 의존한 부분이 있어 추가적인 검증 필요."
+      },
+      {
+        "sourceId": "S5",
+        "title": "Top 5 stocks to watch this week",
+        "source": "Yahoo Finance",
+        "publishedAt": "2026-11-08T16:20:25.000Z",
+        "keyPoints": "이번 주는 다섯 개 기업의 실적 발표와 미국의 최신 인플레이션 데이터를 기반으로 시장의 변동성이 예상됩니다.",
+        "marketImplication": "시장 센티멘트는 기업 실적과 거시 경제지표에 따라 변화할 것입니다.",
+        "needsVerification": "기사 요약에 기반한 내용으로 구체적인 주식 추천에는 한계가 있습니다."
+      }
+    ],
+    "trendAnalysis": "현재 엔비디아(NVDA)는 시장에서 큰 하향세를 보이며, 22일 거래 기간 동안 19.02% 하락했습니다. 이 하락은 단기적으로 볼 때 5일 이동평균선(195.42 USD)과 20일 이동평균선(211.55 USD)을 모두 하회하고 있습니다. 이는 최근의 변동성 확대로 인한 불안정성을 나타내며, 거래량이 증가한 점은 주가 하락에 따른 시장 관심 증가로 해석될 수 있습니다.",
+    "scenarios": [
+      {
+        "type": "Positive",
+        "premise": "Revolution Medicines의 신약이 예상보다 높은 효과를 지속적으로 입증할 경우",
+        "indicatorsToWatch": "FDA 승인을 받을 추가 데이터 발표, 임상 시험 결과",
+        "possibleDirection": "Revolution Medicines 주가 상승 가능성",
+        "invalidationCondition": "임상 결과 예상보다 효과가 낮게 나타나거나 부정적 부작용 발생 시",
+        "cautions": "여전히 초기 임상단계에 있으므로 불확실성이 존재합니다."
+      },
+      {
+        "type": "Negative",
+        "premise": "Intel이 고객 관련 불확실성을 극복하지 못할 경우",
+        "indicatorsToWatch": "고객사 계약 갱신 여부와 데이터 센터 수익 추세",
+        "possibleDirection": "주가의 추가 하락 가능성",
+        "invalidationCondition": "새로운 대기업 고객사 확보 또는 예상치 이상의 데이터센터 매출 증가",
+        "cautions": "기술적 벽돌과 재무 부담이 지속될 수 있습니다."
+      }
+    ],
+    "risks": [
+      "AI 분야 투자에 따른 부채 리스크 확대 가능성",
+      "제약산업의 임상 시험 불확실성",
+      "기술주 중심의 시장 변동성 확대"
+    ],
+    "monitoringIndicators": [
+      "Revolution Medicines의 추가 임상 시험 결과",
+      "Intel의 데이터 센터 매출 성장 지속 여부",
+      "Anthropic AI IPO에 따른 시장 반응"
+    ],
+    "instrumentComparison": [],
+    "financialSummary": {
+      "available": "자료 있음",
+      "periodBasis": "FY2027 Q2",
+      "notes": "엔비디아는 높은 매출 성장률과 순이익을 기록하고 있으며, 부채비율은 28.5%로 안정적입니다."
+    },
+    "researchSummary": {
+      "available": "자료 부족",
+      "maturity": "자료 부족",
+      "notes": "현재 제공된 뉴스 및 시장 데이터에 연구 논문이 포함되지 않았습니다."
+    },
+    "experimentSummary": {
+      "available": "자료 부족",
+      "evidenceLevel": "자료 부족",
+      "notes": "실험 또는 임상 시험 자료가 제공되지 않았습니다."
+    },
+    "disclaimer": "본 분석은 제공된 자료를 기반으로 한 정보 제공 목적의 분석이며, 특정 금융상품의 매수·매도 또는 투자 수익을 보장하는 투자 권유가 아닙니다."
+  },
+  "expect": {
+    "minScore": 100,
+    "maxScore": 100
+  }
+}
