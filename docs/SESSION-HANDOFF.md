@@ -9,13 +9,15 @@
 
 ---
 
-## 2026-11-09 C1: CS 기술 동향 브리핑 (설계 완료, 검토 대기)
+## 2026-11-09 C1: CS 기술 동향 브리핑 (계획 완료, 실행 방식 선택 대기)
 
 - 브랜치 `feature/cs-briefing` — `feature/analysis-quality-gate`(Draft PR #13)에서 땄다.
 - 설계: `docs/superpowers/specs/2026-11-09-cs-briefing-design.md`. `mode: 'cs'` 프로필 구조(분석 실행부 `lib/analysis-runner.js` 추출 + `lib/modes/{invest,cs}.js`), 출처 5종(arXiv cs.*, HN Algolia, 기존 뉴스, 연구 블로그 RSS 9~10개, GitHub 검색), CS 응답 스키마·품질 검사·`CsReportPage`.
 - 후속 C2: 논문 한 편 전문 분석(`mode: 'paper'`). 사용자가 "좀 더 딥하게 세부 분석"으로 요청, "논문 한 편 전문 분석"을 선택.
 - PR #13: https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/13 (기준 `feature/sector-baskets-opendart`, #12 병합 후 main으로 변경).
-- 다음: 사용자 설계 검토 → 구현 계획 → 서브에이전트 주도 실행.
+- 설계 승인됨. 계획: `docs/superpowers/plans/2026-11-09-cs-briefing.md` (10 태스크: 실행부 추출 → mode 라우팅 → HN·GitHub → 블로그·arXiv CS → 스키마·품질·평가 → CS 프로필 → CS 수집 라우트 → 클라이언트 검색·검토 → 보고서 화면 → 문서). 설계 대비 결정 6개는 계획 머리말에 있다(arXiv CS 별도 파일, NVIDIA Atom, 토스 블로그, `baseMeta`, 라우트가 `mode` 분리, `http.get` 헤더 옵션).
+- 진행 기록은 `.superpowers/sdd/2026-11-09-cs-briefing/progress.md`(실행 시작 후). 완료된 태스크는 다시 보내지 않는다.
+- 다음: 실행 방식 선택(서브에이전트 주도 권장) → 최종 리뷰 → 실호출 1회(로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 새 호스트 12개 필요).
 
 ## 2026-11-09 B: 분석 품질 게이트 (완료, Draft PR #13)
 
