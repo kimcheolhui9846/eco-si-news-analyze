@@ -4,6 +4,7 @@ import {
   createCircuitBreaker, createMockLlmClient, callWithResilience,
   ANALYSIS_JSON_SCHEMA, loadConfig, ApiError,
 } from '../server.js';
+import { DISCLAIMER } from '../lib/prompt.js';
 import { makeClock, makeMockLlm, BASE_ENV } from './helpers.js';
 
 const cfg = (over = {}) => loadConfig({ ...BASE_ENV, ...over });
@@ -217,4 +218,18 @@ test('strict 모드 규칙대로 새 필드도 required에 있다', () => {
       Object.keys(schema.properties[key].properties).sort(),
     );
   }
+});
+
+test('응답 스키마에 종목 비교 배열이 있다', () => {
+  const prop = ANALYSIS_JSON_SCHEMA.schema.properties.instrumentComparison;
+  assert.equal(prop.type, 'array');
+  assert.deepEqual(Object.keys(prop.items.properties).sort(), ['keyDifference', 'name', 'positioning', 'symbol']);
+  assert.ok(ANALYSIS_JSON_SCHEMA.schema.required.includes('instrumentComparison'));
+});
+
+test('mock 응답은 빈 종목 비교와 표준 면책 문구를 쓴다', async () => {
+  const llm = createMockLlmClient();
+  const report = JSON.parse((await llm.complete({ useJsonSchema: true })).content);
+  assert.deepEqual(report.instrumentComparison, []);
+  assert.equal(report.disclaimer, DISCLAIMER);
 });
