@@ -30,7 +30,7 @@ export function resolveCase(c) {
   return {
     // CS 검사는 출처와 수집 합계만 본다.
     context: cs
-      ? { sources, total: ctx.total ?? sources.size }
+      ? { sources, total: ctx.total ?? sources.size, idPrefixes: 'PHSBG' }
       : {
           sources,
           instruments: ctx.instruments ?? [],
