@@ -3689,6 +3689,7 @@ git commit -m "feat: add CS collection route"
 - Modify: `client/src/api/client.js`
 - Modify: `client/src/App.jsx`
 - Modify: `client/src/styles/app.css`
+- Create: `tests/client/cs-fixtures.js`
 - Test: `tests/client/cs-search-review.test.jsx`
 
 **Interfaces:**
@@ -3704,21 +3705,12 @@ git commit -m "feat: add CS collection route"
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
-`tests/client/cs-search-review.test.jsx`:
+`tests/client/cs-fixtures.js` (테스트 도우미, 테스트 파일 아님):
 
-```jsx
-import 'global-jsdom/register';
-import { test, afterEach } from 'node:test';
-import assert from 'node:assert/strict';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import App from '../../client/src/App.jsx';
-import CsReviewPage from '../../client/src/pages/CsReviewPage.jsx';
-import ScopePicker, { CS_SCOPES } from '../../client/src/components/ScopePicker.jsx';
-import { createApiClient } from '../../client/src/api/client.js';
+```js
+// CS 화면 테스트 공용 자료. 테스트 파일끼리 import하면 테스트가 두 번 돈다. 여기 둔다.
 
-afterEach(cleanup);
-
-const BUDGET = {
+export const BUDGET = {
   calls: { used: 0, limit: 50, remaining: 50, resetsAt: '2026-11-10T00:00:00.000Z' },
   cost: { usedUsd: 0, limitUsd: 5, remainingUsd: 5, resetsAt: '2026-12-01T00:00:00.000Z' },
 };
@@ -3751,6 +3743,22 @@ export const CS_COLLECT = {
   estimate: { estimatedInputTokens: 900, estimatedCostUsd: 0.0123, budget: BUDGET },
   confirmToken: 'ct_cs',
 };
+```
+
+`tests/client/cs-search-review.test.jsx`:
+
+```jsx
+import 'global-jsdom/register';
+import { test, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import App from '../../client/src/App.jsx';
+import CsReviewPage from '../../client/src/pages/CsReviewPage.jsx';
+import ScopePicker, { CS_SCOPES } from '../../client/src/components/ScopePicker.jsx';
+import { createApiClient } from '../../client/src/api/client.js';
+import { BUDGET, CS_COLLECT } from './cs-fixtures.js';
+
+afterEach(cleanup);
 
 const makeApi = (over = {}) => ({
   login: async () => ({ token: 't', expiresAt: 'x' }),
@@ -4292,7 +4300,7 @@ Expected: fail 0, 빌드 성공
 - [ ] **Step 11: 커밋**
 
 ```bash
-git add client/src/components/ModeTabs.jsx client/src/components/CsSearchForm.jsx client/src/pages/CsReviewPage.jsx client/src/components/ScopePicker.jsx client/src/pages/SearchPage.jsx client/src/api/client.js client/src/App.jsx client/src/styles/app.css tests/client/cs-search-review.test.jsx
+git add client/src/components/ModeTabs.jsx client/src/components/CsSearchForm.jsx client/src/pages/CsReviewPage.jsx client/src/components/ScopePicker.jsx client/src/pages/SearchPage.jsx client/src/api/client.js client/src/App.jsx client/src/styles/app.css tests/client/cs-fixtures.js tests/client/cs-search-review.test.jsx
 git commit -m "feat: add CS mode tab, search form and review page"
 ```
 
@@ -4321,7 +4329,7 @@ import assert from 'node:assert/strict';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import App from '../../client/src/App.jsx';
 import CsReportPage from '../../client/src/pages/CsReportPage.jsx';
-import { CS_COLLECT } from './cs-search-review.test.jsx';
+import { CS_COLLECT } from './cs-fixtures.js';
 
 afterEach(cleanup);
 
