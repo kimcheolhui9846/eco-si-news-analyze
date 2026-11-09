@@ -7,6 +7,7 @@ import SearchPage from './pages/SearchPage.jsx';
 import ReviewPage from './pages/ReviewPage.jsx';
 import PaperReviewPage from './pages/PaperReviewPage.jsx';
 import CsReviewPage from './pages/CsReviewPage.jsx';
+import PaperReportPage from './pages/PaperReportPage.jsx';
 import CsReportPage from './pages/CsReportPage.jsx';
 import ReportPage from './pages/ReportPage.jsx';
 import ProgressIndicator from './components/ProgressIndicator.jsx';
@@ -67,6 +68,13 @@ export default function App({ api = defaultApi }) {
     setStep('search');
   };
 
+  // CS 보고서의 논문에서 바로 전문 분석으로. 수집만 하고, 비용은 검토 화면에서 승인한다.
+  const deepAnalyze = (arxiv) => {
+    setMode('paper');
+    setReport(null);
+    search({ mode: 'paper', arxiv });
+  };
+
   if (step === 'login') {
     return <LoginPage api={api} onSuccess={() => { setError(null); setStep('search'); }} />;
   }
@@ -91,18 +99,24 @@ export default function App({ api = defaultApi }) {
         return <ReviewPage {...props} />;
       })()}
 
-      {step === 'report' && (collected?.mode === 'cs' ? (
-        <CsReportPage report={report} onNewSearch={newSearch} />
-      ) : (
-        <ReportPage
-          report={report}
-          instruments={collected?.instruments}
-          research={collected?.research}
-          experiments={collected?.experiments}
-          collectedMeta={collected?.collected}
-          onNewSearch={newSearch}
-        />
-      ))}
+      {step === 'report' && (() => {
+        if (collected?.mode === 'paper') {
+          return <PaperReportPage report={report} paper={collected.paper} onNewSearch={newSearch} />;
+        }
+        if (collected?.mode === 'cs') {
+          return <CsReportPage report={report} onNewSearch={newSearch} onDeepAnalyze={deepAnalyze} />;
+        }
+        return (
+          <ReportPage
+            report={report}
+            instruments={collected?.instruments}
+            research={collected?.research}
+            experiments={collected?.experiments}
+            collectedMeta={collected?.collected}
+            onNewSearch={newSearch}
+          />
+        );
+      })()}
     </>
   );
 }

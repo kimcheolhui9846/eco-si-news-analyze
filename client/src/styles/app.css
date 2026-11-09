@@ -160,6 +160,9 @@ button.link {
   background: var(--accent-soft); border: 1px solid var(--accent-border);
   color: var(--warn-text); margin-right: 6px;
 }
+button.cite { cursor: pointer; font: inherit; font-family: var(--mono); font-size: 11px; }
+.cite-snippet { margin: 0.5rem 0 0; padding: 0.5rem 0.75rem; border-left: 3px solid var(--border); }
+mark.number { margin-right: 0.4rem; padding: 0 0.3rem; border-radius: 4px; font-variant-numeric: tabular-nums; }
 .briefing { padding: 11px 0; border-bottom: 1px solid var(--border); }
 .briefing:last-child { border-bottom: none; }
 .briefing-head { display: flex; align-items: center; gap: 4px; }

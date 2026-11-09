@@ -1,5 +1,6 @@
 import QualityBadge from '../components/QualityBadge.jsx';
 import SourceCitation from '../components/SourceCitation.jsx';
+import { arxivIdFrom } from '../lib/arxiv.js';
 
 // 모든 문자열은 텍스트로만 그린다. 모델 출력을 HTML로 해석하지 않는다.
 
@@ -28,12 +29,13 @@ const Labeled = ({ label, children }) => (
   <p><span className="muted small">{label}</span> {children}</p>
 );
 
-export default function CsReportPage({ report, onNewSearch }) {
+export default function CsReportPage({ report, onNewSearch, onDeepAnalyze }) {
   if (!report) return null;
 
   const { analysis = {}, sources = [], meta } = report;
   const pains = analysis.developerPainPoints ?? [];
   const titleOf = new Map(sources.map((s) => [s.sourceId, s.title]));
+  const urlOf = new Map(sources.map((s) => [s.sourceId, s.url]));
   const actions = (
     <div className="page-actions">
       <button type="button" className="primary" onClick={onNewSearch}>새 검색</button>
@@ -95,8 +97,13 @@ export default function CsReportPage({ report, onNewSearch }) {
             <Labeled label="기여">{p.contribution}</Labeled>
             <Labeled label="방법">{p.method}</Labeled>
             <Labeled label="한계">{p.limitations}</Labeled>
-            {/* C2(논문 한 편 전문 분석)에서 연결한다. */}
-            <button type="button" disabled>전문 분석 (준비 중)</button>
+            {(() => {
+              // arXiv 링크에서 ID를 뽑을 수 있을 때만 전문 분석으로 넘어간다. 비용은 다음 화면에서 승인한다.
+              const id = arxivIdFrom(urlOf.get(p.sourceId) ?? '');
+              return id && onDeepAnalyze
+                ? <button type="button" onClick={() => onDeepAnalyze(id)}>전문 분석</button>
+                : null;
+            })()}
           </article>
         ))}
       </Section>
