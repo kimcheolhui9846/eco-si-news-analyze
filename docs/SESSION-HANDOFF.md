@@ -9,6 +9,16 @@
 
 ---
 
+## 2026-11-09 C2: 논문 한 편 전문 분석 (구현 완료, PR 전)
+
+- 브랜치 `feature/cs-paper-analysis` — main(58e976c)에서 땄다. 설계 `docs/superpowers/specs/2026-11-09-paper-analysis-design.md`, 계획 `docs/superpowers/plans/2026-11-09-paper-analysis.md`.
+- `mode: 'paper'`: arXiv HTML 판(`arxiv.org/html/<id>`)을 `node-html-parser`로 장 단위 파싱(초록 S0, 장 S1…, 참고문헌·부록 제외) → 25,000토큰 예산으로 자름 → 비판적 읽기 보고서. 수치 대조 품질 검사(`numbers`).
+- 새 허용 호스트 `arxiv.org` — 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에도 더해야 한다.
+- 검증: `npm test` 938 / 937 pass / 0 fail / 1 skip, `npm run eval` 케이스 30개 · 실패 0개 · 평균 점수 92.2, 빌드 성공 (`npm run build:client`).
+- 남은 일: 로컬 실호출 1회(2401.04088, 약 $0.08), PR, 병합 후 운영 확인(승인 필요).
+
+---
+
 ## 2026-11-09 CS 출처 추가: Stack Overflow·Lobsters (PR #15 병합 58e976c, 운영 확인 완료)
 
 - 브랜치 `feature/cs-qa-sources` — main(6e3cd04)에서 땄다. 설계 `docs/superpowers/specs/2026-11-09-cs-qa-sources-design.md`, 계획 `docs/superpowers/plans/2026-11-09-cs-qa-sources.md`.

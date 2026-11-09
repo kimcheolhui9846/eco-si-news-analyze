@@ -14,6 +14,7 @@ Phase 1 기준. 모든 응답은 `application/json`이며, 모든 응답에 `X-R
 |---|---|
 | `'invest'` (기본) | 투자 뉴스 분석. `mode`를 생략하면 이 모드이므로 기존 클라이언트는 그대로 동작한다. |
 | `'cs'` | CS 기술 동향 브리핑. 아래 "CS 기술 동향 브리핑" 절을 본다. |
+| `'paper'` | arXiv 논문 한 편 전문 비판적 읽기. 본문은 arXiv HTML 판, 참고문헌·부록 제외, 약 25,000토큰 예산. 아래 "논문 전문 분석" 절을 본다. |
 
 - 모르는 값은 `400 INVALID_REQUEST` `"지원하지 않는 분석 모드입니다."`로 거부한다.
 - 확인 토큰은 **모드에 묶인다.** 견적 때 모드가 요청 해시에 들어가므로 투자 견적의 토큰으로 CS 분석을 실행하면 `428 CONFIRMATION_REQUIRED`다. 반대도 같다.
@@ -52,7 +53,8 @@ Phase 1 기준. 모든 응답은 `application/json`이며, 모든 응답에 `X-R
 | `CONFIRMATION_REQUIRED` | 428 | 확인 토큰 없이 비용이 드는 분석을 요청함 |
 | `COLLECTION_FAILED` | 502 | 모든 뉴스 피드에서 자료를 수집하지 못함 |
 | `TOO_MANY_CONCURRENT` | 429 | 동시 분석 한도 초과 |
-| `INSUFFICIENT_DATA` | 422 | 중복 제거 후 유효 자료 0건 |
+| `INSUFFICIENT_DATA` | 422 | 중복 제거 후 유효 자료 0건 (논문 모드: 본문 장 없음) |
+| `FULLTEXT_UNAVAILABLE` | 422 | arXiv HTML 판이 없는 논문(404 또는 본문 없는 페이지) |
 | `UPSTREAM_TIMEOUT` | 504 | LLM 응답 지연 |
 | `UPSTREAM_ERROR` | 502 | LLM 호출 실패 |
 | `CIRCUIT_OPEN` | 503 | 연속 실패로 회로 차단기가 열림 |
@@ -929,6 +931,140 @@ curl -X POST http://localhost:3000/api/analyze/news \
 | `investmentLanguage` | `매수`·`매도`·`주가`·`목표 주가`·`투자 권유` 같은 투자 표현이 있으면 경고만 한다(`CS 브리핑에 투자 관련 표현이 있습니다.`). 앞에 한글이 붙은 `외주가` 같은 낱말은 거르지 않는다. |
 
 투자 모드의 `availability`·`disclaimer`·`scenarios`·`comparison`은 CS에서 돌지 않는다.
+
+---
+
+## 논문 전문 분석
+
+본문에 `"mode": "paper"`를 넣으면 같은 세 엔드포인트가 arXiv 논문 한 편의 전문 비판적 읽기로 동작한다. 흐름은 같다(수집 → 확인 토큰 → 분석). 수집은 LLM을 호출하지 않고 arXiv HTML 판을 가져와 장 단위로 나눈다. 분석에서만 비용이 든다(논문 한 편 약 $0.07~0.10).
+
+### 논문 수집 — `POST /api/research/collect`
+
+인증이 필요하다. LLM을 호출하지 않는다.
+
+#### 요청
+
+```json
+{ "mode": "paper", "arxiv": "2401.04088" }
+```
+
+`arxiv`는 arXiv ID(`2401.04088`, 버전 `2401.04088v2`, 옛 형식 `hep-th/9901001`), `arXiv:` 접두(`arXiv:2401.04088`), 또는 `arxiv.org`의 abs·pdf·html 링크(`https://arxiv.org/abs/2401.04088`)다. 모르는 필드는 `400 INVALID_REQUEST`다.
+
+#### 응답 `200`
+
+```json
+{
+  "requestId": "0f8b2c1a-...",
+  "mode": "paper",
+  "paper": {
+    "id": "2401.04088",
+    "title": "Mixtral of Experts",
+    "authors": ["Albert Q. Jiang", "..."],
+    "url": "https://arxiv.org/abs/2401.04088",
+    "htmlUrl": "https://arxiv.org/html/2401.04088",
+    "sections": [
+      { "id": "S0", "anchor": "abstract1", "heading": "Abstract", "text": "..." },
+      { "id": "S1", "anchor": "S1", "heading": "1 Introduction", "text": "..." }
+    ],
+    "truncated": [ { "id": "S7", "heading": "7 Conclusion", "partial": false } ]
+  },
+  "collected": {
+    "collectedAt": "2026-11-09T01:00:00.000Z",
+    "outline": [
+      { "id": "S0", "heading": "Abstract", "tokens": 240, "status": "full" },
+      { "id": "S1", "heading": "1 Introduction", "tokens": 610, "status": "full" },
+      { "id": "S6", "heading": "6 Results", "tokens": 9800, "status": "partial" },
+      { "id": "S7", "heading": "7 Conclusion", "tokens": 400, "status": "dropped" }
+    ],
+    "sectionCount": 6,
+    "truncatedCount": 2
+  },
+  "estimate": {
+    "estimatedInputTokens": 26000,
+    "assumedOutputTokens": 2000,
+    "estimatedCostUsd": 0.085,
+    "budget": { "calls": { "...": "..." }, "cost": { "...": "..." } }
+  },
+  "confirmToken": "ct_...",
+  "confirmTokenExpiresAt": "2026-11-09T01:05:00.000Z"
+}
+```
+
+- `paper.sections`는 예산 안에 든 장이다. `S0`은 초록, `S1…`은 본문 장(번호 없는 장 포함, 문서 순서). 참고문헌과 부록은 뺀다. 소절은 장 본문 안에 `## 소제목` 줄로 남는다. 수식은 `$…$`, 표는 행마다 탭으로 이은 줄, 그림은 캡션만 남는다.
+- 본문은 약 25,000토큰까지 앞 장부터 담는다. 초록은 항상 담는다.
+- `collected.outline`은 화면용 목차다(분석 요청에는 싣지 않는다). `status`는 다음 중 하나다.
+
+| `status` | 의미 |
+|---|---|
+| `full` | 장 전체가 분석에 들어간다 |
+| `partial` | 예산이 남아 있어 장의 앞부분만 들어간다(남은 예산이 2,000토큰 이상일 때). 이후 장은 모두 빠진다 |
+| `dropped` | 예산을 넘어 장이 분석에서 빠진다. 이 장의 ID를 인용하면 품질 검사가 지운다 |
+
+- `paper.truncated`는 `partial`·`dropped`인 장의 `{ id, heading, partial }` 목록이고, `truncatedCount`는 그 개수다.
+- `paper`는 **분석 요청에 그대로 되돌려 보낸다.** 고치면 확인 토큰이 통하지 않는다(`428`).
+
+#### 오류
+
+| 상태 | 코드 | 상황 |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | 스키마 위반, arXiv ID·링크 형식 오류 |
+| 422 | `FULLTEXT_UNAVAILABLE` | arXiv HTML 판이 없는 논문(404 또는 본문 없는 페이지). 메시지 `"이 논문은 arXiv HTML 판이 없어 전문 분석을 할 수 없습니다."` |
+| 502 | `COLLECTION_FAILED` | arXiv 네트워크 오류·5xx·429, 일시 차단. 메시지 `"arXiv에서 논문 본문을 가져오지 못했습니다. 잠시 뒤 다시 시도해 주세요."` |
+
+### 논문 견적·분석 — `POST /api/analyze/estimate`, `POST /api/analyze/news`
+
+두 엔드포인트의 본문은 같다. 견적은 LLM을 호출하지 않고, 분석은 `X-Confirm-Token` 헤더가 필요하다(캐시 히트는 예외).
+
+#### 요청
+
+수집 응답의 `paper`를 그대로 넣는다. 모르는 필드는 거부한다.
+
+```json
+{ "mode": "paper", "paper": { "id": "2401.04088", "title": "...", "authors": [], "url": "...", "htmlUrl": "...", "sections": [], "truncated": [] } }
+```
+
+장 ID는 `S` + 숫자(1~3자리), 장은 200개 이하이고 본문 합계는 프롬프트 길이 상한 안이어야 한다. 본문 장이 `S0`뿐이면 `422 INSUFFICIENT_DATA` `"본문 장이 없어 전문 분석을 할 수 없습니다."`다. 확인 토큰은 모드에 묶이므로 투자·CS 토큰으로는 분석할 수 없다.
+
+#### 출처 ID와 타입
+
+장마다 출처 한 건이다. `sourceId`는 장 ID(`S0`, `S1`…)이고 `type`은 `section`, `source`는 `arXiv <id>`, `url`은 HTML 판의 장 앵커(`https://arxiv.org/html/2401.04088#S3`)다. 보고서 본문의 URL이 논문 abs·html 링크와 장 앵커 밖이면 `[출처 미확인]`으로 치환된다.
+
+#### 응답 `analysis` (`paper_critical_reading`)
+
+| 필드 | 형식 | 설명 |
+|---|---|---|
+| `summary` | 문자열 | 전체 요약 |
+| `problem` | 객체 | `statement`, `sourceIds[]` |
+| `method` | 객체 | `overview`, `keyIdeas[]`, `sourceIds[]` |
+| `experimentalSetup` | 객체 | `datasets[]`, `baselines[]`, `metrics[]`, `sourceIds[]` |
+| `keyResults[]` | 객체 배열 | 최대 6개. `claim`, `numbers[]`(본문 표기 그대로), `sourceIds[]` |
+| `authorStatedLimitations[]` | 객체 배열 | 저자가 밝힌 한계. `point`, `sourceIds[]` |
+| `reviewerConcerns[]` | 객체 배열 | 최대 5개. `concern`, `why`, `severity`(`경미` \| `중요` \| `치명`), `sourceIds[]` |
+| `reproducibility` | 객체 | `code`·`data`(`공개` \| `미공개` \| `언급 없음`), `note`, `sourceIds[]` |
+| `openQuestions` | 문자열 배열 | 남은 질문 |
+
+`meta`는 공통 필드에 더해 다음을 싣는다. `sourceCount`는 분석에 들어간 장 수다.
+
+```json
+"meta": {
+  "sourceCount": 6,
+  "duplicatesRemoved": 0,
+  "paper": { "id": "2401.04088", "title": "Mixtral of Experts" },
+  "truncated": [ { "id": "S7", "heading": "7 Conclusion", "partial": false } ]
+}
+```
+
+#### 논문 품질 검사 (`meta.quality`)
+
+형태와 점수 계산은 [품질 검사](#품질-검사-metaquality)와 같고, 검사 항목이 다음 순서로 돈다. 인용 접두사는 `S`다.
+
+| check | 동작 |
+|---|---|
+| `citations` | 본문에 인용된 없는 장 ID(`[S9]` 등)를 `출처 미확인`으로 바꾼다. |
+| `sectionRefs` | `sourceIds`에서 제공되지 않은 장 ID(분석에서 빠진 장 포함)를 정리한다(교정). 목록 항목(`keyResults`·`authorStatedLimitations`·`reviewerConcerns`)은 근거 장이 하나도 남지 않으면 항목을 제거한다(교정). 객체 섹션(`problem`·`method`·`experimentalSetup`·`reproducibility`)은 근거가 비면 경고만 남긴다. |
+| `numbers` | `keyResults[].numbers`의 각 값을 인용한 장 본문과 대조한다. 정규화는 쉼표 천 단위 제거, 유니코드 마이너스를 `-`로, 끝의 `%`·`x`·`×` 분리이고, 순수한 수치는 숫자 경계로 찾는다(`85.3`이 `185.3`에 걸리지 않는다). 본문에 없는 값은 지우고(교정), 값이 모두 지워지면 항목을 제거한다(교정). `numbers`가 원래 빈 정성 결과는 그대로 둔다. |
+| `coverage` | 경고만 한다: 잘리거나 빠진 장이 있을 때, 장 제목에 `experiment`·`evaluation`·`result`·`benchmark`가 있는데 `keyResults`가 비었을 때, `reviewerConcerns`가 비었을 때. |
+| `investmentLanguage` | `매수`·`매도`·`주가` 같은 투자 표현이 있으면 경고만 한다(CS 모드와 같은 검사). |
 
 ---
 
