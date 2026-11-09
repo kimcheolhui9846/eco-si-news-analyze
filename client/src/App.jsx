@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import SearchPage from './pages/SearchPage.jsx';
 import ReviewPage from './pages/ReviewPage.jsx';
 import CsReviewPage from './pages/CsReviewPage.jsx';
+import CsReportPage from './pages/CsReportPage.jsx';
 import ReportPage from './pages/ReportPage.jsx';
 import ProgressIndicator from './components/ProgressIndicator.jsx';
 import ErrorBanner from './components/ErrorBanner.jsx';
@@ -98,7 +99,9 @@ export default function App({ api = defaultApi }) {
         />
       ))}
 
-      {step === 'report' && (
+      {step === 'report' && (collected?.mode === 'cs' ? (
+        <CsReportPage report={report} onNewSearch={newSearch} />
+      ) : (
         <ReportPage
           report={report}
           instruments={collected?.instruments}
@@ -107,7 +110,7 @@ export default function App({ api = defaultApi }) {
           collectedMeta={collected?.collected}
           onNewSearch={newSearch}
         />
-      )}
+      ))}
     </>
   );
 }

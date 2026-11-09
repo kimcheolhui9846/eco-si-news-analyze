@@ -236,3 +236,14 @@ a { color: var(--accent); }
   background: var(--surface); color: var(--text); cursor: pointer; font: inherit;
 }
 .mode-tabs .tab.active { background: var(--accent-soft); border-color: var(--accent-border); color: var(--warn-text); }
+
+/* ─── CS 보고서 ─── */
+.dev-card { border-top: 1px solid var(--border); padding: 10px 0; }
+.dev-card:first-of-type { border-top: none; padding-top: 0; }
+.dev-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.evidence-badge {
+  font-size: 12px; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--warn-text);
+}
+.cites { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.report-text { white-space: pre-wrap; }
