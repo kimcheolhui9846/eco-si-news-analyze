@@ -150,7 +150,7 @@ OPENAI_API_KEY=sk-...
 | `KCI_API_KEY` | (빈 값) | **선택.** 국내 논문 검색용. 아래 설명 참고 |
 | `RESEARCH_CONTACT_EMAIL` | (빈 값) | **선택.** Crossref polite pool 연락 이메일 |
 | `GITHUB_TOKEN` | (빈 값) | **선택.** CS 브리핑의 GitHub 저장소 검색용. 없으면 GitHub 검색이 분당 10회로 제한되고, 넘으면 해당 출처만 사유와 함께 빠진다 |
-| `STACKEXCHANGE_KEY` | (빈 값) | **선택.** CS 브리핑의 Stack Overflow 질문 검색용. 없으면 IP당 하루 300회로 제한되고, 넘으면 해당 출처만 사유와 함께 빠진다 |
+| `STACKEXCHANGE_KEY` | (빈 값) | **선택.** CS 브리핑의 Stack Overflow 질문 검색용. 키가 있으면 하루 10,000회, 없으면 IP당 하루 300회로 제한되고, 넘으면 해당 출처만 사유와 함께 빠진다. 키를 설정했는데도 한도 메시지가 계속되면 키가 잘못되었거나 폐기된 것이니 확인한다 |
 | `CS_CACHE_TTL_MS` | `21600000` | CS 브리핑 수집 캐시(6시간) |
 
 **키 없는 논문 검색.** 한국어·영문 논문은 OpenAlex를 기본으로 조회하고, 결과가 부족하면 Crossref를 보조로 조회한다. 두 소스 모두 API 키 없이 사용할 수 있다. Crossref polite pool을 사용하려면 선택적으로 `RESEARCH_CONTACT_EMAIL`을 설정한다.
