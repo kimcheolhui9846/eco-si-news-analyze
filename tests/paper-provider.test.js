@@ -179,7 +179,7 @@ test('parseArxivHtml: 분석 스키마 한도를 넘는 저자·제목·장 제�
   const names = Array.from({ length: 101 }, (_, i) => `<span class="ltx_creator"><span class="ltx_personname">${i === 0 ? 'A'.repeat(250) : `Author ${i}`}</span></span>`).join('');
   const html = SHORT
     .replace('<h1 class="ltx_title ltx_title_document">Tiny MoE Retrieval</h1>', `<h1 class="ltx_title ltx_title_document">${'T'.repeat(600)}</h1>`)
-    .replace(/<div class="ltx_authors">[\s\S]*?<\/div>\n<div id="abstract1"/, `<div class="ltx_authors">${names}</div>\n<div id="abstract1"`)
+    .replace(/<div class="ltx_authors">[\s\S]*?<\/div>\r?\n<div id="abstract1"/, `<div class="ltx_authors">${names}</div>\n<div id="abstract1"`)
     .replace('</span>Method</h2>', `</span>${'M'.repeat(301)}</h2>`)
     .replace('<section id="S2" class="ltx_section">', '<section id="S2_bad-anchor!" class="ltx_section">');
   const p = parseArxivHtml(html, { id: '2611.00001' });

@@ -177,7 +177,7 @@ test('LLM에 논문 시스템 프롬프트와 논문 응답 스키마를 넘긴�
 test('한도를 넘는 저자·제목·앵커가 있는 논문도 수집 결과가 분석을 통과한다', async () => {
   const names = Array.from({ length: 101 }, (_, i) => `<span class="ltx_creator"><span class="ltx_personname">${i === 0 ? 'A'.repeat(250) : `Author ${i}`}</span></span>`).join('');
   const html = SHORT
-    .replace(/<div class="ltx_authors">[\s\S]*?<\/div>\n<div id="abstract1"/, `<div class="ltx_authors">${names}</div>\n<div id="abstract1"`)
+    .replace(/<div class="ltx_authors">[\s\S]*?<\/div>\r?\n<div id="abstract1"/, `<div class="ltx_authors">${names}</div>\n<div id="abstract1"`)
     .replace('</span>Method</h2>', `</span>${'M'.repeat(301)}</h2>`)
     .replace('<section id="S2" class="ltx_section">', '<section id="S2_bad-anchor!" class="ltx_section">');
   const { app } = boot(makeHttp(ok(html)));
@@ -208,7 +208,7 @@ test('25k 토큰급 본문 + 저자 100명도 수집 → 분석이 200이다(상
   const secs = Array.from({ length: 4 }, (_, i) =>
     `<section id="S${i + 1}" class="ltx_section"><h2 class="ltx_title ltx_title_section">Part ${i + 1}</h2>${para.repeat(43)}</section>`).join('');
   const html = SHORT
-    .replace(/<div class="ltx_authors">[\s\S]*?<\/div>\n<div id="abstract1"/, `<div class="ltx_authors">${names}</div>\n<div id="abstract1"`)
+    .replace(/<div class="ltx_authors">[\s\S]*?<\/div>\r?\n<div id="abstract1"/, `<div class="ltx_authors">${names}</div>\n<div id="abstract1"`)
     .replace(/<section id="S1"[\s\S]*<section id="bib"/, `${secs}<section id="bib"`);
   const { app } = boot(makeHttp(ok(html)));
   const token = await login(app);
