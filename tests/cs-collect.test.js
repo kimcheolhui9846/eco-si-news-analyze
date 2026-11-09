@@ -14,6 +14,10 @@ const ROUTES = {
   'yna.co.kr': fixture('yonhap-economy.xml'),
   'etnews.com': fixture('yonhap-economy.xml'),
   'toss.tech': fixture('blog-rss.xml'),
+  'lobste.rs/tags.json': fixture('lobsters-tags.json'),
+  'lobste.rs/t/ai.json': fixture('lobsters-ai.json'),
+  'lobste.rs/newest.json': fixture('lobsters-newest.json'),
+  'api.stackexchange.com': fixture('so-search.json'),
   'api.github.com': fixture('github-search.json'),
 };
 
@@ -44,13 +48,13 @@ const collect = (app, token, body) =>
 /** 클라이언트(client/src/api/client.js)와 같은 규칙. cacheKey 계약의 대조 기준이다. */
 const csAnalysisBody = (c) => {
   const body = { mode: 'cs' };
-  for (const key of ['newsList', 'papers', 'community', 'blogs', 'repos']) {
+  for (const key of ['newsList', 'papers', 'community', 'questions', 'blogs', 'repos']) {
     if (c[key]?.length) body[key] = c[key];
   }
   return body;
 };
 
-test('CS 수집: 다섯 출처를 모으고 견적·확인 토큰을 준다', async () => {
+test('CS 수집: 여섯 범위를 모으고 견적·확인 토큰을 준다', async () => {
   const { app } = boot();
   const token = await login(app);
   const res = await collect(app, token, { mode: 'cs', query: 'rag' });
@@ -63,9 +67,11 @@ test('CS 수집: 다섯 출처를 모으고 견적·확인 토큰을 준다', as
   assert.ok(res.body.newsList.length > 0);
   assert.deepEqual(res.body.blogs.map((b) => b.title), ['Hybrid search for better RAG']);
   assert.equal(res.body.repos.length, 2);
+  assert.equal(res.body.questions.length, 2);
   assert.equal(res.body.collected.counts.papers, 3);
+  assert.equal(res.body.collected.counts.questions, 2);
   assert.equal(res.body.collected.total,
-    3 + 2 + res.body.collected.counts.news + 1 + 2);
+    3 + 2 + 2 + res.body.collected.counts.news + 1 + 2);
   assert.ok(res.body.estimate.estimatedCostUsd > 0);
   assert.match(res.body.confirmToken, /^ct_/);
   // 실패한 블로그 9곳은 블로그별 사유로 남는다.
@@ -147,4 +153,39 @@ test('원본은 3건 이상이어도 중복 제거 뒤 3건 미만이면 502 COL
   assert.equal(http.calls.length, 3); // 세 피드가 모두 응답했다(원본 3건).
   assert.equal(res.status, 502);
   assert.equal(res.body.error.code, 'COLLECTION_FAILED');
+});
+
+const recent = (json) => JSON.stringify(JSON.parse(json).map((s) => ({ ...s, created_at: '2026-11-05T00:00:00.000Z' })));
+
+test('CS 수집: Lobsters를 HN과 합쳐 커뮤니티에 싣고 사이트를 표시한다', async () => {
+  const { app } = boot(makeHttp({ ...ROUTES, 'lobste.rs/t/ai.json': recent(fixture('lobsters-ai.json')) }));
+  const token = await login(app);
+  const res = await collect(app, token, { mode: 'cs', query: 'rag', include: ['community'] });
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.community.map((c) => c.site), ['hackernews', 'hackernews', 'lobsters', 'lobsters', 'lobsters']);
+});
+
+test('CS 수집: 질문만 골라도 SO만 부른다', async () => {
+  const http = makeHttp();
+  const { app } = boot(http);
+  const token = await login(app);
+  const res = await collect(app, token, { mode: 'cs', query: 'rag', include: ['questions', 'repos'] });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.questions.length, 2);
+  assert.ok(http.calls.every((u) => u.includes('api.stackexchange.com') || u.includes('api.github.com')));
+});
+
+test('SO 한도 초과는 사유와 함께 questions degraded로 남는다', async () => {
+  const limited = Object.assign(new Error('limit'), { upstreamStatus: 400 });
+  const { app } = boot(makeHttp({ ...ROUTES, 'api.stackexchange.com': limited }));
+  const token = await login(app);
+  const res = await collect(app, token, { mode: 'cs', query: 'rag' });
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.collected.degraded.filter((d) => d.provider === 'questions'), [{
+    provider: 'questions', source: 'Stack Overflow',
+    reason: 'Stack Overflow 호출 한도를 초과했습니다. 잠시 뒤 다시 시도해 주세요.',
+  }]);
 });
