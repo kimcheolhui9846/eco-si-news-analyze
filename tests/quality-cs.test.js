@@ -4,7 +4,7 @@ import {
   checkSourceRefs, checkEvidence, checkCoverage, checkInvestmentLanguage,
   CS_CHECKS, buildCsQualityContext,
 } from '../lib/quality/cs.js';
-import { replaceUnknownIds } from '../lib/quality/citations.js';
+import { replaceUnknownIds, checkCitations } from '../lib/quality/citations.js';
 import { assessQuality } from '../lib/quality/index.js';
 import {
   CS_JSON_SCHEMA, CS_MOCK_REPORT, EVIDENCE_LEVELS, COVERAGE_LEVELS,
@@ -20,7 +20,7 @@ const dev = (over = {}) => ({
 const brief = (issues) => issues.map((i) => [i.check, i.severity, i.path]);
 
 test('citations는 새 접두사 H·B·G도 출처 ID로 본다', () => {
-  assert.deepEqual(replaceUnknownIds('[H9] [B1] [G2]', new Set(['B1'])), {
+  assert.deepEqual(replaceUnknownIds('[H9] [B1] [G2]', new Set(['B1']), 'PHSBG'), {
     text: '[출처 미확인] [B1] [출처 미확인]', changed: true,
   });
 });
@@ -160,4 +160,29 @@ test('CS JSON 스키마는 strict이고 모든 객체가 전 속성 required다'
     'summary', 'keyDevelopments', 'paperHighlights', 'communityPulse',
     'openSourceSignals', 'openQuestions', 'whatToWatch', 'sourceCoverage',
   ]);
+});
+
+test('CS 컨텍스트는 PHSBG 접두사를 쓰고 T는 건드리지 않는다', () => {
+  assert.equal(buildCsQualityContext([]).idPrefixes, 'PHSBG');
+  const { analysis, issues } = checkCitations(
+    { summary: '근거 [H9] [T1]' }, { ...ctx(['P1']), idPrefixes: 'PHSBG' },
+  );
+  assert.equal(analysis.summary, '근거 [출처 미확인] [T1]');
+  assert.equal(issues.length, 1);
+});
+
+test('sourceRefs: 논문 하이라이트는 P, 오픈소스 신호는 G 출처만 허용한다', () => {
+  const { analysis, issues } = checkSourceRefs({
+    paperHighlights: [{ sourceId: 'P1' }, { sourceId: 'G1' }, { sourceId: 'zzz' }],
+    openSourceSignals: [{ sourceId: 'G1' }, { sourceId: 'P1' }],
+  }, ctx());
+  assert.deepEqual(analysis.paperHighlights, [{ sourceId: 'P1' }, ]);
+  assert.deepEqual(analysis.openSourceSignals, [{ sourceId: 'G1' }]);
+  assert.deepEqual(brief(issues), [
+    ['sourceRefs', 'fixed', 'paperHighlights[1].sourceId'],
+    ['sourceRefs', 'fixed', 'paperHighlights[2].sourceId'],
+    ['sourceRefs', 'fixed', 'openSourceSignals[1].sourceId'],
+  ]);
+  assert.match(issues[0].message, /종류가 맞지 않아/);
+  assert.match(issues[0].message, /G1/);
 });
