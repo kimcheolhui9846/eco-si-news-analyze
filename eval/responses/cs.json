@@ -1,0 +1,17 @@
+{
+  "summary": "검색 증강 생성(RAG)의 검색 품질 개선이 논문과 실무 양쪽에서 화제다 [P1][B1].",
+  "keyDevelopments": [
+    { "title": "긴 문맥 검색용 희소 MoE", "whatIsNew": "희소 전문가 혼합 구조로 긴 문맥 검색을 다룬다 [P1].", "whyItMatters": "검색 비용을 줄일 가능성이 있다.", "evidenceLevel": "프리프린트", "sourceIds": ["P1"] },
+    { "title": "작은 RAG 서버 공개", "whatIsNew": "300줄짜리 RAG 서버가 공개됐다 [G1].", "whyItMatters": "학습용 참고 구현으로 쓸 수 있다.", "evidenceLevel": "코드 공개", "sourceIds": ["G1", "H1"] }
+  ],
+  "paperHighlights": [
+    { "sourceId": "P1", "contribution": "긴 문맥 검색에 희소 MoE를 적용했다.", "method": "전문가 라우팅", "limitations": "초록에 한계가 명시되지 않음" }
+  ],
+  "communityPulse": "Hacker News에서 구현이 단순하다는 반응이 많았다 [H1].",
+  "openSourceSignals": [
+    { "sourceId": "G1", "signal": "최근 30일 안에 갱신됐다." }
+  ],
+  "openQuestions": ["분포가 바뀌어도 성능이 유지되는가 [P2]?"],
+  "whatToWatch": ["하이브리드 검색 도입 사례 [B1][S1]"],
+  "sourceCoverage": { "level": "충분", "note": "다섯 종류 출처가 모두 있다." }
+}

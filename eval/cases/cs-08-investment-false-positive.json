@@ -1,0 +1,5 @@
+{
+  "name": "CS: 외주가·추가는 투자 표현이 아니다", "mode": "cs", "context": "cs", "base": "cs",
+  "override": { "communityPulse": "외주가 줄고 사내 구축이 늘었다는 반응과 기능 추가 요청이 많았다 [H1]." },
+  "expect": { "minScore": 100, "mustNotFlag": ["investmentLanguage"] }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "CS: 하이라이트·신호·동향의 없는 ID", "mode": "cs", "context": "cs", "base": "cs",
+  "override": {
+    "keyDevelopments": [
+      { "title": "근거 없는 동향", "whatIsNew": "새 기법.", "whyItMatters": "중요.", "evidenceLevel": "커뮤니티 화제", "sourceIds": ["H9"] }
+    ],
+    "paperHighlights": [ { "sourceId": "P7", "contribution": "c", "method": "m", "limitations": "l" } ],
+    "openSourceSignals": [ { "sourceId": "G5", "signal": "s" } ]
+  },
+  "expect": { "maxScore": 70, "mustFix": ["sourceRefs"], "mustWarn": ["sourceRefs"] }
+}

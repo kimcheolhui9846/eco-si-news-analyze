@@ -1,0 +1,7 @@
+{
+  "name": "CS: arXiv뿐인 근거를 동료 심사로 표시", "mode": "cs", "context": "cs", "base": "cs",
+  "override": { "keyDevelopments": [
+    { "title": "검색 성능 벤치마크", "whatIsNew": "분포 이동 실험 [P2].", "whyItMatters": "평가 기준.", "evidenceLevel": "동료 심사 논문", "sourceIds": ["P1", "P2"] }
+  ] },
+  "expect": { "maxScore": 90, "mustFix": ["evidence"] }
+}

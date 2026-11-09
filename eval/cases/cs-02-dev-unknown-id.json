@@ -1,0 +1,7 @@
+{
+  "name": "CS: 동향 근거에 없는 ID", "mode": "cs", "context": "cs", "base": "cs",
+  "override": { "keyDevelopments": [
+    { "title": "긴 문맥 검색용 희소 MoE", "whatIsNew": "희소 전문가 혼합 구조 [P1].", "whyItMatters": "비용 절감 가능성.", "evidenceLevel": "프리프린트", "sourceIds": ["P1", "P9"] }
+  ] },
+  "expect": { "maxScore": 90, "mustFix": ["sourceRefs"], "mustNotFlag": ["evidence"] }
+}
