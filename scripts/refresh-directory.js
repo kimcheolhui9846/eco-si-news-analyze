@@ -28,7 +28,17 @@ async function refreshUs() {
   write('us-tickers.json', source, rows);
 }
 
-const tag = (xml, name) => xml.match(new RegExp(`<${name}>([^<]*)</${name}>`))?.[1]?.trim() ?? '';
+// corpCode.xml은 회사명의 &·<·>를 엔티티로 싣는다(예: "S&amp;T중공업"). 그대로 두면 해석기가 회사명을 못 맞힌다.
+const decodeEntities = (s) => s
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+  .replace(/&lt;/g, '<')
+  .replace(/&gt;/g, '>')
+  .replace(/&quot;/g, '"')
+  .replace(/&apos;/g, "'")
+  .replace(/&amp;/g, '&');
+
+const tag = (xml, name) => decodeEntities(xml.match(new RegExp(`<${name}>([^<]*)</${name}>`))?.[1]?.trim() ?? '');
 
 async function refreshKr() {
   const key = process.env.OPENDART_API_KEY;

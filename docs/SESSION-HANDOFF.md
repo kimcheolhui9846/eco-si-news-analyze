@@ -9,12 +9,11 @@
 
 ---
 
-## 2026-11-09 C1: CS 기술 동향 브리핑 (완료, 푸시 대기)
+## 2026-11-09 C1: CS 기술 동향 브리핑 (완료, PR 리뷰·병합 대기)
 
-- 브랜치 `feature/cs-briefing` — `feature/analysis-quality-gate`(Draft PR #13)에서 땄다.
+- 브랜치 `feature/cs-briefing` — `feature/analysis-quality-gate`에서 땄다. PR #13 병합(8b8c397) 뒤 main을 병합해 기준을 main으로 맞췄다.
 - 설계: `docs/superpowers/specs/2026-11-09-cs-briefing-design.md`. `mode: 'cs'` 프로필 구조(분석 실행부 `lib/analysis-runner.js` 추출 + `lib/modes/{invest,cs}.js`), 출처 5종(arXiv cs.*, HN Algolia, 기존 뉴스, 연구 블로그 RSS 9~10개, GitHub 검색), CS 응답 스키마·품질 검사·`CsReportPage`.
 - 후속 C2: 논문 한 편 전문 분석(`mode: 'paper'`). 사용자가 "좀 더 딥하게 세부 분석"으로 요청, "논문 한 편 전문 분석"을 선택.
-- PR #13: https://github.com/kimcheolhui9846/eco-si-news-analyze/pull/13 (기준 `feature/sector-baskets-opendart`, #12 병합 후 main으로 변경).
 - 설계 승인됨. 계획: `docs/superpowers/plans/2026-11-09-cs-briefing.md` (10 태스크: 실행부 추출 → mode 라우팅 → HN·GitHub → 블로그·arXiv CS → 스키마·품질·평가 → CS 프로필 → CS 수집 라우트 → 클라이언트 검색·검토 → 보고서 화면 → 문서). 설계 대비 결정 6개는 계획 머리말에 있다(arXiv CS 별도 파일, NVIDIA Atom, 토스 블로그, `baseMeta`, 라우트가 `mode` 분리, `http.get` 헤더 옵션).
 - 진행 기록은 `.superpowers/sdd/2026-11-09-cs-briefing/progress.md`(실행 시작 후). 완료된 태스크는 다시 보내지 않는다.
 - 서브에이전트 주도로 실행. Task 1~10 모두 태스크 리뷰 통과(e0b08d1). `npm test` 816/815 pass/1 skip, eval 25/0, 클라이언트 빌드 성공. 수정 라운드: Task 4(RSS 블로그 URL 2048자 상한), Task 7(중복 제거 후 3건 미만도 502), Task 10(뉴스 degraded 항목은 `feedId`).
@@ -23,12 +22,11 @@
 - 남은 사소한 지적은 원장에 있고 최종 리뷰가 병합 전 수정 불필요로 판정했다.
 - 실호출 1회 완료(2026-11-09, gpt-4o, 'retrieval augmented generation', lang en, 실제 $0.011): 커뮤니티 1·뉴스 8·블로그 8·저장소 8, 품질 100점(교정·경고 0), 위조 URL 0, 자료 충분도 '충분'. 확인 토큰 그대로 통과(428 없음).
   - arXiv는 429 `Rate exceeded`로 degraded("자료를 가져오지 못했습니다"). 단순 질의(`all:battery`)도 429라 IP 단위 제한이며 코드 문제 아님. 후속 개선 후보: arXiv 429에 GitHub처럼 한도 사유 문구.
-  - 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에는 CS 호스트가 아직 없다. 실호출은 `.env.example` 값을 명령행 `EXTERNAL_ALLOWLIST`로 넘겨 실행했다(dotenv는 기존 환경변수를 덮지 않는다).
-- 다음(이전 계획 문구): 실호출 1회(사용자 확인 후, 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 새 호스트 12개 필요) → 푸시·PR은 사용자 요청 시.
+  - 실호출은 `.env.example` 값을 명령행 `EXTERNAL_ALLOWLIST`로 넘겨 실행했다(dotenv는 기존 환경변수를 덮지 않는다). 로컬 `.env`는 main의 `.env.example`(17개 호스트)과 같고, CS 호스트 12개는 이 브랜치 병합 후 다시 맞춰야 한다.
 
-## 2026-11-09 B: 분석 품질 게이트 (완료, Draft PR #13)
+## 2026-11-09 B: 분석 품질 게이트 (완료 — PR #13 병합 8b8c397)
 
-- 브랜치 `feature/analysis-quality-gate` — `feature/sector-baskets-opendart`(Draft PR #12)에서 땄다. PR #12 병합 후 기준을 main으로 바꾼다. 푸시 완료, Draft PR #13.
+- 브랜치 `feature/analysis-quality-gate`, PR #13. PR #12 병합(2026-11-09, 165663a) 뒤 기준을 main으로 바꾸고 main을 병합해 핸드오프 충돌을 풀었다.
 - 설계: `docs/superpowers/specs/2026-11-09-analysis-quality-gate-design.md`, 계획: `docs/superpowers/plans/2026-11-09-analysis-quality-gate.md`.
 - 구현: `lib/quality/`(citations·availability·disclaimer·scenarios·comparison + `assessQuality`), `server.js` 분석 경로 연결(`meta.quality`, 캐시 포함), 응답 스키마 `instrumentComparison`, `eval/`(`npm run eval`, 16케이스), 화면 `QualityBadge`·`InstrumentInsight`.
 - 계획 대비 사용자 승인 변경: ① 단정 표현 정규식 보정(한다체 권유, 목표가는 통화 단위 필수, 부정·과거 수익률 제외, 무효화 조건 빈 값 확대), 종목 심볼 대소문자 무시. ② 최종 리뷰 후: 브리핑 제목·출처·날짜는 서버 값으로 **조용히** 덮어쓰고 감점하지 않음, 복원된 제목의 `[T1]` 등은 건드리지 않음, 비교 검사 종목은 시세가 있는 종목만, 분야가 아니어도 2종목 이상이면 비교 지시.
@@ -38,12 +36,19 @@
 - 남은 사소 항목(최종 리뷰에서 병합 후로 미룸): 분석 비교 지시의 종목 수가 시세 없는 종목까지 센다(1/4만 시세 있으면 요청 후 비움), "목표주가 15만원" 미검출, eval 러너 main-guard 경로 비교, 검사기 예외 무로그, 스펙의 "초기 케이스(13개)" 표기.
 - 사용자는 로컬 `.env`의 `EXTERNAL_ALLOWLIST`를 `.env.example` 값으로 맞췄다(2026-11-09 확인, 17개 호스트 모두 포함).
 
-## 2026-11-08 분야 묶음 + OpenDART (Task 10 대기)
+## 2026-11-08 분야 묶음 + OpenDART (완료 — PR #12 병합, 배포 검증 통과)
+
+- **2026-11-09 배포 검증**: PR #12를 main에 병합(165663a), 사용자가 Render에 `OPENDART_API_KEY` 입력. 운영 URL에서 `OPENDART_EXPECTED=1 ./scripts/verify-research.sh` **24 pass / 0 fail**, 유료 분석 1회 $0.018. Render에서 OpenDART `012`(IP 불허) 없음 — 삼성전자 재무 출처 `dart`, degraded 없음. 남은 degraded는 TSM 재무(20-F)와 arXiv(429)뿐.
+
+- **2026-11-09 Task 10 로컬 진행**: OpenDART 키로 `data/kr-listed.json` 생성(3,939개 상장사, `[이름, 종목코드, corpCode]`).
+  - `refresh-directory.js`에 XML 엔티티 디코딩 추가("S&amp;T중공업" → "S&T중공업"). 생성본에 남은 엔티티 없음.
+  - 흔한 한국어 단어와 겹치는 회사명 점검: "광전자 반도체"가 광전자(017900)로 잡혀 반도체 분야를 가로챘다. `directory.js`에 `COMMON_KR_WORDS`(광전자·오로라·센추리·유니온)를 두어 이름 대조에서만 빼고 종목코드로는 찾는다. 실제 스냅샷 회귀 테스트 추가.
+  - DART 실검증에서 삼성전자·SK하이닉스 순이익이 빠졌다: 실제 계정명이 "당기순이익(손실)"이었다. `dart-financial.js`가 끝의 "(손실)"을 떼고 대조한다(테스트 추가).
+  - `npm test` 650 / 649 pass / 0 fail / 1 skip. `verify-research.sh`(OPENDART_EXPECTED=1, LLM_MODE=mock, 허용목록은 `.env.example` 값을 명령행으로) **24 pass / 0 fail**, `[OK] 삼성전자 → DART 재무`. 남은 degraded는 TSM 재무(20-F)뿐.
+  - 보류: KS/KQ 시장 구분은 corpCode.xml에 없어 보류(디렉터리 해석 결과는 접미사 없는 6자리, Naver는 그대로 받는다).
 
 - 브랜치 `feature/sector-baskets-opendart`. 설계: `docs/superpowers/specs/2026-11-08-sector-baskets-opendart-design.md`, 계획: `docs/superpowers/plans/2026-11-08-sector-baskets-opendart.md`.
 - 완료: Task 1~9 (해석기·분야 사전·DART provider·종목별 수집·스키마·프롬프트·화면·배포 설정·검증 스크립트·문서).
-- 남은 일: **Task 10** — OpenDART 키 발급 후 `scripts/refresh-directory.js`로 `data/kr-listed.json` 생성·커밋, DART 실검증(`OPENDART_EXPECTED=1 ./scripts/verify-research.sh`), Render에 `OPENDART_API_KEY` 입력 후 배포 검증.
-- **Task 10 전에 사용자가 할 일**: 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 `opendart.fss.or.kr`를 추가한다(`.env`가 코드 기본값을 덮어쓴다). Render는 코드 기본값을 쓰므로 `OPENDART_API_KEY`만 넣으면 된다.
 - 알려진 환경 문제: 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 Naver·Coinbase 호스트(`api.stock.naver.com`, `m.stock.naver.com`, `api.exchange.coinbase.com`)도 없어, 그대로 서버를 띄우면 모든 종목 시세가 "가져오지 못했습니다"로 빠진다(9-14 Task 6 이후 계속). `.env.example`의 값으로 맞추면 해결된다.
 - 최종 브랜치 리뷰(전체 diff) 반영 커밋 5개: 흔한 영단어(news, target, quantum…)가 미국 단일어 회사명으로 잡혀 분야 묶음을 가로채던 문제 수정(단일어 회사명은 대문자로 시작해야 하고 `COMMON_ENGLISH_WORDS`에 없어야 함, 실제 스냅샷 회귀 테스트 `tests/resolve-real-snapshot.test.js`), 분석 스키마 `sector`를 분야 이름 enum으로 제한, 비교 지시는 종목 2개 이상일 때만, 종목별 오류 격리(try/catch), `verify-research.sh`의 수집 응답 코드 확인. 부작용: 소문자 `general motors`는 GM으로 해석되지 않는다(대문자 `General Motors`는 됨). `palantir`/`팔란티어` 별칭 추가.
 - Task 10 때 함께 할 일(최종 리뷰 권고): `refresh-directory.js`의 KR XML 엔티티(`&amp;` 등) 디코딩, 생성된 `kr-listed.json`의 3자 이상 회사명이 흔한 한국어 뉴스 단어와 겹치는지 점검, Render(고정 IP 없음)에서 OpenDART가 `012`(IP 불허)를 주는지 확인, 가능하면 KS/KQ 시장 구분 저장.
