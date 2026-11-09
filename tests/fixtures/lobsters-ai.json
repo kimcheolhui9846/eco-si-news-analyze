@@ -1,0 +1,30 @@
+[
+  {
+    "short_id": "abc123", "created_at": "2023-11-10T11:07:51.827-06:00",
+    "title": "Local LLM inference on a Mac mini", "url": "",
+    "score": 13, "comment_count": 5, "description_plain": "What works &amp; what doesn't.",
+    "tags": ["ai", "hardware"], "short_id_url": "https://lobste.rs/s/abc123",
+    "comments_url": "https://lobste.rs/s/abc123/local_llm_inference_on_mac_mini"
+  },
+  {
+    "short_id": "def456", "created_at": "2023-11-01T09:00:00.000-05:00",
+    "title": "Retrieval for code search", "url": "https://example.com/code-search",
+    "score": 40, "comment_count": 12, "description_plain": "",
+    "tags": ["ai", "search"], "short_id_url": "https://lobste.rs/s/def456",
+    "comments_url": "https://lobste.rs/s/def456/retrieval_for_code_search"
+  },
+  {
+    "short_id": "old789", "created_at": "2023-09-01T09:00:00.000-05:00",
+    "title": "Old story", "url": "https://example.com/old",
+    "score": 99, "comment_count": 1, "description_plain": "",
+    "tags": ["ai"], "short_id_url": "https://lobste.rs/s/old789",
+    "comments_url": "https://lobste.rs/s/old789/old_story"
+  },
+  {
+    "short_id": "../bad", "created_at": "2023-11-10T09:00:00.000-05:00",
+    "title": "Bad id", "url": "https://example.com/bad",
+    "score": 50, "comment_count": 0, "description_plain": "",
+    "tags": ["ai"], "short_id_url": "https://lobste.rs/s/bad",
+    "comments_url": "https://lobste.rs/s/bad/bad_id"
+  }
+]

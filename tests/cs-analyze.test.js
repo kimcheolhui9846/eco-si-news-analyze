@@ -39,7 +39,7 @@ test('CS 견적 → 분석이 CS 보고서·출처·품질을 돌려준다', asy
   assert.deepEqual(res.body.sources.map((s) => s.sourceId), ['P1', 'P2', 'H1', 'S1', 'B1', 'G1']);
   assert.equal(res.body.meta.quality.score, 100);
   assert.equal(res.body.meta.sourceCount, 6);
-  assert.deepEqual(res.body.meta.counts, { papers: 2, community: 1, news: 1, blogs: 1, repos: 1 });
+  assert.deepEqual(res.body.meta.counts, { papers: 2, community: 1, questions: 0, news: 1, blogs: 1, repos: 1 });
 });
 
 test('기본 mock 모드(LLM 주입 없음)에서도 CS 보고서가 나온다', async () => {
@@ -60,7 +60,7 @@ test('LLM에 CS 시스템 프롬프트와 CS 응답 스키마를 넘긴다', asy
   const call = llm.calls[0];
   assert.equal(call.jsonSchema.name, 'cs_trend_briefing');
   assert.ok(call.system.includes('CS(컴퓨터 과학) 기술 동향 분석가'));
-  assert.ok(call.user.includes('[커뮤니티 (Hacker News)]'));
+  assert.ok(call.user.includes('[커뮤니티 (Hacker News·Lobsters)]'));
 });
 
 test('투자 견적 토큰으로 CS 분석을 실행할 수 없다(428)', async () => {

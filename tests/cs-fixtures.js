@@ -18,6 +18,7 @@ export const paper = (i = 1, over = {}) => ({
 });
 
 export const hn = (over = {}) => ({
+  site: 'hackernews',
   title: 'Show HN: A tiny RAG server',
   url: 'https://github.com/example/tiny-rag',
   discussionUrl: 'https://news.ycombinator.com/item?id=45810001',
@@ -25,6 +26,33 @@ export const hn = (over = {}) => ({
   numComments: 87,
   publishedAt: '2026-11-05T08:00:00.000Z',
   text: '',
+  ...over,
+});
+
+export const lobsters = (over = {}) => ({
+  site: 'lobsters',
+  title: 'Retrieval for code search',
+  url: 'https://example.com/code-search',
+  discussionUrl: 'https://lobste.rs/s/def456/retrieval_for_code_search',
+  points: 40,
+  numComments: 12,
+  publishedAt: '2026-11-01T14:00:00.000Z',
+  text: '',
+  ...over,
+});
+
+export const question = (over = {}) => ({
+  title: 'RAG retriever returns irrelevant chunks',
+  url: 'https://stackoverflow.com/questions/79923286/rag-retriever-returns-irrelevant-chunks',
+  author: 'devops',
+  tags: ['python', 'rag'],
+  score: 7,
+  answerCount: 2,
+  isAnswered: true,
+  hasAcceptedAnswer: true,
+  viewCount: 605,
+  publishedAt: '2026-10-20T00:00:00.000Z',
+  text: 'My retriever returns unrelated chunks.',
   ...over,
 });
 

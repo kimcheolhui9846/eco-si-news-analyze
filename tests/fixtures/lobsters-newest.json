@@ -1,0 +1,16 @@
+[
+  {
+    "short_id": "new111", "created_at": "2023-11-12T10:00:00.000Z",
+    "title": "Zig 0.14 released", "url": "https://ziglang.org/news",
+    "score": 30, "comment_count": 8, "description_plain": "",
+    "tags": ["zig", "release"], "short_id_url": "https://lobste.rs/s/new111",
+    "comments_url": "https://lobste.rs/s/new111/zig_0_14_released"
+  },
+  {
+    "short_id": "new222", "created_at": "2023-11-12T11:00:00.000Z",
+    "title": "Writing a webassembly runtime", "url": "https://example.com/wasm",
+    "score": 12, "comment_count": 3, "description_plain": "",
+    "tags": ["wasm", "compilers"], "short_id_url": "https://lobste.rs/s/new222",
+    "comments_url": "https://lobste.rs/s/new222/writing_webassembly_runtime"
+  }
+]

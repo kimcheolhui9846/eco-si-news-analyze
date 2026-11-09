@@ -32,6 +32,7 @@ export default function CsReportPage({ report, onNewSearch }) {
   if (!report) return null;
 
   const { analysis = {}, sources = [], meta } = report;
+  const pains = analysis.developerPainPoints ?? [];
   const titleOf = new Map(sources.map((s) => [s.sourceId, s.title]));
   const actions = (
     <div className="page-actions">
@@ -102,6 +103,16 @@ export default function CsReportPage({ report, onNewSearch }) {
 
       <Section title="커뮤니티 반응">
         <p>{analysis.communityPulse || NO_DATA}</p>
+      </Section>
+
+      <Section title="개발자들이 막히는 지점">
+        {pains.length === 0 ? <Empty /> : pains.map((p, i) => (
+          <article key={i} className="dev-card">
+            <div className="dev-head"><strong>{p.title}</strong></div>
+            <p>{p.detail}</p>
+            <Cites ids={p.sourceIds} />
+          </article>
+        ))}
       </Section>
 
       <Section title="오픈소스 신호">

@@ -14,9 +14,21 @@ export const CS_COLLECT = {
     sourceName: 'arXiv', language: 'en', category: 'cs.CL',
   }],
   community: [{
+    site: 'hackernews',
     title: 'Show HN: tiny RAG', url: 'https://github.com/example/tiny-rag',
     discussionUrl: 'https://news.ycombinator.com/item?id=1', points: 312, numComments: 87,
     publishedAt: '2026-11-05T08:00:00.000Z', text: '',
+  }, {
+    site: 'lobsters', title: 'Retrieval for code search', url: 'https://example.com/code-search',
+    discussionUrl: 'https://lobste.rs/s/def456/retrieval', points: 40, numComments: 12,
+    publishedAt: '2026-11-01T14:00:00.000Z', text: '',
+  }],
+  questions: [{
+    title: 'RAG retriever returns irrelevant chunks',
+    url: 'https://stackoverflow.com/questions/79923286/rag-retriever',
+    author: 'devops', tags: ['python', 'rag'], score: 7, answerCount: 0,
+    isAnswered: false, hasAcceptedAnswer: false, viewCount: 605,
+    publishedAt: '2026-10-20T00:00:00.000Z', text: 'My retriever returns unrelated chunks.',
   }],
   newsList: [],
   blogs: [{
@@ -26,9 +38,9 @@ export const CS_COLLECT = {
   repos: [],
   collected: {
     collectedAt: '2026-11-09T00:00:00.000Z',
-    included: ['papers', 'community', 'news', 'blogs', 'repos'],
+    included: ['papers', 'community', 'questions', 'news', 'blogs', 'repos'],
     degraded: [{ provider: 'repos', source: 'GitHub', reason: 'GitHub 검색 한도를 넘었습니다.' }],
-    counts: { papers: 1, community: 1, news: 0, blogs: 1, repos: 0 }, total: 3, duplicatesRemoved: 0,
+    counts: { papers: 1, community: 2, questions: 1, news: 0, blogs: 1, repos: 0 }, total: 3, duplicatesRemoved: 0,
   },
   estimate: { estimatedInputTokens: 900, estimatedCostUsd: 0.0123, budget: BUDGET },
   confirmToken: 'ct_cs',

@@ -1,0 +1,47 @@
+{
+  "items": [
+    {
+      "tags": ["python", "langchain", "rag"],
+      "owner": { "display_name": "dev&amp;ops" },
+      "is_answered": true,
+      "view_count": 605,
+      "accepted_answer_id": 79926667,
+      "answer_count": 2,
+      "score": 7,
+      "creation_date": 1792074068,
+      "question_id": 79923286,
+      "link": "https://stackoverflow.com/questions/79923286/rag-retriever-returns-irrelevant-chunks",
+      "title": "RAG retriever returns irrelevant chunks &quot;sometimes&quot;",
+      "body": "<p>My retriever returns <code>unrelated</code> chunks.</p>"
+    },
+    {
+      "tags": ["vector-database", "pgvector", "postgresql", "embeddings", "rag", "extra-tag"],
+      "owner": {},
+      "is_answered": false,
+      "view_count": 41,
+      "answer_count": 0,
+      "score": -1,
+      "creation_date": 1791900000,
+      "question_id": 79923999,
+      "link": "https://stackoverflow.com/questions/79923999/pgvector-index-not-used",
+      "title": "pgvector index not used",
+      "body": "<p>EXPLAIN shows seq scan.</p>"
+    },
+    {
+      "tags": ["rag"],
+      "owner": { "display_name": "x" },
+      "is_answered": false,
+      "view_count": 1,
+      "answer_count": 0,
+      "score": 0,
+      "creation_date": 1791800000,
+      "question_id": 1,
+      "link": "https://evil.example.com/questions/1",
+      "title": "off-site link",
+      "body": ""
+    }
+  ],
+  "has_more": false,
+  "quota_max": 300,
+  "quota_remaining": 290
+}

@@ -36,9 +36,9 @@
 ### CS 기술 동향 브리핑
 
 검색 화면의 **"CS 동향" 탭**에서 컴퓨터과학 기술 동향을 브리핑받는다. 투자 모드와 같은
-수집 → 검토(비용 승인) → 보고서 흐름이며, 다섯 출처를 모은다: arXiv 논문, Hacker News,
+수집 → 검토(비용 승인) → 보고서 흐름이며, 일곱 출처를 모은다: arXiv 논문, Hacker News, Lobsters(커뮤니티, 태그 피드), Stack Overflow(개발자 질문, 최근 90일),
 뉴스, 기업·연구 블로그, GitHub 저장소. 보고서는 주요 동향(근거 수준 표시), 논문 하이라이트,
-커뮤니티 반응, 오픈소스 신호, 미해결 질문, 지켜볼 것, 자료 충분도로 구성된다.
+커뮤니티 반응, 개발자들이 막히는 지점, 오픈소스 신호, 미해결 질문, 지켜볼 것, 자료 충분도로 구성된다.
 **검색어는 영어를 권장한다**(arXiv·Hacker News·GitHub가 영어 중심이다). 논문은 초록만 분석하며
 **논문 전문 분석은 준비 중이다.** 요청·응답 형태는 [`docs/api.md`](docs/api.md)의 "CS 기술 동향 브리핑"을 본다.
 
@@ -150,6 +150,7 @@ OPENAI_API_KEY=sk-...
 | `KCI_API_KEY` | (빈 값) | **선택.** 국내 논문 검색용. 아래 설명 참고 |
 | `RESEARCH_CONTACT_EMAIL` | (빈 값) | **선택.** Crossref polite pool 연락 이메일 |
 | `GITHUB_TOKEN` | (빈 값) | **선택.** CS 브리핑의 GitHub 저장소 검색용. 없으면 GitHub 검색이 분당 10회로 제한되고, 넘으면 해당 출처만 사유와 함께 빠진다 |
+| `STACKEXCHANGE_KEY` | (빈 값) | **선택.** CS 브리핑의 Stack Overflow 질문 검색용. 키가 있으면 하루 10,000회, 없으면 IP당 하루 300회로 제한되고, 넘으면 해당 출처만 사유와 함께 빠진다. 키를 설정했는데도 한도 메시지가 계속되면 키가 잘못되었거나 폐기된 것이니 확인한다 |
 | `CS_CACHE_TTL_MS` | `21600000` | CS 브리핑 수집 캐시(6시간) |
 
 **키 없는 논문 검색.** 한국어·영문 논문은 OpenAlex를 기본으로 조회하고, 결과가 부족하면 Crossref를 보조로 조회한다. 두 소스 모두 API 키 없이 사용할 수 있다. Crossref polite pool을 사용하려면 선택적으로 `RESEARCH_CONTACT_EMAIL`을 설정한다.
@@ -430,7 +431,7 @@ Task 6의 새 소스는 완료된 일봉 종가를 사용한다. Coinbase 가격
 `api.stock.naver.com`, `m.stock.naver.com`, `api.exchange.coinbase.com`을 포함해야 한다.
 환경변수를 생략하면 코드 기본 허용목록을 사용한다.
 
-CS 기술 동향 브리핑은 다음 호스트를 더 쓴다: `hn.algolia.com`, `api.github.com`,
+CS 기술 동향 브리핑은 다음 호스트를 더 쓴다: `hn.algolia.com`, `api.github.com`, `api.stackexchange.com`, `lobste.rs`,
 `research.google`, `deepmind.google`, `openai.com`, `huggingface.co`, `www.microsoft.com`,
 `developer.nvidia.com`, `aws.amazon.com`, `engineering.fb.com`, `bair.berkeley.edu`, `toss.tech`.
 코드 기본 허용목록에는 들어 있다. **로컬 `.env`에 `EXTERNAL_ALLOWLIST`를 직접 둔 경우 이 호스트를 더해야 한다**

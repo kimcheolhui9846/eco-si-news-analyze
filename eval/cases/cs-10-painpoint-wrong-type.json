@@ -1,0 +1,13 @@
+{
+  "name": "CS: 막히는 지점이 질문이 아닌 출처를 인용",
+  "mode": "cs",
+  "context": "cs-questions",
+  "base": "cs",
+  "override": {
+    "developerPainPoints": [
+      { "title": "검색 품질", "detail": "검색 결과가 질의와 맞지 않는다는 질문이 반복된다.", "sourceIds": ["Q1", "P1"] },
+      { "title": "인덱스", "detail": "커뮤니티에서만 언급됐다.", "sourceIds": ["H1"] }
+    ]
+  },
+  "expect": { "mustFix": ["sourceRefs"] }
+}

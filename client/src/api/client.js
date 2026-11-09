@@ -9,7 +9,7 @@ export class ApiCallError extends Error {
 }
 
 /** CS 분석 요청의 자료 키. 서버 lib/validation.js의 buildCsAnalyzeSchema와 같다. */
-const CS_ANALYSIS_KEYS = ['newsList', 'papers', 'community', 'blogs', 'repos'];
+const CS_ANALYSIS_KEYS = ['newsList', 'papers', 'community', 'questions', 'blogs', 'repos'];
 
 /**
  * 백엔드 호출을 감싼다.

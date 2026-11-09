@@ -6,7 +6,13 @@ import { buildHnUrl, parseHnSearch, createHackerNewsProvider } from '../lib/prov
 import {
   buildGithubUrl, parseGithubSearch, createGithubProvider, GITHUB_LIMIT_REASON,
 } from '../lib/providers/github.js';
-import { cleanText, httpUrlOrNull, CS_LIMITS } from '../lib/providers/cs-common.js';
+import {
+  buildSoUrl, parseSoSearch, createStackOverflowProvider, SO_LIMIT_REASON,
+} from '../lib/providers/stackoverflow.js';
+import {
+  pickLobstersTags, parseLobstersStories, createLobstersProvider,
+} from '../lib/providers/lobsters.js';
+import { cleanText, httpUrlOrNull, CS_LIMITS, CS_MAX } from '../lib/providers/cs-common.js';
 import { makeClock } from './helpers.js';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -71,6 +77,7 @@ test('HN 응답 파싱', () => {
   const items = parseHnSearch(fixture('hn-search.json'));
   assert.equal(items.length, 2);
   assert.deepEqual(items[0], {
+    site: 'hackernews',
     title: 'Show HN: A tiny RAG server in 300 lines',
     url: 'https://github.com/example/tiny-rag',
     discussionUrl: 'https://news.ycombinator.com/item?id=45810001',
@@ -218,4 +225,227 @@ test('GitHub provider: 200인데 HTML이면 degraded이고 캐시하지 않는�
   assert.deepEqual(r, { items: [], degraded: [{ source: 'GitHub', reason: FETCH_FAILED_REASON }] });
   await gh.search({ query: 'rag', limit: 10 });
   assert.equal(http.calls.length, 2);
+});
+
+// ─── Stack Overflow ───
+
+test('SO 검색 URL: 90일·투표순·본문 포함, 키는 있을 때만', () => {
+  assert.equal(
+    buildSoUrl({ query: 'rag agents', fromEpochSec: 1_692_224_000, limit: 8, key: '' }),
+    'https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=votes&q=rag+agents&site=stackoverflow&fromdate=1692224000&pagesize=8&filter=withbody',
+  );
+  assert.ok(buildSoUrl({ query: 'x', fromEpochSec: 1, limit: 8, key: 'k1' }).endsWith('&key=k1'));
+});
+
+test('SO 응답 파싱', () => {
+  const items = parseSoSearch(fixture('so-search.json'));
+  // stackoverflow.com이 아닌 링크는 버린다.
+  assert.equal(items.length, 2);
+  assert.deepEqual(items[0], {
+    title: 'RAG retriever returns irrelevant chunks "sometimes"',
+    url: 'https://stackoverflow.com/questions/79923286/rag-retriever-returns-irrelevant-chunks',
+    author: 'dev&ops',
+    tags: ['python', 'langchain', 'rag'],
+    score: 7,
+    answerCount: 2,
+    isAnswered: true,
+    hasAcceptedAnswer: true,
+    viewCount: 605,
+    publishedAt: new Date(1792074068 * 1000).toISOString(),
+    text: 'My retriever returns unrelated chunks.',
+  });
+  // 음수 점수는 그대로, 작성자가 없으면 빈 문자열, 태그는 5개까지.
+  assert.equal(items[1].score, -1);
+  assert.equal(items[1].author, '');
+  assert.equal(items[1].tags.length, 5);
+  assert.equal(items[1].hasAcceptedAnswer, false);
+});
+
+test('SO 파서는 깨진 JSON에 빈 배열', () => {
+  assert.deepEqual(parseSoSearch('{'), []);
+});
+
+test('SO provider: 90일 전 기준으로 부르고 결과를 캐시한다', async () => {
+  const http = makeHttp(() => fixture('so-search.json'));
+  const so = createStackOverflowProvider({ ...deps(http), key: '' });
+
+  const first = await so.search({ query: 'rag', limit: CS_MAX.questions });
+  await so.search({ query: 'rag', limit: CS_MAX.questions });
+
+  assert.equal(first.items.length, 2);
+  assert.deepEqual(first.degraded, []);
+  assert.equal(http.calls.length, 1);
+  // makeClock 기본 시각 1_700_000_000_000ms → 90일 전 1_692_224_000초
+  assert.ok(http.calls[0].url.includes('fromdate=1692224000'));
+});
+
+test('SO provider: 400·429는 한도 사유, 그 밖은 일반 사유, 캐시하지 않는다', async () => {
+  for (const [status, reason] of [[400, SO_LIMIT_REASON], [429, SO_LIMIT_REASON], [500, '자료를 가져오지 못했습니다.']]) {
+    const http = makeHttp(() => upstream(status));
+    const so = createStackOverflowProvider({ ...deps(http), key: '' });
+    const r = await so.search({ query: 'rag', limit: 8 });
+    assert.deepEqual(r, { items: [], degraded: [{ source: 'Stack Overflow', reason }] });
+    await so.search({ query: 'rag', limit: 8 });
+    assert.equal(http.calls.length, 2);
+  }
+});
+
+test('SO provider: 200인데 HTML이거나 items가 없으면 degraded', async () => {
+  for (const body of ['<html>blocked</html>', '{"quota_max":300}']) {
+    const so = createStackOverflowProvider({ ...deps(makeHttp(() => body)), key: '' });
+    const r = await so.search({ query: 'rag', limit: 8 });
+    assert.equal(r.items.length, 0);
+    assert.equal(r.degraded[0].source, 'Stack Overflow');
+  }
+});
+
+test('SO provider: 키는 URL에만 싣고 사유·캐시 키에 남기지 않는다', async () => {
+  const KEY = 'se-key-SECRET123';
+  const http = makeHttp(() => upstream(400));
+  const cacheKeys = [];
+  const d = deps(http);
+  const cache = { get: (k) => { cacheKeys.push(k); return undefined; }, set: (k) => cacheKeys.push(k) };
+  const so = createStackOverflowProvider({ ...d, cache, key: KEY });
+  const r = await so.search({ query: 'rag', limit: 8 });
+  assert.ok(http.calls[0].url.includes(`key=${KEY}`));
+  assert.ok(!JSON.stringify(r).includes(KEY));
+  assert.ok(cacheKeys.every((k) => !k.includes(KEY)));
+});
+
+test('기본 허용 목록에 Stack Exchange·Lobsters가 있고 SE 키 기본값은 빈 문자열', () => {
+  const config = loadConfig({
+    MY_SECRET_PASSWORD: 'x', LLM_MODE: 'mock', EXTERNAL_ALLOWLIST: undefined, STACKEXCHANGE_KEY: undefined,
+  });
+  for (const host of ['api.stackexchange.com', 'lobste.rs']) {
+    assert.ok(config.externalAllowlist.includes(host), host);
+  }
+  assert.equal(config.stackexchangeKey, '');
+});
+
+// ─── Lobsters ───
+
+const TAGS = ['ai', 'databases', 'rust', 'go'];
+
+test('Lobsters 태그 고르기: 정확 일치·별칭·최대 2개·없는 별칭', () => {
+  assert.deepEqual(pickLobstersTags('Rust async runtime', TAGS), ['rust']);
+  assert.deepEqual(pickLobstersTags('retrieval augmented generation', TAGS), []);
+  assert.deepEqual(pickLobstersTags('LLM agents', TAGS), ['ai']);
+  assert.deepEqual(pickLobstersTags('machine learning in go with sql', TAGS), ['ai', 'go']);
+  // 별칭이 가리키는 태그가 목록에 없으면 쓰지 않는다.
+  assert.deepEqual(pickLobstersTags('kubernetes operators', TAGS), []);
+});
+
+test('Lobsters 태그 별칭: node.js는 nodejs, crypto는 cryptography, cryptography는 직접 일치', () => {
+  const tags = ['nodejs', 'javascript', 'cryptography', 'security'];
+  assert.deepEqual(pickLobstersTags('node', tags), ['nodejs']);
+  assert.deepEqual(pickLobstersTags('node.js', tags), ['nodejs']);
+  assert.deepEqual(pickLobstersTags('typescript', tags), ['javascript']);
+  assert.deepEqual(pickLobstersTags('crypto', tags), ['cryptography']);
+  assert.deepEqual(pickLobstersTags('cryptography', tags), ['cryptography']);
+  assert.deepEqual(pickLobstersTags('crypto', ['security']), []);
+});
+
+test('Lobsters provider: format 같은 비주제 카테고리 태그는 고르지 않는다', async () => {
+  const http = lobstersHttp({
+    '/tags.json': fixture('lobsters-tags.json'),
+    '/t/ai.json': fixture('lobsters-ai.json'),
+  });
+  const r = await createLobstersProvider(deps(http)).search({ query: 'video ai diffusion', limit: 10 });
+  assert.deepEqual(r.degraded, []);
+  assert.ok(r.items.length > 0);
+  const feeds = http.calls.map((c) => c.url).filter((u) => u.includes('/t/'));
+  assert.equal(feeds.length, 1);
+  assert.ok(feeds[0].endsWith('/t/ai.json'));
+});
+
+test('Lobsters provider: 태그 피드에서 질의 단어가 든 글을 점수보다 먼저 둔다', async () => {
+  const http = lobstersHttp({
+    '/tags.json': fixture('lobsters-tags.json'),
+    '/t/ai.json': fixture('lobsters-ai.json'),
+  });
+  const r = await createLobstersProvider(deps(http)).search({ query: 'llm', limit: 10 });
+  assert.equal(r.items[0].title, 'Local LLM inference on a Mac mini');
+  assert.equal(r.items[1].title, 'Retrieval for code search');
+});
+
+test('Lobsters provider: 최신 글 거르기는 통단어 일치(rag는 storage에 안 걸린다)', async () => {
+  const body = JSON.stringify([{
+    short_id: 'sto111', created_at: '2023-11-12T10:00:00.000Z',
+    title: 'Storage engines', url: 'https://example.com/s', score: 5, comment_count: 1,
+    description_plain: '', tags: ['storage'], comments_url: 'https://lobste.rs/s/sto111/storage_engines',
+  }, {
+    short_id: 'rag111', created_at: '2023-11-12T10:00:00.000Z',
+    title: 'A RAG pipeline (v2)', url: 'https://example.com/r', score: 4, comment_count: 1,
+    description_plain: '', tags: ['x'], comments_url: 'https://lobste.rs/s/rag111/rag_pipeline',
+  }]);
+  const http = lobstersHttp({ '/tags.json': new Error('down'), '/newest.json': body });
+  const r = await createLobstersProvider(deps(http)).search({ query: 'rag', limit: 10 });
+  assert.deepEqual(r.items.map((i) => i.title), ['A RAG pipeline (v2)']);
+});
+
+test('Lobsters 글 파싱: 링크 없는 글은 토론 링크, 잘못된 short_id는 버림', () => {
+  const items = parseLobstersStories(fixture('lobsters-ai.json'));
+  assert.equal(items.length, 3);
+  assert.deepEqual(items[0], {
+    site: 'lobsters',
+    title: 'Local LLM inference on a Mac mini',
+    url: 'https://lobste.rs/s/abc123/local_llm_inference_on_mac_mini',
+    discussionUrl: 'https://lobste.rs/s/abc123/local_llm_inference_on_mac_mini',
+    points: 13,
+    numComments: 5,
+    publishedAt: '2023-11-10T17:07:51.827Z',
+    text: "What works & what doesn't.",
+    tags: ['ai', 'hardware'],
+  });
+  assert.equal(items[1].url, 'https://example.com/code-search');
+});
+
+const lobstersHttp = (routes) => makeHttp((url) => {
+  for (const [pattern, body] of Object.entries(routes)) if (url.includes(pattern)) return body;
+  return new Error(`라우트 없음: ${url}`);
+});
+
+test('Lobsters provider: 태그 피드를 30일·점수순으로, 태그 목록은 한 번만', async () => {
+  const http = lobstersHttp({
+    '/tags.json': fixture('lobsters-tags.json'),
+    '/t/ai.json': fixture('lobsters-ai.json'),
+  });
+  const lob = createLobstersProvider(deps(http));
+
+  const r = await lob.search({ query: 'llm inference', limit: 10 });
+  assert.deepEqual(r.degraded, []);
+  assert.deepEqual(r.items.map((i) => i.title), ['Local LLM inference on a Mac mini', 'Retrieval for code search']);
+
+  await lob.search({ query: 'rag', limit: 10 });
+  assert.equal(http.calls.filter((c) => c.url.endsWith('/tags.json')).length, 1);
+});
+
+test('Lobsters provider: 맞는 태그가 없으면 최신 글에서 질의 단어로 거른다', async () => {
+  const http = lobstersHttp({
+    '/tags.json': fixture('lobsters-tags.json'),
+    '/newest.json': fixture('lobsters-newest.json'),
+  });
+  const r = await createLobstersProvider(deps(http)).search({ query: 'webassembly runtime', limit: 10 });
+  assert.deepEqual(r.items.map((i) => i.title), ['Writing a webassembly runtime']);
+});
+
+test('Lobsters provider: 태그 목록 실패는 알리지 않고 최신 글로 대체한다', async () => {
+  const http = lobstersHttp({
+    '/tags.json': new Error('down'),
+    '/newest.json': fixture('lobsters-newest.json'),
+  });
+  const r = await createLobstersProvider(deps(http)).search({ query: 'zig release', limit: 10 });
+  assert.deepEqual(r.degraded, []);
+  assert.deepEqual(r.items.map((i) => i.title), ['Zig 0.14 released']);
+});
+
+test('Lobsters provider: 글 피드 실패·HTML 200은 degraded이고 캐시하지 않는다', async () => {
+  for (const feed of [new Error('down'), '<html>blocked</html>']) {
+    const http = lobstersHttp({ '/tags.json': fixture('lobsters-tags.json'), '/t/ai.json': feed });
+    const lob = createLobstersProvider(deps(http));
+    const r = await lob.search({ query: 'llm', limit: 10 });
+    assert.deepEqual(r, { items: [], degraded: [{ source: 'Lobsters', reason: '자료를 가져오지 못했습니다.' }] });
+    await lob.search({ query: 'llm', limit: 10 });
+    assert.equal(http.calls.filter((c) => c.url.endsWith('/t/ai.json')).length, 2);
+  }
 });

@@ -2,7 +2,7 @@ import NewsList from '../components/NewsList.jsx';
 import { formatDateTime, formatUsd } from '../lib/format.js';
 
 const PROVIDER_LABEL = {
-  papers: '논문', community: '커뮤니티', news: '뉴스', blogs: '기술 블로그', repos: '저장소',
+  papers: '논문', community: '커뮤니티', questions: '개발자 질문', news: '뉴스', blogs: '기술 블로그', repos: '저장소',
 };
 
 const ExternalLink = ({ href, children }) => (
@@ -29,7 +29,7 @@ export default function CsReviewPage({ collected, onApprove, onBack, busy }) {
   if (!collected) return null;
 
   const {
-    newsList = [], papers = [], community = [], blogs = [], repos = [],
+    newsList = [], papers = [], community = [], questions = [], blogs = [], repos = [],
     collected: meta, estimate, confirmToken,
   } = collected;
   const included = meta?.included ?? Object.keys(PROVIDER_LABEL);
@@ -45,7 +45,7 @@ export default function CsReviewPage({ collected, onApprove, onBack, busy }) {
       <section className="card">
         <h2 className="card-title">수집 요약</h2>
         <p>
-          합계 {meta?.total ?? 0}건 · 논문 {papers.length} · 커뮤니티 {community.length} ·
+          합계 {meta?.total ?? 0}건 · 논문 {papers.length} · 커뮤니티 {community.length} · 질문 {questions.length} ·
           {' '}뉴스 {newsList.length} · 블로그 {blogs.length} · 저장소 {repos.length}
         </p>
         {/* 비어 있는 이유를 승인 전에 알아야 한다. */}
@@ -80,15 +80,35 @@ export default function CsReviewPage({ collected, onApprove, onBack, busy }) {
       )}
 
       {shown('community') && (
-        <Group title="커뮤니티 (Hacker News)" items={community}>
+        <Group title="커뮤니티 (Hacker News·Lobsters)" items={community}>
           {community.map((h) => (
             <li key={h.discussionUrl} className="news-item">
-              <div className="news-head"><span className="news-title">{h.title}</span></div>
+              <div className="news-head">
+                <span className="news-title">{h.title}</span>
+                <span className="kind">{h.site === 'lobsters' ? 'Lobsters' : 'HN'}</span>
+              </div>
               <div className="news-meta">
                 점수 {h.points} · 댓글 {h.numComments} · {formatDateTime(h.publishedAt)} ·
                 {' '}<ExternalLink href={h.discussionUrl}>토론</ExternalLink>
               </div>
               {h.text && <p className="news-body">{h.text}</p>}
+            </li>
+          ))}
+        </Group>
+      )}
+
+      {shown('questions') && (
+        <Group title="개발자 질문 (Stack Overflow)" items={questions}>
+          {questions.map((q) => (
+            <li key={q.url} className="news-item">
+              <div className="news-head"><span className="news-title">{q.title}</span></div>
+              <div className="news-meta">
+                {`점수 ${q.score} · 답변 ${q.answerCount} · ${q.hasAcceptedAnswer ? '채택 답변 있음' : (q.isAnswered ? '답변 있음' : '답 없음')} · 조회 ${q.viewCount} ·`}
+                {' '}{formatDateTime(q.publishedAt)} · <ExternalLink href={q.url}>질문</ExternalLink>
+              </div>
+              {q.tags.length > 0 && <div className="muted small">{q.tags.join(' · ')}</div>}
+              <div className="muted small">작성자 {q.author || '미상'} · CC BY-SA</div>
+              {q.text && <p className="news-body">{q.text}</p>}
             </li>
           ))}
         </Group>
@@ -144,7 +164,7 @@ export default function CsReviewPage({ collected, onApprove, onBack, busy }) {
           className="primary"
           disabled={busy}
           onClick={() => onApprove({
-            mode: 'cs', newsList, papers, community, blogs, repos, confirmToken,
+            mode: 'cs', newsList, papers, community, questions, blogs, repos, confirmToken,
           })}
         >
           {busy ? '분석 중…' : '분석 시작'}

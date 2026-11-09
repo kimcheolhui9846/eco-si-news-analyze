@@ -32,6 +32,9 @@ import { createResearchProvider } from './lib/providers/papers.js';
 import { createKciProvider } from './lib/providers/kci.js';
 import { createExperimentProvider } from './lib/providers/experiments.js';
 import { createHackerNewsProvider } from './lib/providers/hackernews.js';
+import { createLobstersProvider } from './lib/providers/lobsters.js';
+import { createStackOverflowProvider } from './lib/providers/stackoverflow.js';
+import { mergeCommunity } from './lib/providers/community.js';
 import { createGithubProvider } from './lib/providers/github.js';
 import { createTechBlogProvider } from './lib/providers/tech-blogs.js';
 import { createArxivCsProvider } from './lib/providers/arxiv-cs.js';
@@ -347,6 +350,8 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
   const csDeps = () => ({ http: httpClient, cache: csCache(), clock: now, makeBreaker: makeProviderBreaker });
   const arxivCsProvider = createArxivCsProvider(csDeps());
   const hnProvider = createHackerNewsProvider(csDeps());
+  const lobstersProvider = createLobstersProvider(csDeps());
+  const soProvider = createStackOverflowProvider({ ...csDeps(), key: config.stackexchangeKey });
   const blogProvider = createTechBlogProvider(csDeps());
   const githubProvider = createGithubProvider({ ...csDeps(), token: config.githubToken });
 
@@ -367,22 +372,26 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     const included = normalizeCsInclude(parsed.data.include);
     const wanted = (scope) => included.includes(scope);
 
-    const [papers, community, news, blogs, repos] = await Promise.all([
+    const [papers, hn, lobsters, questions, news, blogs, repos] = await Promise.all([
       wanted('papers') ? arxivCsProvider.search({ query, limit: CS_MAX.papers }) : null,
       wanted('community') ? hnProvider.search({ query, limit: CS_MAX.community }) : null,
+      wanted('community') ? lobstersProvider.search({ query, limit: CS_MAX.community }) : null,
+      wanted('questions') ? soProvider.search({ query, limit: CS_MAX.questions }) : null,
       wanted('news') ? newsProvider.search({ query, lang, limit: CS_MAX.news }) : null,
       wanted('blogs') ? blogProvider.search({ query, limit: CS_MAX.blogs }) : null,
       wanted('repos') ? githubProvider.search({ query, limit: CS_MAX.repos }) : null,
     ]);
 
     const degraded = [
-      ['papers', papers], ['community', community], ['news', news], ['blogs', blogs], ['repos', repos],
+      ['papers', papers], ['community', hn], ['community', lobsters], ['questions', questions],
+      ['news', news], ['blogs', blogs], ['repos', repos],
     ].flatMap(([provider, result]) => (result?.degraded ?? []).map((d) => ({ provider, ...d })));
 
     // 분석 요청과 같은 키 이름으로 싣는다. 클라이언트는 비어 있지 않은 배열만 되돌려 보낸다.
     const lists = {
       papers: papers?.items ?? [],
-      community: community?.items ?? [],
+      community: wanted('community') ? mergeCommunity(hn?.items, lobsters?.items, CS_MAX.community) : [],
+      questions: questions?.items ?? [],
       newsList: (news?.items ?? []).map((i) => ({
         title: i.title, content: i.content, source: i.source,
         url: i.url, publishedAt: i.publishedAt, contentKind: i.contentKind,

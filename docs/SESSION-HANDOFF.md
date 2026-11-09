@@ -3,11 +3,20 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-09-14 (Task 6 시장 데이터 소스 교체 구현 검증 중)
-- **현재 브랜치**: `codex/task-6-market-sources` (Task 5 기록 브랜치 기반, Draft PR #7)
+- **최종 갱신**: 2026-11-09 (CS 출처 확장: Stack Overflow·Lobsters, 최종 리뷰 수정 반영)
+- **현재 브랜치**: `feature/cs-qa-sources` (main 6e3cd04 기반, PR 전)
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
+
+## 2026-11-09 CS 출처 추가: Stack Overflow·Lobsters (구현·리뷰·실호출 완료, PR 전)
+
+- 브랜치 `feature/cs-qa-sources` — main(6e3cd04)에서 땄다. 설계 `docs/superpowers/specs/2026-11-09-cs-qa-sources-design.md`, 계획 `docs/superpowers/plans/2026-11-09-cs-qa-sources.md`.
+- Lobsters는 커뮤니티(H)에 HN과 6:4로 합친다(검색 API가 없어 태그 피드·최신 글을 거른다). Stack Overflow는 새 범위 `questions`(Q), 보고서 섹션 `developerPainPoints`. 인용 접두사 `PHSBGQ`.
+- 새 환경변수 `STACKEXCHANGE_KEY`(선택). 새 허용 호스트 `api.stackexchange.com`, `lobste.rs` — 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에도 더해야 한다.
+- 검증: `npm test` 876 / 875 pass / 0 fail / 1 skip, `npm run eval` 케이스 27개 · 실패 0개 · 평균 점수 92.8, 빌드 성공 (`npm run build:client`). 최종 리뷰 수정(Lobsters 태그 주제 한정·통단어 일치, API 문서·README 보강) 반영.
+- 로컬 실호출 1회(2026-11-09, gpt-4o, 'llm inference', 허용목록은 `.env.example` 값을 명령행으로): 논문 8·커뮤니티 10(HN 6·Lobsters 4)·질문 1·뉴스 8·블로그 8·저장소 8, 품질 100점(교정·경고 0), 위조 URL 0, 실제 $0.022. `developerPainPoints` 1개([Q1]). SO는 이 질의에서 90일 내 질문이 1건뿐이었다.
+- C1 운영 확인(2026-11-09, PR #14 병합 6e3cd04 후): 'retrieval augmented generation' 논문 8·커뮤니티 1·뉴스 8·블로그 8·저장소 8, 품질 100점, 실제 $0.020. 운영에서는 arXiv가 정상(로컬 IP만 429).
 
 ## 2026-11-09 C1: CS 기술 동향 브리핑 (완료, PR 리뷰·병합 대기)
 

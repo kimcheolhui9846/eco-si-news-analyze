@@ -13,7 +13,7 @@ import { parseGithubSearch } from '../lib/providers/github.js';
 import { parseBlogFeed, TECH_BLOGS } from '../lib/providers/tech-blogs.js';
 import { parseArxivCs } from '../lib/providers/papers.js';
 import { BASE_ENV } from './helpers.js';
-import { csData, hn, newsItem, paper } from './cs-fixtures.js';
+import { csData, hn, lobsters, newsItem, paper, question } from './cs-fixtures.js';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const config = loadConfig(BASE_ENV);
@@ -80,7 +80,7 @@ test('urlWhitelist에 원문과 HN 토론 링크가 모두 있다', () => {
 test('baseMeta는 합계와 종류별 개수다', () => {
   assert.deepEqual(csProfile.baseMeta(csProfile.normalize(csData())), {
     sourceCount: 6, duplicatesRemoved: 0,
-    counts: { papers: 2, community: 1, news: 1, blogs: 1, repos: 1 },
+    counts: { papers: 2, community: 1, questions: 0, news: 1, blogs: 1, repos: 1 },
   });
 });
 
@@ -121,7 +121,7 @@ test('CS 수집 스키마와 범위 정규화', () => {
   assert.equal(s.safeParse({ query: 'rag', include: ['papers', 'repos'] }).success, true);
   assert.equal(s.safeParse({ query: 'rag', include: ['market'] }).success, false);
   assert.equal(s.safeParse({ query: 'rag', symbol: 'NVDA' }).success, false);
-  assert.deepEqual(CS_SCOPES, ['papers', 'community', 'news', 'blogs', 'repos']);
+  assert.deepEqual(CS_SCOPES, ['papers', 'community', 'questions', 'news', 'blogs', 'repos']);
   assert.deepEqual(normalizeCsInclude(undefined), CS_SCOPES);
   assert.deepEqual(normalizeCsInclude([]), CS_SCOPES);
   assert.deepEqual(normalizeCsInclude(['repos', 'papers']), ['papers', 'repos']);
@@ -137,4 +137,63 @@ test('수집기 출력은 그대로 CS 분석 스키마를 통과한다', () => 
   };
   const result = schema.safeParse(body);
   assert.equal(result.success, true, JSON.stringify(result.error?.issues?.[0]));
+});
+
+test('normalize: 질문에 Q ID를 붙이고 합계에 센다', () => {
+  const n = csProfile.normalize(csData({ questions: [question(), question({ url: 'https://stackoverflow.com/questions/2/x' })] }));
+  assert.deepEqual(n.questions.map((q) => q.sourceId), ['Q1', 'Q2']);
+  assert.equal(n.total, 8);
+  assert.equal(csProfile.baseMeta(n).counts.questions, 2);
+});
+
+test('hashInput에 질문이 들어간다', () => {
+  const a = csProfile.hashInput(csProfile.normalize(csData()));
+  const b = csProfile.hashInput(csProfile.normalize(csData({ questions: [question()] })));
+  assert.notDeepEqual(a, b);
+  assert.equal(b.questions.length, 1);
+});
+
+test('buildSources: Lobsters·Stack Overflow 출처 이름과 CC BY-SA 표기', () => {
+  const n = csProfile.normalize(csData({
+    community: [hn(), lobsters()],
+    questions: [question(), question({ url: 'https://stackoverflow.com/questions/2/x', author: '' })],
+  }));
+  const sources = csProfile.buildSources(n, '2026-11-09T00:00:00.000Z');
+  const by = new Map(sources.map((s) => [s.sourceId, s]));
+  assert.equal(by.get('H1').source, 'Hacker News');
+  assert.equal(by.get('H2').source, 'Lobsters');
+  assert.equal(by.get('H2').url, 'https://lobste.rs/s/def456/retrieval_for_code_search');
+  assert.equal(by.get('Q1').type, 'question');
+  assert.equal(by.get('Q1').source, 'Stack Overflow · devops · CC BY-SA');
+  assert.equal(by.get('Q2').source, 'Stack Overflow · 작성자 미상 · CC BY-SA');
+  assert.equal(by.get('Q1').url, question().url);
+  // 순서: 논문 → 커뮤니티 → 질문 → 뉴스 → 블로그 → 저장소
+  assert.deepEqual(sources.map((s) => s.sourceId[0]), ['P', 'P', 'H', 'H', 'Q', 'Q', 'S', 'B', 'G']);
+});
+
+test('urlWhitelist에 질문 링크가 있다', () => {
+  const urls = csProfile.urlWhitelist(csProfile.normalize(csData({ questions: [question()] })));
+  assert.ok(urls.has(question().url));
+});
+
+test('사용자 프롬프트: 질문 구획과 커뮤니티 사이트 표시', () => {
+  const n = csProfile.normalize(csData({ community: [hn(), lobsters()], questions: [question()] }));
+  const p = csProfile.buildUserPrompt(n, { collectedAt: '2026-11-09T00:00:00.000Z' });
+  assert.ok(p.includes('[개발자 질문 (Stack Overflow)]'));
+  assert.ok(p.includes('- 출처 ID: Q1'));
+  assert.ok(p.includes('- 반응: 점수 7 · 답변 2 · 채택 답변 있음 · 조회 605'));
+  assert.ok(p.includes('- 태그: python, rag'));
+  assert.ok(p.includes('- 사이트: Lobsters'));
+  assert.ok(p.includes('질문 1'));
+});
+
+test('CS 분석 스키마: 커뮤니티 site 필수, 질문 strict·상한', () => {
+  const { site: _site, ...noSite } = hn();
+  assert.equal(schema.safeParse({ community: [noSite] }).success, false);
+  assert.equal(schema.safeParse({ community: [hn({ site: 'reddit' })] }).success, false);
+  assert.equal(schema.safeParse({ community: [lobsters()] }).success, true);
+  assert.equal(schema.safeParse({ questions: [question()] }).success, true);
+  assert.equal(schema.safeParse({ questions: [question({ extra: 1 })] }).success, false);
+  assert.equal(schema.safeParse({ questions: [question({ score: -3 })] }).success, true);
+  assert.equal(schema.safeParse({ questions: Array.from({ length: 9 }, () => question()) }).success, false);
 });

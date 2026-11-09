@@ -1,0 +1,8 @@
+{
+  "name": "CS: 질문 자료가 있는데 막히는 지점이 비었다",
+  "mode": "cs",
+  "context": "cs-questions",
+  "base": "cs",
+  "override": { "developerPainPoints": [] },
+  "expect": { "mustWarn": ["sourceRefs"] }
+}
