@@ -14,7 +14,7 @@ import { loadConfig } from './lib/config.js';
 import { createLogger } from './lib/logger.js';
 import { createSessionStore, safeCompare } from './lib/session.js';
 import {
-  buildResearchSchema, buildCsResearchSchema, formatZodError, normalizeInclude, normalizeCsInclude,
+  buildResearchSchema, buildCsResearchSchema, buildPaperResearchSchema, formatZodError, normalizeInclude, normalizeCsInclude,
 } from './lib/validation.js';
 import {
   createLlmClient, createMockLlmClient, createCircuitBreaker,
@@ -49,6 +49,9 @@ import { createAnalysisRunner } from './lib/analysis-runner.js';
 import { getProfile, splitMode } from './lib/modes/index.js';
 import { investProfile } from './lib/modes/invest.js';
 import { csProfile } from './lib/modes/cs.js';
+import { paperProfile } from './lib/modes/paper.js';
+import { createArxivHtmlProvider, parseArxivId } from './lib/providers/arxiv-html.js';
+import { fitSections } from './lib/modes/paper-budget.js';
 
 // 기존 테스트가 '../server.js'에서 import하던 심볼을 그대로 유지한다.
 export { ApiError } from './lib/errors.js';
@@ -122,9 +125,12 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
 
   // 주입된 llm이 있으면 그것을 쓴다. 없으면 모드에 따라 실제/mock 클라이언트를 만든다.
   // 주입된 llm이 있으면 그것을 쓴다. 없으면 모드에 따라 실제/mock 클라이언트를 만든다.
-  // mock은 응답 스키마 이름으로 투자·CS 보고서를 고른다.
+  // mock은 응답 스키마 이름으로 투자·CS·논문 보고서를 고른다.
   const llmClient = llm ?? (config.llmMode === 'mock'
-    ? createMockLlmClient({ [csProfile.jsonSchema.name]: csProfile.mockReport })
+    ? createMockLlmClient({
+        [csProfile.jsonSchema.name]: csProfile.mockReport,
+        [paperProfile.jsonSchema.name]: paperProfile.mockReport,
+      })
     : createLlmClient(config));
   const breaker = createCircuitBreaker({
     threshold: config.breakerThreshold,
@@ -354,6 +360,12 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
   const soProvider = createStackOverflowProvider({ ...csDeps(), key: config.stackexchangeKey });
   const blogProvider = createTechBlogProvider(csDeps());
   const githubProvider = createGithubProvider({ ...csDeps(), token: config.githubToken });
+  // 논문 전문. 같은 논문을 다시 열 때 arXiv를 다시 부르지 않는다.
+  const arxivHtmlProvider = createArxivHtmlProvider({
+    http: httpClient,
+    cache: createTtlCache({ ttlMs: config.csCacheTtlMs, maxEntries: 50, clock: now }),
+    makeBreaker: makeProviderBreaker,
+  });
 
   // ─── 수집 엔드포인트 ───
 
@@ -442,6 +454,57 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     });
   };
 
+  const paperResearchSchema = buildPaperResearchSchema();
+
+  /** 논문 한 편 수집. 본문을 가져와 예산에 맞춰 자르고 견적·확인 토큰을 준다. */
+  const collectPaper = async (req, res, body) => {
+    const parsed = paperResearchSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
+    }
+    const id = parseArxivId(parsed.data.arxiv);
+    if (!id) {
+      throw new ApiError(400, 'INVALID_REQUEST', 'arXiv ID 또는 arXiv 링크를 입력해 주세요. 예: 2401.04088');
+    }
+
+    const fetched = await arxivHtmlProvider.fetchPaper(id);
+    const fitted = fitSections(fetched.sections);
+    // 클라이언트는 이 객체를 그대로 분석 요청에 되돌려 보낸다. 화면용 목차는 collected에 따로 싣는다.
+    const paper = {
+      id: fetched.id,
+      title: fetched.title,
+      authors: fetched.authors,
+      url: fetched.url,
+      htmlUrl: fetched.htmlUrl,
+      sections: fitted.sections,
+      truncated: fitted.truncated,
+    };
+
+    // 견적은 분석과 같은 프로필 함수로 만든다. cacheKey가 일치해야 확인 토큰이 통한다.
+    const normalized = paperProfile.normalize({ paper });
+    const { collectedAt, estimatedInputTokens, estimatedCostUsd, cacheKey } =
+      runner.quote(paperProfile, normalized);
+
+    res.json({
+      requestId: req.requestId,
+      mode: 'paper',
+      paper,
+      collected: {
+        collectedAt,
+        outline: fitted.outline,
+        sectionCount: fitted.sections.length,
+        truncatedCount: fitted.truncated.length,
+      },
+      estimate: {
+        estimatedInputTokens,
+        assumedOutputTokens: config.assumedOutputTokens,
+        estimatedCostUsd: Number(estimatedCostUsd.toFixed(6)),
+        budget: budget.snapshot(),
+      },
+      ...runner.issueConfirmToken(cacheKey, req.session.token),
+    });
+  };
+
   app.post(
     '/api/research/collect',
     makeResearchLimiter(config),
@@ -450,7 +513,9 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     async (req, res) => {
       const { mode, body } = splitMode(req.body);
       // 모르는 모드는 getProfile이 400으로 거부한다.
-      if (getProfile(mode).mode === 'cs') return collectCs(req, res, body);
+      const profileMode = getProfile(mode).mode;
+      if (profileMode === 'cs') return collectCs(req, res, body);
+      if (profileMode === 'paper') return collectPaper(req, res, body);
       const parsed = researchSchema.safeParse(body);
       if (!parsed.success) {
         throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
