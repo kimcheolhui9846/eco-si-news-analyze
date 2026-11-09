@@ -9,7 +9,7 @@
 
 ---
 
-## 2026-11-09 C1: CS 기술 동향 브리핑 (10개 태스크 구현 완료, 최종 리뷰 중)
+## 2026-11-09 C1: CS 기술 동향 브리핑 (구현·최종 리뷰 완료, 실호출 대기)
 
 - 브랜치 `feature/cs-briefing` — `feature/analysis-quality-gate`(Draft PR #13)에서 땄다.
 - 설계: `docs/superpowers/specs/2026-11-09-cs-briefing-design.md`. `mode: 'cs'` 프로필 구조(분석 실행부 `lib/analysis-runner.js` 추출 + `lib/modes/{invest,cs}.js`), 출처 5종(arXiv cs.*, HN Algolia, 기존 뉴스, 연구 블로그 RSS 9~10개, GitHub 검색), CS 응답 스키마·품질 검사·`CsReportPage`.
@@ -19,7 +19,9 @@
 - 진행 기록은 `.superpowers/sdd/2026-11-09-cs-briefing/progress.md`(실행 시작 후). 완료된 태스크는 다시 보내지 않는다.
 - 서브에이전트 주도로 실행. Task 1~10 모두 태스크 리뷰 통과(e0b08d1). `npm test` 816/815 pass/1 skip, eval 25/0, 클라이언트 빌드 성공. 수정 라운드: Task 4(RSS 블로그 URL 2048자 상한), Task 7(중복 제거 후 3건 미만도 502), Task 10(뉴스 degraded 항목은 `feedId`).
 - 사소한 지적은 원장 `.superpowers/sdd/2026-11-09-cs-briefing/progress.md`의 `minor (deferred)` 줄에 있다. 최종 리뷰가 분류한다.
-- 다음: 최종 전체 리뷰(b2ff21e..e0b08d1) → 수정 1회 → 실호출 1회(사용자 확인 후, 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 새 호스트 12개 필요) → 푸시·PR은 사용자 요청 시.
+- 최종 리뷰(opus): 수정 후 병합 가능 판정 → 수정 4건(f9cdae1 잘못된 200 응답 캐시 금지·degraded, 6e9456a 인용 ID 접두사를 모드별로(투자 SPTFM·CS PHSBG — 투자 출력 불변), 0dc4c8f 하이라이트 P·신호 G만, 69f4731 뉴스 출처 문서) → 재검토 통과. `npm test` 827/826 pass/1 skip, eval 25/0, 빌드 성공(컨트롤러 직접 확인).
+- 남은 사소한 지적은 원장에 있고 최종 리뷰가 병합 전 수정 불필요로 판정했다.
+- 다음: 실호출 1회(사용자 확인 후, 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 새 호스트 12개 필요) → 푸시·PR은 사용자 요청 시.
 
 ## 2026-11-09 B: 분석 품질 게이트 (완료, Draft PR #13)
 
