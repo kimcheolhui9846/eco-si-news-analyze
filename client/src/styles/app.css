@@ -228,3 +228,11 @@ a { color: var(--accent); }
 /* ─── 종목별 비교 분석 ─── */
 .instrument-insight { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
 .instrument-insight p { margin: 0.25rem 0 0; }
+
+/* ─── 분석 종류 탭 ─── */
+.mode-tabs { display: flex; gap: 8px; margin-bottom: var(--gap); }
+.mode-tabs .tab {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text); cursor: pointer; font: inherit;
+}
+.mode-tabs .tab.active { background: var(--accent-soft); border-color: var(--accent-border); color: var(--warn-text); }
