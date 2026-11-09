@@ -392,14 +392,22 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     };
 
     const rawTotal = Object.values(lists).reduce((sum, list) => sum + list.length, 0);
-    if (rawTotal < 3) {
+    const tooFew = () => {
       req.log.warn({ degraded, included, rawTotal }, 'CS 수집 결과가 3건 미만이다');
-      throw new ApiError(502, 'COLLECTION_FAILED',
+      return new ApiError(502, 'COLLECTION_FAILED',
         'CS 동향 분석에 필요한 자료를 3건 이상 모으지 못했습니다. 검색어를 영어로 바꾸거나 범위를 넓혀 다시 시도해 주세요.');
-    }
+    };
+    if (rawTotal < 3) throw tooFew();
 
     // 견적은 분석과 같은 프로필 함수로 만든다. cacheKey가 일치해야 확인 토큰이 통한다.
-    const normalized = csProfile.normalize(lists);
+    // 중복 제거 뒤 3건 미만이면 normalize가 422를 던진다. 수집 단계에서는 502로 통일한다.
+    let normalized;
+    try {
+      normalized = csProfile.normalize(lists);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'INSUFFICIENT_DATA') throw tooFew();
+      throw err;
+    }
     const { collectedAt, estimatedInputTokens, estimatedCostUsd, cacheKey } =
       runner.quote(csProfile, normalized);
 

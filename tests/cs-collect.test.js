@@ -130,3 +130,21 @@ test('CS 수집에 투자 전용 필드나 모르는 범위를 보내면 400', a
     assert.equal(res.status, 400, JSON.stringify(body));
   }
 });
+
+test('원본은 3건 이상이어도 중복 제거 뒤 3건 미만이면 502 COLLECTION_FAILED', async () => {
+  // 같은 기사 1건을 세 피드(google, yna, etnews)가 똑같이 돌려준다. 원본 3건 -> 제목 중복 제거 뒤 1건.
+  const one = `<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>
+    <item><title>RAG pipeline news</title><link>https://example.com/a</link>
+    <description>rag content</description><pubDate>Mon, 09 Nov 2026 00:00:00 GMT</pubDate></item>
+    </channel></rss>`;
+  const http = makeHttp({
+    'news.google.com': one, 'yna.co.kr': one, 'etnews.com': one,
+  });
+  const { app } = boot(http);
+  const token = await login(app);
+  const res = await collect(app, token, { mode: 'cs', query: 'rag', include: ['news'] });
+
+  assert.equal(http.calls.length, 3); // 세 피드가 모두 응답했다(원본 3건).
+  assert.equal(res.status, 502);
+  assert.equal(res.body.error.code, 'COLLECTION_FAILED');
+});
