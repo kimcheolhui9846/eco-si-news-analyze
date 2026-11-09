@@ -30,7 +30,8 @@ export default function App({ api = defaultApi }) {
     api.budget().then(setBudget).catch(() => setBudget(null));
   }, [step, api]);
 
-  const search = async (form) => {
+  // failStep: 수집이 실패했을 때 돌아갈 화면. 없으면 오류 매핑의 nextStep을 따른다.
+  const search = async (form, { failStep } = {}) => {
     setStep('collecting');
     setError(null);
     try {
@@ -41,7 +42,7 @@ export default function App({ api = defaultApi }) {
       const mapped = messageForError(err);
       setError({ message: mapped.message, requestId: err?.requestId });
       // nextStep이 없어도 수집 중 화면에 머물면 안 된다.
-      setStep(mapped.nextStep ?? 'search');
+      setStep(failStep ?? mapped.nextStep ?? 'search');
     }
   };
 
@@ -71,8 +72,8 @@ export default function App({ api = defaultApi }) {
   // CS 보고서의 논문에서 바로 전문 분석으로. 수집만 하고, 비용은 검토 화면에서 승인한다.
   const deepAnalyze = (arxiv) => {
     setMode('paper');
-    setReport(null);
-    search({ mode: 'paper', arxiv });
+    // CS 보고서는 수집이 성공해 검토 화면으로 넘어갈 때까지 지키고, 실패하면 그 보고서로 돌아온다.
+    search({ mode: 'paper', arxiv }, { failStep: 'report' });
   };
 
   if (step === 'login') {

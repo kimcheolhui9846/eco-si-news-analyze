@@ -14,7 +14,7 @@ import { loadConfig } from './lib/config.js';
 import { createLogger } from './lib/logger.js';
 import { createSessionStore, safeCompare } from './lib/session.js';
 import {
-  buildResearchSchema, buildCsResearchSchema, buildPaperResearchSchema, formatZodError, normalizeInclude, normalizeCsInclude,
+  buildResearchSchema, buildCsResearchSchema, buildPaperResearchSchema, buildPaperAnalyzeSchema, formatZodError, normalizeInclude, normalizeCsInclude,
 } from './lib/validation.js';
 import {
   createLlmClient, createMockLlmClient, createCircuitBreaker,
@@ -50,7 +50,7 @@ import { getProfile, splitMode } from './lib/modes/index.js';
 import { investProfile } from './lib/modes/invest.js';
 import { csProfile } from './lib/modes/cs.js';
 import { paperProfile } from './lib/modes/paper.js';
-import { createArxivHtmlProvider, parseArxivId } from './lib/providers/arxiv-html.js';
+import { createArxivHtmlProvider, parseArxivId, PAPER_FETCH_FAILED_MESSAGE } from './lib/providers/arxiv-html.js';
 import { fitSections } from './lib/modes/paper-budget.js';
 
 // 기존 테스트가 '../server.js'에서 import하던 심볼을 그대로 유지한다.
@@ -455,6 +455,7 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
   };
 
   const paperResearchSchema = buildPaperResearchSchema();
+  const paperAnalyzeSchema = buildPaperAnalyzeSchema(config);
 
   /** 논문 한 편 수집. 본문을 가져와 예산에 맞춰 자르고 견적·확인 토큰을 준다. */
   const collectPaper = async (req, res, body) => {
@@ -479,6 +480,12 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
       sections: fitted.sections,
       truncated: fitted.truncated,
     };
+
+    // 승인을 받은 뒤 분석 요청이 400으로 거절되지 않도록, 분석 스키마를 여기서 먼저 통과시킨다.
+    // 상세(스키마 경로·값)는 응답에 싣지 않는다.
+    if (!paperAnalyzeSchema.safeParse({ paper }).success) {
+      throw new ApiError(502, 'COLLECTION_FAILED', PAPER_FETCH_FAILED_MESSAGE);
+    }
 
     // 견적은 분석과 같은 프로필 함수로 만든다. cacheKey가 일치해야 확인 토큰이 통한다.
     const normalized = paperProfile.normalize({ paper });

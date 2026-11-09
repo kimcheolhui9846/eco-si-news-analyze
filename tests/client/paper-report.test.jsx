@@ -100,3 +100,32 @@ test('CS 보고서 → 전문 분석: 논문 탭으로 바꿔 수집하고 검�
   await waitFor(() => assert.ok(screen.getByText('읽을 논문을 확인해 주세요')));
   assert.deepEqual(collects.at(-1), { mode: 'paper', arxiv: '2611.00001v1' });
 });
+
+test('CS 보고서 → 전문 분석 수집이 실패하면 CS 보고서로 돌아오고 오류를 보여 준다', async () => {
+  const api = {
+    login: async () => ({ token: 't', expiresAt: 'x' }),
+    budget: async () => BUDGET,
+    collect: async (form) => {
+      if (form.mode === 'paper') throw { code: 'FULLTEXT_UNAVAILABLE', message: '이 논문은 arXiv HTML 판이 없어 전문 분석을 할 수 없습니다.' };
+      return CS_COLLECT;
+    },
+    analyze: async () => CS_REPORT,
+    logout: async () => {},
+  };
+  render(<App api={api} />);
+  fireEvent.change(screen.getByLabelText(/비밀번호/), { target: { value: 'pw' } });
+  fireEvent.click(screen.getByRole('button', { name: /로그인/ }));
+  await waitFor(() => assert.ok(screen.getByRole('tab', { name: 'CS 동향' })));
+  fireEvent.click(screen.getByRole('tab', { name: 'CS 동향' }));
+  fireEvent.change(screen.getByLabelText(/검색어/), { target: { value: 'moe' } });
+  fireEvent.click(screen.getByRole('button', { name: '자료 수집' }));
+  await waitFor(() => assert.ok(screen.getByRole('button', { name: '분석 시작' })));
+  fireEvent.click(screen.getByRole('button', { name: '분석 시작' }));
+  await waitFor(() => assert.ok(screen.getByRole('button', { name: '전문 분석' })));
+
+  fireEvent.click(screen.getByRole('button', { name: '전문 분석' }));
+  await waitFor(() => assert.ok(screen.getByText(/arXiv HTML 판이 없어/)));
+  // CS 보고서가 그대로 남아 있다.
+  assert.ok(screen.getByRole('button', { name: '전문 분석' }));
+  assert.equal(screen.queryByLabelText(/검색어/), null);
+});

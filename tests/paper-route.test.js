@@ -173,3 +173,50 @@ test('LLM에 논문 시스템 프롬프트와 논문 응답 스키마를 넘긴�
   assert.ok(call.system.includes('비판적 읽기'));
   assert.ok(call.user.includes('[S3] 3 Experiments'));
 });
+
+test('한도를 넘는 저자·제목·앵커가 있는 논문도 수집 결과가 분석을 통과한다', async () => {
+  const names = Array.from({ length: 101 }, (_, i) => `<span class="ltx_creator"><span class="ltx_personname">${i === 0 ? 'A'.repeat(250) : `Author ${i}`}</span></span>`).join('');
+  const html = SHORT
+    .replace(/<div class="ltx_authors">[\s\S]*?<\/div>\n<div id="abstract1"/, `<div class="ltx_authors">${names}</div>\n<div id="abstract1"`)
+    .replace('</span>Method</h2>', `</span>${'M'.repeat(301)}</h2>`)
+    .replace('<section id="S2" class="ltx_section">', '<section id="S2_bad-anchor!" class="ltx_section">');
+  const { app } = boot(makeHttp(ok(html)));
+  const token = await login(app);
+  const c = (await collect(app, token, { mode: 'paper', arxiv: '2611.00001' })).body;
+  assert.equal(c.paper.authors.length, 100);
+  const res = await analyze(app, token, { mode: 'paper', paper: c.paper }, c.confirmToken);
+  assert.equal(res.status, 200, JSON.stringify(res.body.error));
+});
+
+test('수집 결과가 분석 스키마에 맞지 않으면 승인 전에 502 COLLECTION_FAILED로 막는다', async () => {
+  // 장 201개 — 파서는 막지 않지만 분석 스키마는 200개까지만 받는다.
+  const secs = Array.from({ length: 201 }, (_, i) => `<section id="S${i + 1}" class="ltx_section"><h2 class="ltx_title ltx_title_section">H${i}</h2><div class="ltx_para"><p class="ltx_p">${'body text '.repeat(5)}</p></div></section>`).join('');
+  const html = SHORT.replace(/<section id="S1"[\s\S]*<section id="bib"/, `${secs}<section id="bib"`);
+  const { app } = boot(makeHttp(ok(html)));
+  const token = await login(app);
+  const res = await collect(app, token, { mode: 'paper', arxiv: '2611.00001' });
+  assert.equal(res.status, 502);
+  assert.equal(res.body.error.code, 'COLLECTION_FAILED');
+  assert.equal(res.body.error.message, 'arXiv에서 논문 본문을 가져오지 못했습니다. 잠시 뒤 다시 시도해 주세요.');
+  assert.equal(res.body.confirmToken, undefined);
+});
+
+test('25k 토큰급 본문 + 저자 100명도 수집 → 분석이 200이다(상한 여유)', async () => {
+  const names = Array.from({ length: 100 }, (_, i) => `<span class="ltx_creator"><span class="ltx_personname">Author Name ${i}</span></span>`).join('');
+  // 장 4개 x 약 25,000자 = 약 25k 토큰(글자/4). 장마다 문단을 나눠 줄 수를 늘린다.
+  const para = `<div class="ltx_para"><p class="ltx_p">${'alpha beta gamma delta '.repeat(25)}</p></div>`;
+  const secs = Array.from({ length: 4 }, (_, i) =>
+    `<section id="S${i + 1}" class="ltx_section"><h2 class="ltx_title ltx_title_section">Part ${i + 1}</h2>${para.repeat(43)}</section>`).join('');
+  const html = SHORT
+    .replace(/<div class="ltx_authors">[\s\S]*?<\/div>\n<div id="abstract1"/, `<div class="ltx_authors">${names}</div>\n<div id="abstract1"`)
+    .replace(/<section id="S1"[\s\S]*<section id="bib"/, `${secs}<section id="bib"`);
+  const { app } = boot(makeHttp(ok(html)));
+  const token = await login(app);
+  const col = await collect(app, token, { mode: 'paper', arxiv: '2611.00001' });
+  assert.equal(col.status, 200, JSON.stringify(col.body.error));
+  const c = col.body;
+  assert.ok(c.estimate.estimatedInputTokens >= 20_000, String(c.estimate.estimatedInputTokens));
+  assert.equal(c.paper.authors.length, 100);
+  const res = await analyze(app, token, { mode: 'paper', paper: c.paper }, c.confirmToken);
+  assert.equal(res.status, 200, JSON.stringify(res.body.error));
+});

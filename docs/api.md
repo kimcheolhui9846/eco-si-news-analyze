@@ -51,7 +51,7 @@ Phase 1 기준. 모든 응답은 `application/json`이며, 모든 응답에 `X-R
 | `RATE_LIMITED` | 429 | rate limit 초과 (시간 창 기준) |
 | `BUDGET_EXCEEDED` | 429 | 일일 호출 수 또는 월 비용 한도 소진 |
 | `CONFIRMATION_REQUIRED` | 428 | 확인 토큰 없이 비용이 드는 분석을 요청함 |
-| `COLLECTION_FAILED` | 502 | 모든 뉴스 피드에서 자료를 수집하지 못함 |
+| `COLLECTION_FAILED` | 502 | 모든 뉴스 피드에서 자료를 수집하지 못함 (논문 모드: arXiv 본문을 가져오지 못함) |
 | `TOO_MANY_CONCURRENT` | 429 | 동시 분석 한도 초과 |
 | `INSUFFICIENT_DATA` | 422 | 중복 제거 후 유효 자료 0건 (논문 모드: 본문 장 없음) |
 | `FULLTEXT_UNAVAILABLE` | 422 | arXiv HTML 판이 없는 논문(404 또는 본문 없는 페이지) |
@@ -966,7 +966,10 @@ curl -X POST http://localhost:3000/api/analyze/news \
       { "id": "S0", "anchor": "abstract1", "heading": "Abstract", "text": "..." },
       { "id": "S1", "anchor": "S1", "heading": "1 Introduction", "text": "..." }
     ],
-    "truncated": [ { "id": "S7", "heading": "7 Conclusion", "partial": false } ]
+    "truncated": [
+      { "id": "S6", "heading": "6 Results", "partial": true },
+      { "id": "S7", "heading": "7 Conclusion", "partial": false }
+    ]
   },
   "collected": {
     "collectedAt": "2026-11-09T01:00:00.000Z",
@@ -1008,8 +1011,9 @@ curl -X POST http://localhost:3000/api/analyze/news \
 | 상태 | 코드 | 상황 |
 |---|---|---|
 | 400 | `INVALID_REQUEST` | 스키마 위반, arXiv ID·링크 형식 오류 |
+| 422 | `INSUFFICIENT_DATA` | 본문 장이 초록(`S0`)뿐이라 분석할 내용이 없음. 메시지 `"본문 장이 없어 전문 분석을 할 수 없습니다."` |
 | 422 | `FULLTEXT_UNAVAILABLE` | arXiv HTML 판이 없는 논문(404 또는 본문 없는 페이지). 메시지 `"이 논문은 arXiv HTML 판이 없어 전문 분석을 할 수 없습니다."` |
-| 502 | `COLLECTION_FAILED` | arXiv 네트워크 오류·5xx·429, 일시 차단. 메시지 `"arXiv에서 논문 본문을 가져오지 못했습니다. 잠시 뒤 다시 시도해 주세요."` |
+| 502 | `COLLECTION_FAILED` | arXiv 네트워크 오류·5xx·429, 일시 차단. 파싱한 결과가 분석 요청 스키마에 맞지 않을 때도 같은 코드·메시지로 막는다(승인 뒤 400이 나지 않도록). 메시지 `"arXiv에서 논문 본문을 가져오지 못했습니다. 잠시 뒤 다시 시도해 주세요."` |
 
 ### 논문 견적·분석 — `POST /api/analyze/estimate`, `POST /api/analyze/news`
 
@@ -1020,10 +1024,10 @@ curl -X POST http://localhost:3000/api/analyze/news \
 수집 응답의 `paper`를 그대로 넣는다. 모르는 필드는 거부한다.
 
 ```json
-{ "mode": "paper", "paper": { "id": "2401.04088", "title": "...", "authors": [], "url": "...", "htmlUrl": "...", "sections": [], "truncated": [] } }
+{ "mode": "paper", "paper": { "id": "2401.04088", "title": "...", "authors": [], "url": "...", "htmlUrl": "...", "sections": [ { "id": "S1", "anchor": "S1", "heading": "1 Introduction", "text": "..." } ], "truncated": [] } }
 ```
 
-장 ID는 `S` + 숫자(1~3자리), 장은 200개 이하이고 본문 합계는 프롬프트 길이 상한 안이어야 한다. 본문 장이 `S0`뿐이면 `422 INSUFFICIENT_DATA` `"본문 장이 없어 전문 분석을 할 수 없습니다."`다. 확인 토큰은 모드에 묶이므로 투자·CS 토큰으로는 분석할 수 없다.
+장 ID는 `S` + 숫자(1~3자리), 장은 200개 이하다. Zod는 장마다 `text` 길이만 프롬프트 길이 상한으로 막고, 본문 합계는 프롬프트 크기 검사(`413 INPUT_TOO_LARGE`)가 막는다. 본문 장이 `S0`뿐이면 `422 INSUFFICIENT_DATA` `"본문 장이 없어 전문 분석을 할 수 없습니다."`다. 확인 토큰은 모드에 묶이므로 투자·CS 토큰으로는 분석할 수 없다.
 
 #### 출처 ID와 타입
 
@@ -1060,9 +1064,9 @@ curl -X POST http://localhost:3000/api/analyze/news \
 
 | check | 동작 |
 |---|---|
-| `citations` | 본문에 인용된 없는 장 ID(`[S9]` 등)를 `출처 미확인`으로 바꾼다. |
+| `citations` | 제공되지 않은 장 ID 인용(`[S9]` 등)을 `출처 미확인`으로 바꾼다. |
 | `sectionRefs` | `sourceIds`에서 제공되지 않은 장 ID(분석에서 빠진 장 포함)를 정리한다(교정). 목록 항목(`keyResults`·`authorStatedLimitations`·`reviewerConcerns`)은 근거 장이 하나도 남지 않으면 항목을 제거한다(교정). 객체 섹션(`problem`·`method`·`experimentalSetup`·`reproducibility`)은 근거가 비면 경고만 남긴다. |
-| `numbers` | `keyResults[].numbers`의 각 값을 인용한 장 본문과 대조한다. 정규화는 쉼표 천 단위 제거, 유니코드 마이너스를 `-`로, 끝의 `%`·`x`·`×` 분리이고, 순수한 수치는 숫자 경계로 찾는다(`85.3`이 `185.3`에 걸리지 않는다). 본문에 없는 값은 지우고(교정), 값이 모두 지워지면 항목을 제거한다(교정). `numbers`가 원래 빈 정성 결과는 그대로 둔다. |
+| `numbers` | `keyResults[].numbers`의 각 값을 인용한 장 본문과 대조한다. 정규화는 쉼표 천 단위 제거, 유니코드 마이너스를 `-`로, 끝의 `%`·`x`·`×` 분리이고, 순수한 수치는 숫자 경계로 찾는다(`85.3`이 `185.3`에 걸리지 않는다). 본문에 없는 값은 지우고(교정), 값이 모두 지워지면 항목을 제거한다(교정). `numbers`가 원래 빈 정성 결과는 그대로 둔다. 한 자리 같은 작은 정수는 본문 어디에나 있어 쉽게 일치하므로 이런 값에는 검사가 약하다. |
 | `coverage` | 경고만 한다: 잘리거나 빠진 장이 있을 때, 장 제목에 `experiment`·`evaluation`·`result`·`benchmark`가 있는데 `keyResults`가 비었을 때, `reviewerConcerns`가 비었을 때. |
 | `investmentLanguage` | `매수`·`매도`·`주가` 같은 투자 표현이 있으면 경고만 한다(CS 모드와 같은 검사). |
 
