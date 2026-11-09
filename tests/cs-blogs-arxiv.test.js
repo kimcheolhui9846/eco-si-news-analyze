@@ -70,6 +70,14 @@ test('Atom 블로그 파싱: 링크 없는 항목은 버린다', () => {
   }]);
 });
 
+test('RSS 블로그 파싱: 2048자를 넘는 링크의 항목은 버린다', () => {
+  const xml = `<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>
+<item><title>Too long</title><link>https://toss.tech/${'x'.repeat(2100)}</link><pubDate>Mon, 02 Nov 2026 00:00:00 GMT</pubDate><description>body</description></item>
+<item><title>Normal</title><link>https://toss.tech/article/normal</link><pubDate>Mon, 02 Nov 2026 00:00:00 GMT</pubDate><description>body</description></item>
+</channel></rss>`;
+  assert.deepEqual(parseBlogFeed(xml, TOSS).map((i) => i.title), ['Normal']);
+});
+
 test('깨진 피드는 빈 배열', () => {
   assert.deepEqual(parseBlogFeed('<rss', TOSS), []);
   assert.deepEqual(parseBlogFeed('', TOSS), []);
