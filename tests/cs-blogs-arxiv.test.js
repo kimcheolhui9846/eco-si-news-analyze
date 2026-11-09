@@ -145,3 +145,39 @@ test('arXiv CS provider: 상한·캐시', async () => {
   assert.equal(http.calls.length, 1);
   assert.ok(http.calls[0].url.includes('cat:cs.*'));
 });
+
+// ─── 형식이 틀린 200 응답은 실패다 ───
+
+test('블로그 provider: 200인데 HTML이면 degraded이고 캐시하지 않는다', async () => {
+  const http = makeHttp(() => '<!doctype html><html><body>challenge</body></html>');
+  const provider = createTechBlogProvider(deps(http));
+  const r = await provider.search({ query: 'rag', limit: 8 });
+  assert.equal(r.degraded.length, TECH_BLOGS.length);
+  assert.deepEqual(r.degraded[0], { source: 'Google Research', reason: '자료를 가져오지 못했습니다.' });
+  await provider.search({ query: 'rag', limit: 8 });
+  assert.equal(http.calls.length, TECH_BLOGS.length * 2);
+});
+
+test('블로그 provider: 항목이 하나도 없는 피드는 degraded', async () => {
+  const http = makeHttp(() => '<rss version="2.0"><channel><title>x</title></channel></rss>');
+  const r = await createTechBlogProvider(deps(http)).search({ query: 'rag', limit: 8 });
+  assert.equal(r.degraded.length, TECH_BLOGS.length);
+});
+
+test('arXiv CS provider: 200인데 HTML이면 degraded이고 캐시하지 않는다', async () => {
+  const http = makeHttp(() => '<!doctype html><html><body>blocked</body></html>');
+  const arxiv = createArxivCsProvider(deps(http));
+  const r = await arxiv.search({ query: 'rag', limit: 2 });
+  assert.deepEqual(r, { items: [], degraded: [{ source: 'arXiv', reason: '자료를 가져오지 못했습니다.' }] });
+  await arxiv.search({ query: 'rag', limit: 2 });
+  assert.equal(http.calls.length, 2);
+});
+
+test('arXiv CS provider: 정상적인 빈 결과는 degraded가 아니고 다시 가져온다', async () => {
+  const http = makeHttp(() => '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>q</title></feed>');
+  const arxiv = createArxivCsProvider(deps(http));
+  const r = await arxiv.search({ query: 'rag', limit: 2 });
+  assert.deepEqual(r, { items: [], degraded: [] });
+  await arxiv.search({ query: 'rag', limit: 2 });
+  assert.equal(http.calls.length, 2);
+});

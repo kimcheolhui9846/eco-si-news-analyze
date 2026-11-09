@@ -181,3 +181,41 @@ test('GitHub provider: 403·429는 한도 사유, 그 밖은 일반 사유', asy
   assert.deepEqual(r.degraded, [{ source: 'GitHub', reason: '자료를 가져오지 못했습니다.' }]);
   assert.equal(GITHUB_LIMIT_REASON, 'GitHub 검색 한도를 넘었습니다.');
 });
+
+// ─── 형식이 틀린 200 응답은 실패다 ───
+
+const HTML_200 = '<!doctype html><html><body>Just a moment...</body></html>';
+const FETCH_FAILED_REASON = '자료를 가져오지 못했습니다.';
+
+test('HN provider: 200인데 HTML이면 degraded이고 캐시하지 않는다', async () => {
+  const http = makeHttp(() => HTML_200);
+  const hn = createHackerNewsProvider(deps(http));
+  const r = await hn.search({ query: 'rag', limit: 10 });
+  assert.deepEqual(r, { items: [], degraded: [{ source: 'Hacker News', reason: FETCH_FAILED_REASON }] });
+  await hn.search({ query: 'rag', limit: 10 });
+  assert.equal(http.calls.length, 2);
+});
+
+test('HN provider: hits 배열이 없는 JSON도 degraded', async () => {
+  const hn = createHackerNewsProvider(deps(makeHttp(() => '{"message":"x"}')));
+  const r = await hn.search({ query: 'rag', limit: 10 });
+  assert.equal(r.degraded.length, 1);
+});
+
+test('HN provider: 정상적인 빈 결과는 degraded가 아니고 다시 가져온다', async () => {
+  const http = makeHttp(() => '{"hits":[]}');
+  const hn = createHackerNewsProvider(deps(http));
+  const r = await hn.search({ query: 'rag', limit: 10 });
+  assert.deepEqual(r, { items: [], degraded: [] });
+  await hn.search({ query: 'rag', limit: 10 });
+  assert.equal(http.calls.length, 2);
+});
+
+test('GitHub provider: 200인데 HTML이면 degraded이고 캐시하지 않는다', async () => {
+  const http = makeHttp(() => HTML_200);
+  const gh = createGithubProvider(deps(http));
+  const r = await gh.search({ query: 'rag', limit: 10 });
+  assert.deepEqual(r, { items: [], degraded: [{ source: 'GitHub', reason: FETCH_FAILED_REASON }] });
+  await gh.search({ query: 'rag', limit: 10 });
+  assert.equal(http.calls.length, 2);
+});
