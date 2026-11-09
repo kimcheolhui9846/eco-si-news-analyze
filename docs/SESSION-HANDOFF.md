@@ -9,7 +9,7 @@
 
 ---
 
-## 2026-11-09 C1: CS 기술 동향 브리핑 (구현·최종 리뷰 완료, 실호출 대기)
+## 2026-11-09 C1: CS 기술 동향 브리핑 (완료, 푸시 대기)
 
 - 브랜치 `feature/cs-briefing` — `feature/analysis-quality-gate`(Draft PR #13)에서 땄다.
 - 설계: `docs/superpowers/specs/2026-11-09-cs-briefing-design.md`. `mode: 'cs'` 프로필 구조(분석 실행부 `lib/analysis-runner.js` 추출 + `lib/modes/{invest,cs}.js`), 출처 5종(arXiv cs.*, HN Algolia, 기존 뉴스, 연구 블로그 RSS 9~10개, GitHub 검색), CS 응답 스키마·품질 검사·`CsReportPage`.
@@ -21,7 +21,10 @@
 - 사소한 지적은 원장 `.superpowers/sdd/2026-11-09-cs-briefing/progress.md`의 `minor (deferred)` 줄에 있다. 최종 리뷰가 분류한다.
 - 최종 리뷰(opus): 수정 후 병합 가능 판정 → 수정 4건(f9cdae1 잘못된 200 응답 캐시 금지·degraded, 6e9456a 인용 ID 접두사를 모드별로(투자 SPTFM·CS PHSBG — 투자 출력 불변), 0dc4c8f 하이라이트 P·신호 G만, 69f4731 뉴스 출처 문서) → 재검토 통과. `npm test` 827/826 pass/1 skip, eval 25/0, 빌드 성공(컨트롤러 직접 확인).
 - 남은 사소한 지적은 원장에 있고 최종 리뷰가 병합 전 수정 불필요로 판정했다.
-- 다음: 실호출 1회(사용자 확인 후, 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 새 호스트 12개 필요) → 푸시·PR은 사용자 요청 시.
+- 실호출 1회 완료(2026-11-09, gpt-4o, 'retrieval augmented generation', lang en, 실제 $0.011): 커뮤니티 1·뉴스 8·블로그 8·저장소 8, 품질 100점(교정·경고 0), 위조 URL 0, 자료 충분도 '충분'. 확인 토큰 그대로 통과(428 없음).
+  - arXiv는 429 `Rate exceeded`로 degraded("자료를 가져오지 못했습니다"). 단순 질의(`all:battery`)도 429라 IP 단위 제한이며 코드 문제 아님. 후속 개선 후보: arXiv 429에 GitHub처럼 한도 사유 문구.
+  - 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에는 CS 호스트가 아직 없다. 실호출은 `.env.example` 값을 명령행 `EXTERNAL_ALLOWLIST`로 넘겨 실행했다(dotenv는 기존 환경변수를 덮지 않는다).
+- 다음(이전 계획 문구): 실호출 1회(사용자 확인 후, 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에 새 호스트 12개 필요) → 푸시·PR은 사용자 요청 시.
 
 ## 2026-11-09 B: 분석 품질 게이트 (완료, Draft PR #13)
 
