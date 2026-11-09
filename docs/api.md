@@ -787,7 +787,7 @@ curl -X POST http://localhost:3000/api/analyze/news \
 |---|---|---|---|
 | `papers` | arXiv `cs.*` 분야, 제출일 최신순 | 8 | 제한 없음(최신순) |
 | `community` | Hacker News (hn.algolia.com) | 10 | 최근 30일 |
-| `news` | Google News RSS | 8 | 뉴스 수집 기본 동작 |
+| `news` | `lang`이 `ko`(기본)면 Google 뉴스(ko)·연합뉴스·전자신문, `en`이면 Google News(en). 투자 모드와 같은 뉴스 수집기를 쓴다(티커 피드는 쓰지 않는다) | 8 | 뉴스 수집 기본 동작 |
 | `blogs` | 기업·연구 블로그 RSS 10곳(Google Research, Google DeepMind, OpenAI, Hugging Face, Microsoft Research, NVIDIA Developer, AWS Machine Learning, Meta Engineering, BAIR, 토스 기술 블로그) | 8 | 최근 60일 |
 | `repos` | GitHub 저장소 검색 | 8 | 최근 30일 |
 
@@ -809,7 +809,7 @@ curl -X POST http://localhost:3000/api/analyze/news \
     "included": ["papers", "community", "news", "blogs", "repos"],
     "degraded": [
       { "provider": "repos", "source": "GitHub", "reason": "GitHub 검색 한도를 넘었습니다." },
-      { "provider": "news", "feedId": "google-news-en", "reason": "자료를 가져오지 못했습니다." }
+      { "provider": "news", "feedId": "google-news-ko", "reason": "자료를 가져오지 못했습니다." }
     ],
     "counts": { "papers": 8, "community": 10, "news": 8, "blogs": 3, "repos": 0 },
     "total": 29,
@@ -826,6 +826,7 @@ curl -X POST http://localhost:3000/api/analyze/news \
 }
 ```
 
+- 상류가 `200`을 주더라도 본문 구조가 틀리면(HN·GitHub는 JSON의 `hits`/`items` 배열 없음, arXiv는 Atom `feed` 루트 없음, 블로그는 RSS·Atom이 아니거나 글이 하나도 없음) 실패로 보고 `degraded`에 올리며 캐시하지 않는다. 구조가 맞는 빈 검색 결과는 실패가 아니고 역시 캐시하지 않는다.
 - 자료 배열의 키 이름(`papers`·`community`·`newsList`·`blogs`·`repos`)은 **분석 요청과 같다.** 클라이언트는 비어 있지 않은 배열만 분석 요청에 되돌려 보낸다(빈 배열은 보내지 않는다. 그래야 견적과 분석의 `cacheKey`가 일치해 확인 토큰이 통한다).
 - `collected.counts`는 뉴스 중복 제거 뒤의 개수이고 `total`은 그 합계다.
 - `degraded[]`의 `provider`는 `papers`·`community`·`news`·`blogs`·`repos` 중 하나다. 나머지 필드는 출처마다 다르다. `papers`·`community`·`blogs`·`repos`는 `{ provider, source, reason }`, `news`는 피드 단위라 `{ provider: 'news', feedId, reason }`이다. 일부 출처가 실패해도 나머지로 진행한다. 실패 사유는 `자료를 가져오지 못했습니다.` 또는 `일시적으로 사용할 수 없습니다.`(회로 차단기)이고, GitHub이 403·429로 답하면 `GitHub 검색 한도를 넘었습니다.`다. 상류의 원본 오류 메시지는 담지 않는다.
@@ -915,8 +916,8 @@ curl -X POST http://localhost:3000/api/analyze/news \
 
 | check | 동작 |
 |---|---|
-| `citations` | 본문에 인용된 없는 출처 ID(`[P9]` 등)를 `출처 미확인`으로 바꾼다(투자 모드와 같은 검사). |
-| `sourceRefs` | `keyDevelopments[].sourceIds`에서 제공되지 않은 ID를 빼고(교정 `주요 동향에서 제공되지 않은 출처 ID N개를 뺐습니다.`), 중복은 조용히 합친다. 남은 ID가 없으면 경고 `근거 출처가 없는 동향입니다. 직접 확인해 주세요.` `paperHighlights`·`openSourceSignals`의 `sourceId`가 제공된 출처에 없으면 그 항목을 제거한다(교정 `논문 하이라이트 항목의 출처 ID(P9)가 제공된 출처에 없어 항목을 제거했습니다.`, 오픈소스 신호는 `오픈소스 신호 항목의 ...`). |
+| `citations` | 본문에 인용된 없는 출처 ID(`[P9]` 등)를 `출처 미확인`으로 바꾼다(투자 모드와 같은 검사). 인정하는 접두사는 CS 모드에서 `P H S B G`이고 투자 모드는 종전대로 `S P T F M`이다. 그 밖의 `[T1]` 같은 글자는 건드리지 않는다. |
+| `sourceRefs` | `keyDevelopments[].sourceIds`에서 제공되지 않은 ID를 빼고(교정 `주요 동향에서 제공되지 않은 출처 ID N개를 뺐습니다.`), 중복은 조용히 합친다. 남은 ID가 없으면 경고 `근거 출처가 없는 동향입니다. 직접 확인해 주세요.` `paperHighlights`·`openSourceSignals`의 `sourceId`가 제공된 출처에 없으면 그 항목을 제거한다(교정 `논문 하이라이트 항목의 출처 ID(P9)가 제공된 출처에 없어 항목을 제거했습니다.`, 오픈소스 신호는 `오픈소스 신호 항목의 ...`). 출처가 있어도 종류가 맞지 않으면(논문 하이라이트가 `P`가 아닌 출처, 오픈소스 신호가 `G`가 아닌 출처) 항목을 제거한다(교정 `... 출처 ID(G1)는 종류가 맞지 않아 항목을 제거했습니다.`). |
 | `evidence` | 근거가 전부 `P`(arXiv)인데 `동료 심사 논문`이면 `프리프린트`로 교정한다(`근거가 arXiv 프리프린트뿐이라 근거 수준을 '프리프린트'로 바로잡았습니다.`). `코드 공개`인데 근거에 `G`가 없으면 경고(`'코드 공개'로 표시됐지만 근거에 GitHub 저장소가 없습니다.`). |
 | `coverage` | `sourceCoverage.level`이 `충분`인데 수집 자료가 5건 미만이면 `부족`으로 교정한다(`수집 자료가 N건뿐이라 자료 충분도를 '부족'으로 바로잡았습니다.`). |
 | `investmentLanguage` | `매수`·`매도`·`주가`·`목표 주가`·`투자 권유` 같은 투자 표현이 있으면 경고만 한다(`CS 브리핑에 투자 관련 표현이 있습니다.`). 앞에 한글이 붙은 `외주가` 같은 낱말은 거르지 않는다. |
