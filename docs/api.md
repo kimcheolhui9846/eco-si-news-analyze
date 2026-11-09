@@ -775,9 +775,9 @@ curl -X POST http://localhost:3000/api/analyze/news \
 | 필드 | 필수 | 설명 |
 |---|---|---|
 | `mode` | 예 | `"cs"` |
-| `query` | 예 | 검색어. 1~200자. **영어를 권장한다**(arXiv·Hacker News·GitHub가 영어 중심이다). |
+| `query` | 예 | 검색어. 1~200자. **영어를 권장한다**(arXiv·Hacker News·Lobsters·Stack Overflow·GitHub가 영어 중심이다). |
 | `lang` | 아니오 | `ko`(기본) \| `en`. 뉴스 검색에만 쓴다. |
-| `include` | 아니오 | `papers` \| `community` \| `news` \| `blogs` \| `repos`. 비우거나 생략하면 전부. 중복은 합치고 응답에서는 이 순서로 정렬한다. |
+| `include` | 아니오 | `papers` \| `community` \| `questions` \| `news` \| `blogs` \| `repos` (이 순서). 비우거나 생략하면 전부. 중복은 합치고 응답에서는 이 순서로 정렬한다. |
 
 모르는 필드나 `include` 값은 `400 INVALID_REQUEST`다.
 
@@ -786,7 +786,8 @@ curl -X POST http://localhost:3000/api/analyze/news \
 | `include` | 출처 | 상한 | 기간 |
 |---|---|---|---|
 | `papers` | arXiv `cs.*` 분야, 제출일 최신순 | 8 | 제한 없음(최신순) |
-| `community` | Hacker News (hn.algolia.com) | 10 | 최근 30일 |
+| `community` | Hacker News (hn.algolia.com) + Lobsters (lobste.rs). Hacker News 6 : Lobsters 4로 나누고 한쪽이 모자라면 다른 쪽으로 채운다. Lobsters는 검색 JSON이 없어 질의를 태그 피드로 바꿔 읽고, 맞는 태그가 없으면 최신 글에서 거른다 | 10 | 최근 30일 |
+| `questions` | Stack Overflow (Stack Exchange API), 투표 순. 선택 환경변수 `STACKEXCHANGE_KEY`가 있으면 하루 10,000회, 없으면 IP당 하루 300회 | 8 | 최근 90일 |
 | `news` | `lang`이 `ko`(기본)면 Google 뉴스(ko)·연합뉴스·전자신문, `en`이면 Google News(en). 투자 모드와 같은 뉴스 수집기를 쓴다(티커 피드는 쓰지 않는다) | 8 | 뉴스 수집 기본 동작 |
 | `blogs` | 기업·연구 블로그 RSS 10곳(Google Research, Google DeepMind, OpenAI, Hugging Face, Microsoft Research, NVIDIA Developer, AWS Machine Learning, Meta Engineering, BAIR, 토스 기술 블로그) | 8 | 최근 60일 |
 | `repos` | GitHub 저장소 검색 | 8 | 최근 30일 |
@@ -801,18 +802,19 @@ curl -X POST http://localhost:3000/api/analyze/news \
   "mode": "cs",
   "papers": [ { "...": "..." } ],
   "community": [ { "...": "..." } ],
+  "questions": [ { "...": "..." } ],
   "newsList": [ { "title": "...", "content": "...", "source": "...", "url": "...", "publishedAt": "...", "contentKind": "..." } ],
   "blogs": [ { "...": "..." } ],
   "repos": [ { "...": "..." } ],
   "collected": {
     "collectedAt": "2026-11-09T01:00:00.000Z",
-    "included": ["papers", "community", "news", "blogs", "repos"],
+    "included": ["papers", "community", "questions", "news", "blogs", "repos"],
     "degraded": [
       { "provider": "repos", "source": "GitHub", "reason": "GitHub 검색 한도를 넘었습니다." },
       { "provider": "news", "feedId": "google-news-ko", "reason": "자료를 가져오지 못했습니다." }
     ],
-    "counts": { "papers": 8, "community": 10, "news": 8, "blogs": 3, "repos": 0 },
-    "total": 29,
+    "counts": { "papers": 8, "community": 10, "questions": 8, "news": 8, "blogs": 3, "repos": 0 },
+    "total": 37,
     "duplicatesRemoved": 0
   },
   "estimate": {
@@ -826,10 +828,10 @@ curl -X POST http://localhost:3000/api/analyze/news \
 }
 ```
 
-- 상류가 `200`을 주더라도 본문 구조가 틀리면(HN·GitHub는 JSON의 `hits`/`items` 배열 없음, arXiv는 Atom `feed` 루트 없음, 블로그는 RSS·Atom이 아니거나 글이 하나도 없음) 실패로 보고 `degraded`에 올리며 캐시하지 않는다. 구조가 맞는 빈 검색 결과는 실패가 아니고 역시 캐시하지 않는다.
-- 자료 배열의 키 이름(`papers`·`community`·`newsList`·`blogs`·`repos`)은 **분석 요청과 같다.** 클라이언트는 비어 있지 않은 배열만 분석 요청에 되돌려 보낸다(빈 배열은 보내지 않는다. 그래야 견적과 분석의 `cacheKey`가 일치해 확인 토큰이 통한다).
+- 상류가 `200`을 주더라도 본문 구조가 틀리면(HN·GitHub·Stack Overflow는 JSON의 `hits`/`items` 배열 없음, Lobsters는 JSON 배열이 아님, arXiv는 Atom `feed` 루트 없음, 블로그는 RSS·Atom이 아니거나 글이 하나도 없음) 실패로 보고 `degraded`에 올리며 캐시하지 않는다. 구조가 맞는 빈 검색 결과는 실패가 아니고 역시 캐시하지 않는다.
+- 자료 배열의 키 이름(`papers`·`community`·`questions`·`newsList`·`blogs`·`repos`)은 **분석 요청과 같다.** 클라이언트는 비어 있지 않은 배열만 분석 요청에 되돌려 보낸다(빈 배열은 보내지 않는다. 그래야 견적과 분석의 `cacheKey`가 일치해 확인 토큰이 통한다).
 - `collected.counts`는 뉴스 중복 제거 뒤의 개수이고 `total`은 그 합계다.
-- `degraded[]`의 `provider`는 `papers`·`community`·`news`·`blogs`·`repos` 중 하나다. 나머지 필드는 출처마다 다르다. `papers`·`community`·`blogs`·`repos`는 `{ provider, source, reason }`, `news`는 피드 단위라 `{ provider: 'news', feedId, reason }`이다. 일부 출처가 실패해도 나머지로 진행한다. 실패 사유는 `자료를 가져오지 못했습니다.` 또는 `일시적으로 사용할 수 없습니다.`(회로 차단기)이고, GitHub이 403·429로 답하면 `GitHub 검색 한도를 넘었습니다.`다. 상류의 원본 오류 메시지는 담지 않는다.
+- `degraded[]`의 `provider`는 `papers`·`community`·`questions`·`news`·`blogs`·`repos` 중 하나다. Hacker News와 Lobsters의 실패는 둘 다 `provider: 'community'`이고 `source`가 `Hacker News` 또는 `Lobsters`로 갈린다. 나머지 필드는 출처마다 다르다. `papers`·`community`·`questions`·`blogs`·`repos`는 `{ provider, source, reason }`, `news`는 피드 단위라 `{ provider: 'news', feedId, reason }`이다. 일부 출처가 실패해도 나머지로 진행한다. 실패 사유는 `자료를 가져오지 못했습니다.` 또는 `일시적으로 사용할 수 없습니다.`(회로 차단기)이고, GitHub이 403·429로 답하면 `GitHub 검색 한도를 넘었습니다.`, Stack Overflow가 한도를 알리면 `Stack Overflow 호출 한도를 초과했습니다. 잠시 뒤 다시 시도해 주세요.`다. Stack Exchange는 잘못되거나 폐기된 `STACKEXCHANGE_KEY`에도 같은 400으로 답하므로, 키를 설정했는데 이 사유가 계속되면 키를 확인한다. 상류의 원본 오류 메시지는 담지 않는다.
 
 #### 오류
 
@@ -852,18 +854,20 @@ curl -X POST http://localhost:3000/api/analyze/news \
   "newsList": [ ],
   "papers": [ ],
   "community": [ ],
+  "questions": [ ],
   "blogs": [ ],
   "repos": [ ]
 }
 ```
 
-다섯 배열은 모두 선택이다. 수집 응답의 배열을 그대로 넣는다. 모르는 필드는 거부한다.
+여섯 배열은 모두 선택이다. 수집 응답의 배열을 그대로 넣는다. 모르는 필드는 거부한다.
 
 | 필드 | 상한 | 항목 필드 |
 |---|---|---|
 | `newsList` | `MAX_NEWS_ITEMS` | 투자 모드 `newsList`와 같다 |
 | `papers` | 8 | 투자 모드 논문 항목 필드 + `category`(문자열 또는 `null`, 40자) |
-| `community` | 10 | `title`(1~300자), `url`, `discussionUrl`, `points`(0 이상 정수), `numComments`(0 이상 정수), `publishedAt`, `text`(1500자 이하) |
+| `community` | 10 | `site`(필수, `'hackernews'` \| `'lobsters'`), `title`(1~300자), `url`, `discussionUrl`, `points`(0 이상 정수), `numComments`(0 이상 정수), `publishedAt`, `text`(1500자 이하) |
+| `questions` | 8 | `title`(1~300자), `url`, `author`, `tags`(5개 이하, 각 35자 이하), `score`(정수, 음수 가능), `answerCount`(0 이상 정수), `isAnswered`, `hasAcceptedAnswer`(불리언), `viewCount`(0 이상 정수), `publishedAt`, `text`(1500자 이하) |
 | `blogs` | 8 | `title`(1~300자), `url`, `blog`(1~100자), `summary`(1500자 이하), `publishedAt` |
 | `repos` | 8 | `fullName`(1~200자), `url`, `description`(500자 이하), `stars`(0 이상 정수), `language`(60자 또는 `null`), `license`(60자 또는 `null`), `pushedAt`, `createdAt`(64자 이하 또는 `null`) |
 
@@ -878,12 +882,13 @@ curl -X POST http://localhost:3000/api/analyze/news \
 | 접두사 | `sources[].type` | 자료 | `sources[].source` |
 |---|---|---|---|
 | `P` | `paper` | arXiv 논문 | `arXiv (cs.CL)`처럼 분야를 붙인다(분야가 없으면 `arXiv`) |
-| `H` | `community` | Hacker News | `Hacker News`. `url`은 원문이 아니라 **토론 페이지**(`discussionUrl`)다 |
+| `H` | `community` | Hacker News · Lobsters | `Hacker News` 또는 `Lobsters`(항목의 `site`로 정한다). `url`은 원문이 아니라 **토론 페이지**(`discussionUrl`)다 |
+| `Q` | `question` | Stack Overflow 질문 | `Stack Overflow · <author 또는 작성자 미상> · CC BY-SA` (CC BY-SA 표기 의무 때문에 작성자와 라이선스를 싣는다) |
 | `S` | `news` | 뉴스 | 기사의 출처명 |
 | `B` | `blog` | 기업·연구 블로그 | 블로그 이름 |
 | `G` | `repo` | GitHub 저장소 | `GitHub` (제목은 `owner/name`) |
 
-보고서 본문의 URL이 위 자료의 URL(HN은 원문과 토론 두 가지) 밖이면 `[출처 미확인]`으로 치환된다.
+보고서 본문의 URL이 위 자료의 URL(HN·Lobsters는 원문과 토론 두 가지) 밖이면 `[출처 미확인]`으로 치환된다.
 
 #### 응답 `analysis` (`cs_trend_briefing`)
 
@@ -893,6 +898,7 @@ curl -X POST http://localhost:3000/api/analyze/news \
 | `keyDevelopments[]` | 객체 배열 | `title`, `whatIsNew`, `whyItMatters`, `evidenceLevel`, `sourceIds[]` |
 | `paperHighlights[]` | 객체 배열 | `sourceId`, `contribution`, `method`, `limitations` |
 | `communityPulse` | 문자열 | 커뮤니티 반응 |
+| `developerPainPoints[]` | 객체 배열 | 최대 5개. `title`, `detail`, `sourceIds[]`(`Q` 출처만) |
 | `openSourceSignals[]` | 객체 배열 | `sourceId`, `signal` |
 | `openQuestions` | 문자열 배열 | 미해결 질문 |
 | `whatToWatch` | 문자열 배열 | 지켜볼 것 |
@@ -904,9 +910,9 @@ curl -X POST http://localhost:3000/api/analyze/news \
 
 ```json
 "meta": {
-  "sourceCount": 29,
+  "sourceCount": 37,
   "duplicatesRemoved": 0,
-  "counts": { "papers": 8, "community": 10, "news": 8, "blogs": 3, "repos": 0 }
+  "counts": { "papers": 8, "community": 10, "questions": 8, "news": 8, "blogs": 3, "repos": 0 }
 }
 ```
 
@@ -916,8 +922,8 @@ curl -X POST http://localhost:3000/api/analyze/news \
 
 | check | 동작 |
 |---|---|
-| `citations` | 본문에 인용된 없는 출처 ID(`[P9]` 등)를 `출처 미확인`으로 바꾼다(투자 모드와 같은 검사). 인정하는 접두사는 CS 모드에서 `P H S B G`이고 투자 모드는 종전대로 `S P T F M`이다. 그 밖의 `[T1]` 같은 글자는 건드리지 않는다. |
-| `sourceRefs` | `keyDevelopments[].sourceIds`에서 제공되지 않은 ID를 빼고(교정 `주요 동향에서 제공되지 않은 출처 ID N개를 뺐습니다.`), 중복은 조용히 합친다. 남은 ID가 없으면 경고 `근거 출처가 없는 동향입니다. 직접 확인해 주세요.` `paperHighlights`·`openSourceSignals`의 `sourceId`가 제공된 출처에 없으면 그 항목을 제거한다(교정 `논문 하이라이트 항목의 출처 ID(P9)가 제공된 출처에 없어 항목을 제거했습니다.`, 오픈소스 신호는 `오픈소스 신호 항목의 ...`). 출처가 있어도 종류가 맞지 않으면(논문 하이라이트가 `P`가 아닌 출처, 오픈소스 신호가 `G`가 아닌 출처) 항목을 제거한다(교정 `... 출처 ID(G1)는 종류가 맞지 않아 항목을 제거했습니다.`). |
+| `citations` | 본문에 인용된 없는 출처 ID(`[P9]` 등)를 `출처 미확인`으로 바꾼다(투자 모드와 같은 검사). 인정하는 접두사는 CS 모드에서 `P H S B G Q`이고 투자 모드는 종전대로 `S P T F M`이다. 그 밖의 `[T1]` 같은 글자는 건드리지 않는다. |
+| `sourceRefs` | `keyDevelopments[].sourceIds`에서 제공되지 않은 ID를 빼고(교정 `주요 동향에서 제공되지 않은 출처 ID N개를 뺐습니다.`), 중복은 조용히 합친다. 남은 ID가 없으면 경고 `근거 출처가 없는 동향입니다. 직접 확인해 주세요.` `paperHighlights`·`openSourceSignals`의 `sourceId`가 제공된 출처에 없으면 그 항목을 제거한다(교정 `논문 하이라이트 항목의 출처 ID(P9)가 제공된 출처에 없어 항목을 제거했습니다.`, 오픈소스 신호는 `오픈소스 신호 항목의 ...`). `developerPainPoints[].sourceIds`는 `Q`로 시작하고 제공된 출처만 남기고(교정 `막히는 지점에서 개발자 질문이 아니거나 제공되지 않은 출처 ID N개를 뺐습니다.`), 남는 ID가 없는 항목은 제거하며(교정 `개발자 질문 근거가 없는 막히는 지점 항목을 제거했습니다.`), 개발자 질문을 수집했는데 섹션이 비면 경고 `개발자 질문 자료가 있는데 막히는 지점을 정리하지 않았습니다.`를 낸다. 출처가 있어도 종류가 맞지 않으면(논문 하이라이트가 `P`가 아닌 출처, 오픈소스 신호가 `G`가 아닌 출처) 항목을 제거한다(교정 `... 출처 ID(G1)는 종류가 맞지 않아 항목을 제거했습니다.`). |
 | `evidence` | 근거가 전부 `P`(arXiv)인데 `동료 심사 논문`이면 `프리프린트`로 교정한다(`근거가 arXiv 프리프린트뿐이라 근거 수준을 '프리프린트'로 바로잡았습니다.`). `코드 공개`인데 근거에 `G`가 없으면 경고(`'코드 공개'로 표시됐지만 근거에 GitHub 저장소가 없습니다.`). |
 | `coverage` | `sourceCoverage.level`이 `충분`인데 수집 자료가 5건 미만이면 `부족`으로 교정한다(`수집 자료가 N건뿐이라 자료 충분도를 '부족'으로 바로잡았습니다.`). |
 | `investmentLanguage` | `매수`·`매도`·`주가`·`목표 주가`·`투자 권유` 같은 투자 표현이 있으면 경고만 한다(`CS 브리핑에 투자 관련 표현이 있습니다.`). 앞에 한글이 붙은 `외주가` 같은 낱말은 거르지 않는다. |
