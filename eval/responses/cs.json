@@ -11,6 +11,7 @@
   "openSourceSignals": [
     { "sourceId": "G1", "signal": "최근 30일 안에 갱신됐다." }
   ],
+  "developerPainPoints": [],
   "openQuestions": ["분포가 바뀌어도 성능이 유지되는가 [P2]?"],
   "whatToWatch": ["하이브리드 검색 도입 사례 [B1][S1]"],
   "sourceCoverage": { "level": "충분", "note": "다섯 종류 출처가 모두 있다." }

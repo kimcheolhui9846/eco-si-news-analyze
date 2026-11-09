@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 import { assessQuality, CHECKS } from '../lib/quality/index.js';
-import { CS_CHECKS } from '../lib/quality/cs.js';
+import { CS_CHECKS, CS_ID_PREFIXES } from '../lib/quality/cs.js';
 
 // ─── 오프라인 품질 평가 ───
 //
@@ -30,7 +30,7 @@ export function resolveCase(c) {
   return {
     // CS 검사는 출처와 수집 합계만 본다.
     context: cs
-      ? { sources, total: ctx.total ?? sources.size, idPrefixes: 'PHSBG' }
+      ? { sources, total: ctx.total ?? sources.size, idPrefixes: CS_ID_PREFIXES }
       : {
           sources,
           instruments: ctx.instruments ?? [],

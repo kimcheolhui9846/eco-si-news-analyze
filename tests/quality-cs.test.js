@@ -2,13 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   checkSourceRefs, checkEvidence, checkCoverage, checkInvestmentLanguage,
-  CS_CHECKS, buildCsQualityContext,
+  CS_CHECKS, buildCsQualityContext, CS_ID_PREFIXES,
 } from '../lib/quality/cs.js';
 import { replaceUnknownIds, checkCitations } from '../lib/quality/citations.js';
 import { assessQuality } from '../lib/quality/index.js';
 import {
   CS_JSON_SCHEMA, CS_MOCK_REPORT, EVIDENCE_LEVELS, COVERAGE_LEVELS,
 } from '../lib/modes/cs-schema.js';
+import { CS_SYSTEM_PROMPT } from '../lib/modes/cs-prompt.js';
 
 const ctx = (ids = ['P1', 'P2', 'H1', 'S1', 'B1', 'G1'], total = ids.length) => ({
   sources: new Map(ids.map((id) => [id, { title: id, source: 'x', publishedAt: '', type: 'x' }])),
@@ -158,14 +159,14 @@ test('CS JSON 스키마는 strict이고 모든 객체가 전 속성 required다'
   walk(CS_JSON_SCHEMA.schema);
   assert.deepEqual(Object.keys(CS_JSON_SCHEMA.schema.properties), [
     'summary', 'keyDevelopments', 'paperHighlights', 'communityPulse',
-    'openSourceSignals', 'openQuestions', 'whatToWatch', 'sourceCoverage',
+    'openSourceSignals', 'developerPainPoints', 'openQuestions', 'whatToWatch', 'sourceCoverage',
   ]);
 });
 
 test('CS 컨텍스트는 PHSBG 접두사를 쓰고 T는 건드리지 않는다', () => {
-  assert.equal(buildCsQualityContext([]).idPrefixes, 'PHSBG');
+  assert.equal(buildCsQualityContext([]).idPrefixes, 'PHSBGQ');
   const { analysis, issues } = checkCitations(
-    { summary: '근거 [H9] [T1]' }, { ...ctx(['P1']), idPrefixes: 'PHSBG' },
+    { summary: '근거 [H9] [T1]' }, { ...ctx(['P1']), idPrefixes: 'PHSBGQ' },
   );
   assert.equal(analysis.summary, '근거 [출처 미확인] [T1]');
   assert.equal(issues.length, 1);
@@ -185,4 +186,55 @@ test('sourceRefs: 논문 하이라이트는 P, 오픈소스 신호는 G 출처�
   ]);
   assert.match(issues[0].message, /종류가 맞지 않아/);
   assert.match(issues[0].message, /G1/);
+});
+
+const qCtx = () => buildCsQualityContext([
+  { sourceId: 'P1', title: 'p', source: 'arXiv', publishedAt: '2026-11-01', type: 'paper' },
+  { sourceId: 'H1', title: 'h', source: 'Lobsters', publishedAt: '2026-11-01', type: 'community' },
+  { sourceId: 'Q1', title: 'q1', source: 'Stack Overflow · a · CC BY-SA', publishedAt: '2026-11-01', type: 'question' },
+  { sourceId: 'Q2', title: 'q2', source: 'Stack Overflow · b · CC BY-SA', publishedAt: '2026-11-01', type: 'question' },
+]);
+
+test('CS 인용 접두사는 PHSBGQ다', () => {
+  assert.equal(CS_ID_PREFIXES, 'PHSBGQ');
+  assert.equal(qCtx().idPrefixes, 'PHSBGQ');
+});
+
+test('sourceRefs: 막히는 지점은 Q 출처만 남기고, 남는 게 없으면 항목을 뺀다', () => {
+  const analysis = {
+    developerPainPoints: [
+      { title: 'a', detail: 'd', sourceIds: ['Q1', 'P1', 'Q9', 'Q1'] },
+      { title: 'b', detail: 'd', sourceIds: ['H1'] },
+    ],
+  };
+  const { analysis: out, issues } = checkSourceRefs(analysis, qCtx());
+  assert.deepEqual(out.developerPainPoints, [{ title: 'a', detail: 'd', sourceIds: ['Q1'] }]);
+  assert.ok(issues.some((i) => i.severity === 'fixed' && i.path === 'developerPainPoints[0].sourceIds'));
+  assert.ok(issues.some((i) => i.severity === 'fixed' && i.path === 'developerPainPoints[1]'));
+});
+
+test('sourceRefs: 질문 자료가 있는데 막히는 지점이 비면 경고, 없으면 조용하다', () => {
+  const { issues } = checkSourceRefs({ developerPainPoints: [] }, qCtx());
+  assert.ok(issues.some((i) => i.severity === 'warning' && i.path === 'developerPainPoints'));
+  const noQ = buildCsQualityContext([{ sourceId: 'P1', title: 'p', source: 'arXiv', publishedAt: '2026-11-01', type: 'paper' }]);
+  assert.deepEqual(checkSourceRefs({ developerPainPoints: [] }, noQ).issues, []);
+});
+
+test('citations: 본문의 없는 Q ID는 출처 미확인으로 바꾼다', () => {
+  const { analysis: out } = checkCitations({ summary: '막힘 [Q1] [Q7]' }, qCtx());
+  assert.equal(out.summary.includes('[Q1]'), true);
+  assert.equal(out.summary.includes('[Q7]'), false);
+});
+
+test('CS JSON 스키마에 developerPainPoints가 strict로 있고 mock 보고서는 빈 배열이다', () => {
+  const p = CS_JSON_SCHEMA.schema.properties.developerPainPoints;
+  assert.equal(p.type, 'array');
+  assert.deepEqual(p.items.required, ['title', 'detail', 'sourceIds']);
+  assert.equal(p.items.additionalProperties, false);
+  assert.deepEqual(CS_MOCK_REPORT.developerPainPoints, []);
+});
+
+test('시스템 프롬프트: Q 접두사와 막히는 지점 규칙', () => {
+  assert.ok(CS_SYSTEM_PROMPT.includes('Q 개발자 질문(Stack Overflow)'));
+  assert.ok(CS_SYSTEM_PROMPT.includes('developerPainPoints는 개발자 질문(Q) 출처만'));
 });
