@@ -9,7 +9,14 @@
 
 ---
 
-## 2026-11-08 분야 묶음 + OpenDART (Task 10 대기)
+## 2026-11-08 분야 묶음 + OpenDART (Task 10 로컬 완료, 배포 검증 대기)
+
+- **2026-11-09 Task 10 로컬 진행**: OpenDART 키로 `data/kr-listed.json` 생성(3,939개 상장사, `[이름, 종목코드, corpCode]`).
+  - `refresh-directory.js`에 XML 엔티티 디코딩 추가("S&amp;T중공업" → "S&T중공업"). 생성본에 남은 엔티티 없음.
+  - 흔한 한국어 단어와 겹치는 회사명 점검: "광전자 반도체"가 광전자(017900)로 잡혀 반도체 분야를 가로챘다. `directory.js`에 `COMMON_KR_WORDS`(광전자·오로라·센추리·유니온)를 두어 이름 대조에서만 빼고 종목코드로는 찾는다. 실제 스냅샷 회귀 테스트 추가.
+  - DART 실검증에서 삼성전자·SK하이닉스 순이익이 빠졌다: 실제 계정명이 "당기순이익(손실)"이었다. `dart-financial.js`가 끝의 "(손실)"을 떼고 대조한다(테스트 추가).
+  - `npm test` 650 / 649 pass / 0 fail / 1 skip. `verify-research.sh`(OPENDART_EXPECTED=1, LLM_MODE=mock, 허용목록은 `.env.example` 값을 명령행으로) **24 pass / 0 fail**, `[OK] 삼성전자 → DART 재무`. 남은 degraded는 TSM 재무(20-F)뿐.
+  - 남은 일: 사용자가 Render 대시보드에 `OPENDART_API_KEY` 입력 → 병합·배포 후 OpenDART `012`(IP 불허) 여부 확인. KS/KQ 시장 구분은 corpCode.xml에 없어 보류(디렉터리 해석 결과는 접미사 없는 6자리, Naver는 그대로 받는다).
 
 - 브랜치 `feature/sector-baskets-opendart`. 설계: `docs/superpowers/specs/2026-11-08-sector-baskets-opendart-design.md`, 계획: `docs/superpowers/plans/2026-11-08-sector-baskets-opendart.md`.
 - 완료: Task 1~9 (해석기·분야 사전·DART provider·종목별 수집·스키마·프롬프트·화면·배포 설정·검증 스크립트·문서).
