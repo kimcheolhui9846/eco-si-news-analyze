@@ -38,6 +38,7 @@ import {
   collectInstruments, toAnalysisInstruments, UNRESOLVED_REASON,
 } from './lib/instruments.js';
 import { createAnalysisRunner } from './lib/analysis-runner.js';
+import { getProfile, splitMode } from './lib/modes/index.js';
 import { investProfile } from './lib/modes/invest.js';
 
 // 기존 테스트가 '../server.js'에서 import하던 심볼을 그대로 유지한다.
@@ -340,7 +341,10 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     jsonBody,
     requireAuth,
     async (req, res) => {
-      const parsed = researchSchema.safeParse(req.body);
+      const { mode, body } = splitMode(req.body);
+      // 모르는 모드는 여기서 400. CS 수집은 Task 7에서 이 자리에 분기한다.
+      getProfile(mode);
+      const parsed = researchSchema.safeParse(body);
       if (!parsed.success) {
         throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
       }
@@ -474,7 +478,8 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
    * 예산이 부족하면 여기서 막아 사용자가 확인 단계로 넘어가지 못하게 한다.
    */
   app.post('/api/analyze/estimate', makeAnalyzeLimiter(config), jsonBody, requireAuth, (req, res) => {
-    res.json(runner.estimate(investProfile, req.body, req));
+    const { mode, body } = splitMode(req.body);
+    res.json(runner.estimate(getProfile(mode), body, req));
   });
 
   app.post(
@@ -484,7 +489,8 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     requireAuth,                  // [3] 인증 — 여기를 통과해야만 LLM 경로에 진입한다
     makeSessionLimiter(config),   // [4] 세션 한도 — req.session이 필요하므로 인증 뒤
     async (req, res) => {
-      res.json(await runner.run(investProfile, req.body, req));
+      const { mode, body } = splitMode(req.body);
+      res.json(await runner.run(getProfile(mode), body, req));
     },
   );
 
