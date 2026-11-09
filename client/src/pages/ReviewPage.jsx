@@ -1,5 +1,6 @@
 import SourceSummary from '../components/SourceSummary.jsx';
 import NewsList from '../components/NewsList.jsx';
+import InstrumentComparison from '../components/InstrumentComparison.jsx';
 import FinancialMetrics from '../components/FinancialMetrics.jsx';
 import ResearchList from '../components/ResearchList.jsx';
 import ExperimentStatus from '../components/ExperimentStatus.jsx';
@@ -9,9 +10,11 @@ export default function ReviewPage({ collected, onApprove, onBack, busy }) {
   if (!collected) return null;
 
   const {
-    newsList, marketData, financial, research, experiments,
+    newsList, instruments = [], research, experiments,
     collected: meta, estimate, confirmToken,
   } = collected;
+  const sector = meta?.resolution?.sector;
+  const single = instruments.length === 1 ? instruments[0] : null;
   const headlineOnly = meta?.headlineOnlyCount ?? 0;
 
   return (
@@ -23,14 +26,17 @@ export default function ReviewPage({ collected, onApprove, onBack, busy }) {
 
       <SourceSummary collected={meta} />
 
-      {marketData && (
+      {instruments.length > 1 && (
+        <InstrumentComparison instruments={instruments} resolution={meta?.resolution} degraded={meta?.degraded} />
+      )}
+      {single?.marketData && (
         <section className="card">
           <h2 className="card-title">시장 데이터</h2>
           <p>
-            <strong>{marketData.assetName}</strong> {marketData.currentPrice}
-            {' '}<span className="change">{marketData.priceChange}</span>
+            <strong>{single.name}</strong> {single.marketData.currentPrice}
+            {' '}<span className="change">{single.marketData.priceChange}</span>
           </p>
-          <p className="muted small">{marketData.chartTrend}</p>
+          <p className="muted small">{single.marketData.chartTrend}</p>
         </section>
       )}
 
@@ -41,8 +47,8 @@ export default function ReviewPage({ collected, onApprove, onBack, busy }) {
 
       {/* 선택한 범위는 비어 있어도 렌더링한다. 감추면 자료가 존재하지
           않는다고 오해한다. */}
-      {meta?.included?.includes('financial') && (
-        <FinancialMetrics financial={financial} collected={meta} />
+      {meta?.included?.includes('financial') && instruments.length <= 1 && (
+        <FinancialMetrics financial={single?.financial} collected={meta} />
       )}
       {meta?.included?.includes('research') && (
         <ResearchList items={research} collected={meta} />
@@ -73,7 +79,7 @@ export default function ReviewPage({ collected, onApprove, onBack, busy }) {
           className="primary"
           disabled={busy}
           onClick={() => onApprove({
-            newsList, marketData, financial, research, experiments, confirmToken,
+            newsList, instruments, sector, research, experiments, confirmToken,
           })}
         >
           {busy ? '분석 중…' : '분석 시작'}

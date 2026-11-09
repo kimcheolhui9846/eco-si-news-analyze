@@ -25,7 +25,7 @@ test('빌드 명령이 클라이언트를 빌드한다', () => {
 
 test('비밀값을 저장소에 넣지 않는다', () => {
   // sync: false면 Render 대시보드에서 입력받는다.
-  for (const key of ['MY_SECRET_PASSWORD', 'OPENAI_API_KEY']) {
+  for (const key of ['MY_SECRET_PASSWORD', 'OPENAI_API_KEY', 'OPENDART_API_KEY']) {
     const block = renderYaml.slice(renderYaml.indexOf(key));
     assert.match(
       block.slice(0, 120),

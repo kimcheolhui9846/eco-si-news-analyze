@@ -149,49 +149,6 @@ test('사전의 모든 항목이 필수 필드를 갖는다', () => {
   }
 });
 
-// ─── 심볼 해석 ───
-
-test('symbol이 주어지면 그대로 쓴다', async () => {
-  const r = await provider(makeHttp({})).resolveSymbol({ query: '아무거나', symbol: 'TSLA' });
-
-  assert.equal(r.symbol, 'TSLA');
-  assert.equal(r.source, 'explicit');
-});
-
-test('symbol이 없으면 별칭 사전을 본다', async () => {
-  const r = await provider(makeHttp({})).resolveSymbol({ query: '엔비디아 실적' });
-
-  assert.equal(r.symbol, 'NVDA');
-  assert.equal(r.source, 'alias');
-});
-
-test('별칭에 없고 영문이면 Yahoo 검색을 시도한다', async () => {
-  const http = makeHttp({
-    'v1/finance/search': JSON.stringify({ quotes: [{ symbol: 'XYZQ', shortname: 'XYZQ Inc' }] }),
-  });
-  const r = await provider(http).resolveSymbol({ query: 'Some Unknown Corp' });
-
-  assert.equal(r.symbol, 'XYZQ');
-  assert.equal(r.source, 'search');
-});
-
-test('한글 질의는 Yahoo 검색을 시도하지 않는다', async () => {
-  // Yahoo가 한글 질의에 400을 반환하는 것이 확인됐다. 부를 이유가 없다.
-  const http = makeHttp({});
-  const r = await provider(http).resolveSymbol({ query: '없는회사이름입니다' });
-
-  assert.equal(r.source, 'unresolved');
-  assert.equal(http.calls.length, 0, '한글인데 검색을 호출했다');
-});
-
-test('Yahoo 검색이 실패해도 예외를 던지지 않는다', async () => {
-  const http = makeHttp({ 'v1/finance/search': new Error('다운') });
-  const r = await provider(http).resolveSymbol({ query: 'Unknown Company' });
-
-  assert.equal(r.source, 'unresolved');
-  assert.equal(r.symbol, null);
-});
-
 // ─── 주식 시세 ───
 
 test('Naver 응답에서 marketData를 만든다', async () => {

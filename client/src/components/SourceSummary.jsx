@@ -6,8 +6,8 @@ const PROVIDER_LABEL = {
   research: '논문', experiments: '실험·임상',
 };
 
-const SOURCE_LABEL = {
-  explicit: '직접 입력', alias: '별칭 사전', search: '검색', unresolved: '해석 실패',
+const RESOLUTION_LABEL = {
+  explicit: '직접 입력', company: '회사', sector: '분야 묶음', unresolved: '해석 실패',
 };
 
 export default function SourceSummary({ collected }) {
@@ -20,8 +20,12 @@ export default function SourceSummary({ collected }) {
         <div><strong className="warn">{formatCount(collected.headlineOnlyCount, '건')}</strong><span>제목만</span></div>
         <div><strong>{formatCount(collected.duplicatesRemoved, '건')}</strong><span>중복 제거</span></div>
         <div>
-          <strong>{collected.resolvedSymbol ?? '—'}</strong>
-          <span>종목 ({SOURCE_LABEL[collected.symbolSource] ?? collected.symbolSource})</span>
+          <strong>
+            {collected.resolution?.kind === 'sector'
+              ? `${collected.resolution.sector} ${collected.resolution.symbols.length}종목`
+              : collected.resolution?.symbols?.[0] ?? '—'}
+          </strong>
+          <span>종목 ({RESOLUTION_LABEL[collected.resolution?.kind] ?? '—'})</span>
         </div>
       </div>
 
@@ -34,7 +38,7 @@ export default function SourceSummary({ collected }) {
         <ul className="degraded">
           {collected.degraded.map((d, i) => (
             <li key={`${d.provider}-${i}`}>
-              {PROVIDER_LABEL[d.provider] ?? d.provider}: {d.reason}
+              {PROVIDER_LABEL[d.provider] ?? d.provider}{d.symbol ? ` (${d.symbol})` : ''}: {d.reason}
             </li>
           ))}
         </ul>

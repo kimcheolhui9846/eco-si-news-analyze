@@ -39,7 +39,7 @@
 
 ```
 POST /api/research/collect  (무료 — LLM 미호출)
- ↓ 심볼 해석: 명시 → 별칭 사전 → Yahoo 검색(영문만) → 미해석
+ ↓ 종목 해석: 직접 입력 티커 → 회사(별칭 → SEC/OpenDART 디렉터리) → 분야 묶음(최대 4종목) → 미해석
  ↓ 뉴스 RSS + 시장 차트 병렬 수집 (허용목록·회로차단기·캐시)
  ↓ 차트 지표를 코드가 계산 → chartTrend 문장
  ↓ 정규화 → 견적 → 확인 토큰 발급
@@ -132,6 +132,8 @@ OPENAI_API_KEY=sk-...
 | `MARKET_CACHE_TTL_MS` | `60000` | 시장 차트 캐시 |
 | `RESEARCH_RATE_WINDOW_MS` / `_MAX` | `900000` / `60` | 수집 rate limit |
 | `FINANCIAL_CACHE_TTL_MS` | `86400000` | SEC 재무지표 캐시. 분기 실적은 하루에 여러 번 바뀌지 않는다 |
+| `OPENDART_API_KEY` | (비어 있음) | 선택. 한국 상장사 재무(OpenDART). 비어 있으면 한국 재무만 사유와 함께 빠진다. 허용목록에 `opendart.fss.or.kr` 필요 |
+| `DART_CACHE_TTL_MS` | `21600000` | OpenDART 재무 캐시(6시간) |
 | `RESEARCH_CACHE_TTL_MS` | `3600000` | 논문 캐시 |
 | `EXPERIMENT_CACHE_TTL_MS` | `3600000` | 임상시험 캐시 |
 | `MAX_RESEARCH_ITEMS` | `5` | 수집할 논문 수 상한 |
@@ -258,7 +260,12 @@ CONFIRM=$(node -pe "require('/tmp/collected.json').confirmToken")
 node -e "
   const c = require('/tmp/collected.json');
   const body = { newsList: c.newsList };
-  if (c.marketData) body.marketData = c.marketData;
+  // 시세·재무가 있는 종목만 싣고 차트용 series는 뺀다. 빈 자료는 필드를 생략한다.
+  const inst = (c.instruments || []).filter(i => i.marketData || i.financial).map(({ series, ...rest }) => rest);
+  if (inst.length) body.instruments = inst;
+  if (c.collected && c.collected.resolution && c.collected.resolution.sector) body.sector = c.collected.resolution.sector;
+  if (c.research && c.research.length) body.research = c.research;
+  if (c.experiments && c.experiments.length) body.experiments = c.experiments;
   require('fs').writeFileSync('/tmp/analyze.json', JSON.stringify(body), 'utf8');
 "
 
@@ -288,12 +295,15 @@ BODY='{
     "url": "https://example.com/article/1",
     "publishedAt": "2026-08-30T09:00:00Z"
   }],
-  "marketData": {
-    "assetName": "엔비디아",
-    "currentPrice": "182.50",
-    "priceChange": "+2.3%",
-    "chartTrend": "20일 이동평균 상회"
-  }
+  "instruments": [{
+    "symbol": "NVDA", "name": "NVIDIA", "assetType": "stock", "market": "US",
+    "marketData": {
+      "assetName": "엔비디아",
+      "currentPrice": "182.50",
+      "priceChange": "+2.3%",
+      "chartTrend": "20일 이동평균 상회"
+    }
+  }]
 }'
 
 # 2) 견적 — 비용이 들지 않는다. 예상 비용과 남은 예산을 확인한다.
@@ -426,10 +436,12 @@ Task 6의 새 소스는 완료된 일봉 종가를 사용한다. Coinbase 가격
 
 **새 호스트는 `EXTERNAL_ALLOWLIST`에도 추가해야 한다.** 허용목록에 없으면 요청 자체가 나가지 않는다.
 
-### 심볼 별칭 추가
+### 종목·분야 추가
 
-한글 회사명은 API로 티커를 찾을 수 없어(Yahoo 검색이 `400` 반환) 사전에 의존한다.
-`lib/providers/aliases.js`의 `SYMBOL_ALIASES`에 추가한다.
+회사는 `lib/providers/aliases.js`의 `SYMBOL_ALIASES`(한글명 별칭)와 디렉터리 스냅샷
+(`data/us-tickers.json`, `data/kr-listed.json`)에서 찾는다. 스냅샷은
+`node scripts/refresh-directory.js`로 갱신한다(한국 상장사는 `OPENDART_API_KEY` 필요).
+분야 묶음은 `lib/providers/sectors.js`의 분야 사전이 정하며 묶음당 최대 4종목이다.
 
 ```js
 '회사이름': { symbol: '123456.KS', assetType: 'stock', name: '회사이름' },
@@ -490,7 +502,7 @@ npm test
 | `tests/rss.test.js` | RSS 파싱, 피드 레지스트리, XXE |
 | `tests/news-provider.test.js` | 뉴스 수집, 부분 실패, 캐시·회로차단기 |
 | `tests/indicators.test.js` | 차트 지표 계산, 추세 문장 |
-| `tests/market-provider.test.js` | 시세 조회, 심볼 해석, 별칭 사전 |
+| `tests/market-provider.test.js` | 시세 조회 |
 | `tests/research.test.js` | 수집 엔드포인트 통합 |
 | `tests/static.test.js` | 정적 서빙, SPA 폴백이 API를 삼키지 않는지 |
 | `tests/client/errors.test.js` | 에러 코드 → 메시지·다음 화면 매핑 |

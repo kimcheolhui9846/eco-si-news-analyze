@@ -211,3 +211,7 @@ a { color: var(--accent); }
 .research-list, .trial-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
 .research-head, .trial-head { display: flex; gap: 0.5rem; align-items: center; }
 .research-title, .trial-title { margin: 0.25rem 0; font-size: 1rem; }
+
+.table-scroll { overflow-x: auto; }
+.comparison td span + span { display: block; }
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }

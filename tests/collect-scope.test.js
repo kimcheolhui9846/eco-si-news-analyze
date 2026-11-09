@@ -2,7 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import request from 'supertest';
-import { bootstrap, makeClock, makeMockLlm, TEST_PASSWORD } from './helpers.js';
+import { createDirectory } from '../server.js';
+import {
+  analysisBody, bootstrap, makeClock, makeMockLlm, TEST_PASSWORD,
+} from './helpers.js';
+
+// 실제 data/ 스냅샷에 의존하지 않도록 디렉터리를 주입한다.
+const DIRECTORY = createDirectory({
+  us: [['NVDA', '0001045810', 'NVIDIA CORP']],
+  kr: [['삼성전자', '005930', '00126380']],
+});
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 
@@ -46,17 +55,8 @@ const boot = (over = {}) => bootstrap({
   http: over.http ?? makeHttp(),
   llm: makeMockLlm(() => ({ content: JSON.stringify({ report: '보고서' }), model: 'mock' })),
   env: over.env,
+  directory: DIRECTORY,
 });
-
-/** 수집 결과를 분석 요청 본문으로 옮긴다. 빈 자료는 넣지 않는다. */
-const analyzeBodyFrom = (collected) => {
-  const body = { newsList: collected.newsList };
-  if (collected.marketData) body.marketData = collected.marketData;
-  if (collected.financial) body.financial = collected.financial;
-  if (collected.research?.length) body.research = collected.research;
-  if (collected.experiments?.length) body.experiments = collected.experiments;
-  return body;
-};
 
 // ─── 하위 호환 ───
 
@@ -73,7 +73,7 @@ test('include를 보내지 않으면 Phase 2a와 같이 동작한다', async () 
   assert.deepEqual(res.body.collected.included, ['news', 'market']);
   assert.equal(res.body.research, undefined);
   assert.equal(res.body.experiments, undefined);
-  assert.equal(res.body.financial, undefined);
+  assert.equal(res.body.instruments[0].financial, undefined);
 });
 
 test('선택하지 않은 provider는 호출되지 않는다', async () => {
@@ -122,14 +122,15 @@ test('다섯 가지를 모두 선택하면 세 자료가 응답에 실린다', a
   assert.equal(res.status, 200);
   assert.ok(res.body.research.length > 0);
   assert.ok(res.body.experiments.length > 0);
-  assert.ok(res.body.financial.metrics.length > 0);
+  assert.ok(res.body.instruments[0].financial.metrics.length > 0);
   assert.equal(res.body.collected.researchCount, res.body.research.length);
   assert.equal(res.body.collected.experimentCount, res.body.experiments.length);
-  assert.equal(res.body.collected.financialMetricCount, res.body.financial.metrics.length);
+  assert.equal(res.body.collected.financialMetricCount, res.body.instruments[0].financial.metrics.length);
 });
 
-test('한국 종목은 CIK가 없어 재무가 빠지고 사유가 남는다', async () => {
-  const { app } = boot();
+test('OpenDART 키가 없으면 한국 종목 재무가 빠지고 사유가 남는다', async () => {
+  // 로컬 .env의 OpenDART 키와 무관하게 "한국 재무를 못 가져온다" 상황을 고정한다.
+  const { app } = boot({ env: { OPENDART_API_KEY: '' } });
   const agent = request.agent(app);
   const token = await login(agent);
 
@@ -137,7 +138,7 @@ test('한국 종목은 CIK가 없어 재무가 빠지고 사유가 남는다', a
     .set('Authorization', `Bearer ${token}`)
     .send({ query: '삼성전자 실적', include: ['news', 'financial'] });
 
-  assert.equal(res.body.financial, undefined);
+  assert.equal(res.body.instruments[0].financial, undefined);
   assert.ok(res.body.collected.degraded.some((d) => d.provider === 'financial'));
 });
 
@@ -207,7 +208,7 @@ test('수집 결과를 그대로 보내면 확인 토큰이 통한다', async ()
   const res = await agent.post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', collected.body.confirmToken)
-    .send(analyzeBodyFrom(collected.body));
+    .send(analysisBody(collected.body));
 
   assert.equal(res.status, 200, JSON.stringify(res.body));
 });
@@ -251,13 +252,13 @@ test('재무 계산값을 바꾸면 428로 막힌다', async () => {
     .set('Authorization', `Bearer ${token}`)
     .send({ query: 'nvidia earnings', symbol: 'NVDA', lang: 'en', include: ['news', 'financial'] });
 
-  const tampered = structuredClone(collected.body.financial);
-  tampered.metrics[0].value = 1;
+  const tampered = analysisBody(collected.body);
+  tampered.instruments[0].financial.metrics[0].value = 1;
 
   const res = await agent.post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', collected.body.confirmToken)
-    .send({ newsList: collected.body.newsList, financial: tampered });
+    .send(tampered);
 
   assert.equal(res.status, 428);
 });
@@ -279,7 +280,7 @@ test('출처 배열에 논문·실험 타입이 섞여 나온다', async () => {
   const res = await agent.post('/api/analyze/news')
     .set('Authorization', `Bearer ${token}`)
     .set('X-Confirm-Token', collected.body.confirmToken)
-    .send(analyzeBodyFrom(collected.body));
+    .send(analysisBody(collected.body));
 
   assert.equal(res.status, 200, JSON.stringify(res.body));
   const types = new Set(res.body.sources.map((s) => s.type));

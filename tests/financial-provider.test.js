@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   createFinancialProvider, pickLatestFact, findYearAgoFact,
-  createTtlCache, createCircuitBreaker, lookupAlias, cikForSymbol,
+  createTtlCache, createCircuitBreaker, lookupAlias, loadDirectory,
 } from '../server.js';
 import { makeClock } from './helpers.js';
 
@@ -175,9 +175,13 @@ test('회사 티커 목록 파일을 fetch하지 않는다', async () => {
 
 // ─── CIK 별칭 ───
 
+// 티커 → CIK는 이제 디렉터리 스냅샷이 맡는다(서버는 createResolver로 같은 조회를 한다).
+const DIRECTORY = loadDirectory();
+const cikForSymbol = (symbol) => (symbol ? DIRECTORY.bySymbol(symbol)?.cik ?? null : null);
+
 test('미국 종목 별칭에 CIK가 있다', () => {
-  assert.equal(lookupAlias('엔비디아').cik, '0001045810');
-  assert.equal(lookupAlias('애플').cik, '0000320193');
+  assert.equal(cikForSymbol(lookupAlias('엔비디아').symbol), '0001045810');
+  assert.equal(cikForSymbol(lookupAlias('애플').symbol), '0000320193');
 });
 
 test('한국 종목 별칭에는 CIK가 없다', () => {

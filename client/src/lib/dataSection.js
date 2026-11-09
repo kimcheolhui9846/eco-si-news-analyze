@@ -24,7 +24,7 @@ export function emptySectionMessage(provider, collected) {
   parts.push(...reasons);
 
   // 한국어 질의로 소스가 통째로 생략된 경우 그 사실을 함께 적는다.
-  // 재무는 언어와 무관하게 미국 상장사 여부로만 갈린다.
+  // 재무는 언어와 무관하게 종목 해석 결과로만 갈린다.
   if (collected.languageRoute?.route === 'ko' && provider !== 'financial') {
     parts.push(collected.languageRoute.reason);
   }

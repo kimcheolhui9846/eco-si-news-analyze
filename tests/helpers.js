@@ -32,6 +32,23 @@ export const BASE_ENV = {
   BUDGET_FILE: '',
 };
 
-export function bootstrap({ env = {}, clock, llm, http, extraRoutes } = {}) {
-  return createApp({ env: { ...BASE_ENV, ...env }, clock, llm, http, extraRoutes });
+export function bootstrap({ env = {}, clock, llm, http, extraRoutes, directory } = {}) {
+  return createApp({ env: { ...BASE_ENV, ...env }, clock, llm, http, extraRoutes, directory });
+}
+
+/**
+ * 수집 응답 → 분석 요청 본문. 클라이언트(client/src/api/client.js)와 같은 규칙이다.
+ * 이 규칙이 cacheKey 계약이다. lib/instruments.js의 toAnalysisInstruments를 import하지
+ * 않는다 — 서버 구현과 독립된 대조 기준(oracle)이어야 어긋남을 잡을 수 있다.
+ */
+export function analysisBody(c) {
+  const body = { newsList: c.newsList };
+  const instruments = (c.instruments ?? [])
+    .filter((i) => i.marketData || i.financial)
+    .map(({ series, ...rest }) => rest);
+  if (instruments.length) body.instruments = instruments;
+  if (c.collected?.resolution?.sector) body.sector = c.collected.resolution.sector;
+  if (c.research?.length) body.research = c.research;
+  if (c.experiments?.length) body.experiments = c.experiments;
+  return body;
 }

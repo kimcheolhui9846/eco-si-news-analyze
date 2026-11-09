@@ -45,5 +45,9 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      # 한국 상장사 재무(OpenDART). 비어 있으면 한국 재무만 사유와 함께 빠진다.
+      # Render 대시보드에서 입력한다. 저장소에 넣지 않는다.
+      - key: OPENDART_API_KEY
+        sync: false
 
     # PORT는 설정하지 않는다. Render가 주입하고 config.port가 읽는다.

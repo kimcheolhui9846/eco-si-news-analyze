@@ -2,7 +2,7 @@
 const SCOPES = [
   { value: 'news', label: '뉴스', hint: '항상 포함됩니다', locked: true },
   { value: 'market', label: '시장 차트', hint: '주가·코인 시세와 이동평균' },
-  { value: 'financial', label: '재무지표', hint: '미국 상장사만 (SEC EDGAR)' },
+  { value: 'financial', label: '재무지표', hint: '미국(SEC)·한국(OpenDART) 상장사' },
   { value: 'research', label: '논문', hint: '초록까지. 표본 수·연구 단계는 제공되지 않음' },
   // 힌트에 '검색어'라는 낱말을 쓰지 않는다. 위쪽 '검색어' 입력 레이블과
   // 겹쳐 화면 낭독기와 테스트 양쪽에서 어느 쪽인지 가려지지 않는다.

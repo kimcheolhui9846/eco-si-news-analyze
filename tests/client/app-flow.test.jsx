@@ -16,14 +16,17 @@ const COLLECT_RESULT = {
     title: '기사', content: '본문', source: '연합뉴스',
     url: 'https://a.com/1', publishedAt: '2026-09-01T00:00:00.000Z', contentKind: 'summary',
   }],
-  marketData: { assetName: 'NVDA', currentPrice: '224.41 USD', priceChange: '5.23%', chartTrend: '상승' },
-  marketSeries: {
-    symbol: 'NVDA', currency: 'USD',
-    points: [{ t: '2026-09-01T00:00:00.000Z', c: 1 }, { t: '2026-09-02T00:00:00.000Z', c: 2 }],
-    indicators: {},
-  },
+  instruments: [{
+    symbol: 'NVDA', name: 'NVIDIA', assetType: 'stock', market: 'US',
+    marketData: { assetName: 'NVDA', currentPrice: '224.41 USD', priceChange: '5.23%', chartTrend: '상승' },
+    series: {
+      symbol: 'NVDA', currency: 'USD',
+      points: [{ t: '2026-09-01T00:00:00.000Z', c: 1 }, { t: '2026-09-02T00:00:00.000Z', c: 2 }],
+      indicators: {},
+    },
+  }],
   collected: {
-    collectedAt: '2026-09-03T01:00:00.000Z', resolvedSymbol: 'NVDA', symbolSource: 'explicit',
+    collectedAt: '2026-09-03T01:00:00.000Z', resolution: { kind: 'explicit', symbols: ['NVDA'] },
     feedsUsed: ['google-news-ko'], newsCount: 1, duplicatesRemoved: 0,
     headlineOnlyCount: 0, degraded: [],
   },

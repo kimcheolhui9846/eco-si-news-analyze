@@ -32,12 +32,17 @@ import { createBudgetTracker, estimateCostUsd } from './lib/budget.js';
 import { createHttpClient } from './lib/http.js';
 import { createRssNewsProvider } from './lib/providers/news.js';
 import { createMarketProvider } from './lib/providers/market.js';
-import { cikForSymbol } from './lib/providers/aliases.js';
 import { createFinancialProvider } from './lib/providers/financial.js';
 import { createResearchProvider } from './lib/providers/papers.js';
 import { createKciProvider } from './lib/providers/kci.js';
 import { createExperimentProvider } from './lib/providers/experiments.js';
 import { assignResearchIds, assignExperimentIds } from './lib/sections.js';
+import { loadDirectory } from './lib/providers/directory.js';
+import { createResolver } from './lib/resolve.js';
+import { createDartFinancialProvider } from './lib/providers/dart-financial.js';
+import {
+  collectInstruments, toAnalysisInstruments, relevanceName, UNRESOLVED_REASON,
+} from './lib/instruments.js';
 
 // 기존 테스트가 '../server.js'에서 import하던 심볼을 그대로 유지한다.
 export { ApiError } from './lib/errors.js';
@@ -68,7 +73,7 @@ export { parseRssFeed } from './lib/providers/rss.js';
 export { FEEDS, tickerFeed, buildFeedUrl, feedsFor } from './lib/providers/feeds.js';
 export { createRssNewsProvider, matchesQuery } from './lib/providers/news.js';
 export { computeIndicators, buildChartTrend } from './lib/providers/indicators.js';
-export { SYMBOL_ALIASES, lookupAlias, cikForSymbol } from './lib/providers/aliases.js';
+export { SYMBOL_ALIASES, lookupAlias } from './lib/providers/aliases.js';
 export { createMarketProvider } from './lib/providers/market.js';
 export {
   createFinancialProvider, pickLatestFact, findYearAgoFact, FINANCIAL_CONCEPTS,
@@ -86,13 +91,17 @@ export {
   createExperimentProvider, parseClinicalTrials,
 } from './lib/providers/experiments.js';
 export {
-  assignResearchIds, assignExperimentIds, FINANCIAL_SOURCE_ID,
+  assignResearchIds, assignExperimentIds, financialEntries,
   formatFinancialSection, formatResearchSection, formatExperimentSection,
 } from './lib/sections.js';
+export { createDirectory, loadDirectory } from './lib/providers/directory.js';
+export { createResolver, MAX_INSTRUMENTS } from './lib/resolve.js';
+export { createDartFinancialProvider, reportCandidates, parseDartAccounts } from './lib/providers/dart-financial.js';
+export { lookupSector, SECTOR_BASKETS } from './lib/providers/sectors.js';
 
 // ─── 앱 팩토리 ───
 
-export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
+export function createApp({ env = {}, clock, llm, http, extraRoutes, directory } = {}) {
   const config = loadConfig(env);
   const now = clock ?? { now: () => Date.now() };
 
@@ -284,6 +293,16 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
     makeBreaker: makeProviderBreaker,
   });
 
+  const dartProvider = createDartFinancialProvider({
+    http: httpClient,
+    cache: createTtlCache({ ttlMs: config.dartCacheTtlMs, maxEntries: 200, clock: now }),
+    clock: now,
+    makeBreaker: makeProviderBreaker,
+    apiKey: config.opendartApiKey,
+    log: logger,
+  });
+  const resolveInstruments = createResolver({ directory: directory ?? loadDirectory({ log: logger }) });
+
   // 키가 없으면 이 provider가 호출하지 않고 사유만 돌려준다.
   const kciProvider = createKciProvider({
     http: httpClient,
@@ -328,22 +347,19 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       const included = normalizeInclude(parsed.data.include);
       const wanted = (scope) => included.includes(scope);
 
-      const resolved = await marketProvider.resolveSymbol({ query, symbol, assetType });
+      const resolution = resolveInstruments({ query, symbol, assetType });
+      const single = resolution.kind === 'explicit' || resolution.kind === 'company';
+      const wantMarket = wanted('market');
+      const wantFinancial = wanted('financial');
 
       // 선택된 provider만 호출한다. 하나가 느리거나 실패해도 나머지로 진행한다.
-      const [news, market, financialResult, researchResult, experimentResult] = await Promise.all([
-        newsProvider.search({ query, lang, limit: maxNews, symbol: resolved.symbol }),
-        wanted('market')
-          ? marketProvider.fetch({ symbol: resolved.symbol, assetType: resolved.assetType, range })
-          : null,
-        wanted('financial')
-          // 별칭으로 해석했으면 cik가 함께 온다. symbol을 직접 넣은 경우에는
-          // 티커로 역조회한다.
-          ? financialProvider.fetch({
-            cik: resolved.cik ?? cikForSymbol(resolved.symbol),
-            symbol: resolved.symbol,
-          })
-          : null,
+      const [news, collectedInstruments, researchResult, experimentResult] = await Promise.all([
+        newsProvider.search({ query, lang, limit: maxNews, symbol: single ? resolution.instruments[0].symbol : undefined }),
+        collectInstruments({
+          instruments: resolution.instruments,
+          wantMarket, wantFinancial, range,
+          market: marketProvider, sec: financialProvider, dart: dartProvider,
+        }),
         wanted('research')
           ? researchProvider.search({ query, limit: config.maxResearchItems })
           : null,
@@ -356,30 +372,22 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       if (news.items.length === 0) {
         // 실패 원인을 로그에 남긴다. 남기지 않으면 왜 비었는지 알 수 없다.
         req.log.warn(
-          { degraded: news.degraded, feedsUsed: news.feedsUsed, lang, symbol: resolved.symbol },
+          { degraded: news.degraded, feedsUsed: news.feedsUsed, lang, resolution: resolution.kind },
           '뉴스 수집 결과가 비었다',
         );
         throw new ApiError(502, 'COLLECTION_FAILED', '분석할 뉴스를 수집하지 못했습니다. 검색어를 바꿔 다시 시도해 주세요.');
       }
 
       const degraded = news.degraded.map((d) => ({ provider: 'news', ...d }));
-
-      if (wanted('market') && !market) {
-        degraded.push({
-          provider: 'market',
-          reason: resolved.symbol
-            ? '시장 데이터를 가져오지 못했습니다.'
-            : '심볼을 해석하지 못했습니다.',
-        });
+      if (resolution.kind === 'unresolved') {
+        if (wantMarket) degraded.push({ provider: 'market', reason: UNRESOLVED_REASON });
+        if (wantFinancial) degraded.push({ provider: 'financial', reason: UNRESOLVED_REASON });
       }
-      if (wanted('financial') && !financialResult) {
-        degraded.push({
-          provider: 'financial',
-          reason: '미국 상장사가 아니거나 사전에 없는 종목입니다. SEC EDGAR는 미국 상장사만 다룹니다.',
-        });
-      }
-      for (const d of financialResult?.degraded ?? []) {
-        degraded.push({ provider: 'financial', ...d });
+      degraded.push(...collectedInstruments.degraded);
+      for (const inst of collectedInstruments.instruments) {
+        for (const d of inst.financial?.degraded ?? []) {
+          degraded.push({ provider: 'financial', symbol: inst.symbol, reason: `${d.concept}: ${d.reason}` });
+        }
       }
       for (const d of researchResult?.degraded ?? []) {
         degraded.push({ provider: 'research', ...d });
@@ -400,7 +408,6 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
 
       // 자료가 비면 필드를 아예 싣지 않는다. JSON.stringify가 undefined는
       // 버리고 []는 남기므로, 규칙을 하나로 고정해야 cacheKey가 일치한다.
-      const financial = financialResult ?? undefined;
       const research = researchResult?.items.length ? researchResult.items : undefined;
       const experiments = experimentResult?.items.length ? experimentResult.items : undefined;
 
@@ -409,21 +416,17 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
         ?? experimentResult?.languageRoute
         ?? null;
 
-      const marketData = market?.marketData;
-      // 차트용 시계열. 분석 프롬프트에는 넣지 않는다 — 토큰만 늘고
-      // cacheKey가 바뀌면 확인 토큰 흐름이 깨진다.
-      const marketSeries = market
-        ? { ...market.series, indicators: market.indicators }
-        : undefined;
+      const analysisInstruments = toAnalysisInstruments(collectedInstruments.instruments);
+      const instruments = analysisInstruments.length > 0 ? analysisInstruments : undefined;
+      const sector = resolution.kind === 'sector' ? resolution.sector : undefined;
 
       // 견적을 내려면 분석과 똑같이 정규화·조립해야 한다.
       // cacheKey가 일치해야 확인 토큰이 통하기 때문이다.
       const { items, duplicatesRemoved } =
-        normalizeNewsList(newsList, { assetName: marketData?.assetName });
+        normalizeNewsList(newsList, { assetName: relevanceName(analysisInstruments) });
       const collectedAt = new Date(now.now()).toISOString();
       const userPrompt = buildUserPrompt({
-        items, marketData, collectedAt,
-        financial,
+        items, instruments, sector, collectedAt,
         research: assignResearchIds(research ?? []),
         experiments: assignExperimentIds(experiments ?? []),
       });
@@ -435,8 +438,8 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       );
 
       const cacheKey = hashRequest({
-        items, marketData, analysisPeriod: undefined,
-        financial, research, experiments,
+        items, instruments, sector, analysisPeriod: undefined,
+        research, experiments,
         model: config.openaiModel,
       });
 
@@ -446,22 +449,24 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       res.json({
         requestId: req.requestId,
         newsList,
-        marketData,
-        marketSeries,
-        financial,
+        instruments: collectedInstruments.instruments,
         research,
         experiments,
         collected: {
           collectedAt,
           included,
           languageRoute,
-          resolvedSymbol: resolved.symbol,
-          symbolSource: resolved.source,
+          resolution: {
+            kind: resolution.kind,
+            ...(resolution.sector ? { sector: resolution.sector } : {}),
+            symbols: resolution.instruments.map((i) => i.symbol),
+          },
           feedsUsed: news.feedsUsed,
           newsCount: items.length,
           researchCount: research?.length ?? 0,
           experimentCount: experiments?.length ?? 0,
-          financialMetricCount: financial?.metrics.length ?? 0,
+          financialMetricCount: collectedInstruments.instruments
+            .reduce((n, i) => n + (i.financial?.metrics.length ?? 0), 0),
           duplicatesRemoved,
           headlineOnlyCount: items.filter((i) => i.contentKind === 'headline').length,
           degraded,
@@ -492,9 +497,9 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
       throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
     }
 
-    const { newsList, marketData, analysisPeriod, financial, research, experiments } = parsed.data;
+    const { newsList, instruments, sector, analysisPeriod, research, experiments } = parsed.data;
     const { items, duplicatesRemoved } =
-      normalizeNewsList(newsList, { assetName: marketData?.assetName });
+      normalizeNewsList(newsList, { assetName: relevanceName(instruments) });
 
     if (items.length === 0) {
       throw new ApiError(422, 'INSUFFICIENT_DATA', '중복 제거 후 분석할 자료가 남지 않았습니다.');
@@ -506,13 +511,13 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
 
     // 논문·실험·재무 URL을 넣지 않으면 진짜 출처가 위조로 판정돼 지워진다.
     const urlWhitelist = collectUrlWhitelist({
-      items, research: researchItems, experiments: experimentItems, financial,
+      items, research: researchItems, experiments: experimentItems, instruments,
     });
 
     const collectedAt = new Date(now.now()).toISOString();
     const userPrompt = buildUserPrompt({
-      items, marketData, collectedAt, analysisPeriod,
-      financial, research: researchItems, experiments: experimentItems,
+      items, instruments, sector, collectedAt, analysisPeriod,
+      research: researchItems, experiments: experimentItems,
     });
 
     // 프롬프트 길이와 토큰 예산을 LLM 호출 전에 확인한다.
@@ -527,14 +532,14 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
     );
 
     return {
-      items, marketData, analysisPeriod, duplicatesRemoved, urlWhitelist,
-      financial, researchItems, experimentItems,
+      items, instruments, analysisPeriod, duplicatesRemoved, urlWhitelist,
+      researchItems, experimentItems,
       collectedAt, userPrompt, estimatedInputTokens, estimatedCostUsd,
       // 캐시 키는 정규화된 자료 기준이다. 순서만 다른 요청도 같은 키가 된다.
       // 새 자료를 넣지 않으면 작은 견적으로 큰 요청을 실행할 수 있다.
       cacheKey: hashRequest({
-        items, marketData, analysisPeriod,
-        financial, research, experiments,
+        items, instruments, sector, analysisPeriod,
+        research, experiments,
         model: config.openaiModel,
       }),
     };
@@ -592,14 +597,14 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes } = {}) {
     async (req, res) => {
       const {
         items, duplicatesRemoved, urlWhitelist, collectedAt,
-        financial, researchItems, experimentItems,
+        instruments, researchItems, experimentItems,
         userPrompt, estimatedInputTokens, estimatedCostUsd, cacheKey,
       } = prepare(req);
 
       const sources = [
         ...buildSources(items, collectedAt),
         ...buildExtraSources({
-          research: researchItems, experiments: experimentItems, financial, collectedAt,
+          research: researchItems, experiments: experimentItems, instruments, collectedAt,
         }),
       ];
       const baseMeta = {
