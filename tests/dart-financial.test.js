@@ -75,6 +75,16 @@ test('parseDartAccounts: 부채비율과 전년 동기 대비 매출 성장률�
   ]);
 });
 
+test("parseDartAccounts: 실제 공시의 '(손실)' 붙은 계정명도 같은 계정으로 본다", () => {
+  // 실측: 삼성전자·SK하이닉스 2026 반기 응답의 순이익 계정명은 "당기순이익(손실)"이었다.
+  const body = JSON.parse(FIXTURE);
+  for (const r of body.list) if (r.account_nm === '당기순이익' || r.account_nm === '영업이익') r.account_nm += '(손실)';
+  const parsed = parseDartAccounts(body, { report: reportCandidates(NOW)[0], year: 2026 });
+  assert.deepEqual(parsed.metrics.map((m) => m.label), ['매출', '영업이익', '순이익', '자산', '부채']);
+  assert.equal(parsed.metrics[2].concept, '당기순이익 (연결)');
+  assert.equal(parsed.degraded.length, 0);
+});
+
 test('parseDartAccounts: 연결이 없으면 개별을 쓴다', () => {
   const body = JSON.parse(FIXTURE);
   body.list = body.list.filter((r) => r.fs_div === 'OFS');
