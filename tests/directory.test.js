@@ -33,6 +33,13 @@ test('findInQuery: 2자 한국 회사명은 오탐 위험 때문에 보지 않�
   assert.equal(dir().findInQuery('투자 대상 기업'), null);
 });
 
+test('findInQuery: 흔한 단어와 같은 한국 회사명은 이름으로 대조하지 않는다', () => {
+  const d = createDirectory({ kr: [['광전자', '017900', '00111111'], ['오로라', '039830', '00222222']] });
+  assert.equal(d.findInQuery('광전자 반도체'), null);
+  assert.equal(d.findInQuery('오로라 관측'), null);
+  assert.equal(d.bySymbol('017900')?.name, '광전자');   // 종목코드로는 여전히 찾는다
+});
+
 test('findInQuery: 대문자 단어만 미국 티커로 본다', () => {
   assert.equal(dir().findInQuery('PLTR 실적')?.symbol, 'PLTR');
   assert.equal(dir().findInQuery('pltr 실적'), null);
