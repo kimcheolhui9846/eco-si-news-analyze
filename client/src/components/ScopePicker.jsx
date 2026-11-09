@@ -13,7 +13,8 @@ export const INVEST_SCOPES = [
 // 힌트에 '검색어'라는 낱말을 쓰지 않는다(위 INVEST_SCOPES 주석 참고).
 export const CS_SCOPES = [
   { value: 'papers', label: '논문', hint: 'arXiv CS 분야 프리프린트 · 영문 질의 권장' },
-  { value: 'community', label: '커뮤니티', hint: 'Hacker News 최근 30일 · 영문 질의 권장' },
+  { value: 'community', label: '커뮤니티', hint: 'Hacker News·Lobsters 최근 30일 · 영문 질의 권장' },
+  { value: 'questions', label: '개발자 질문', hint: 'Stack Overflow 최근 90일 · 투표순 · 영문 질의 권장' },
   { value: 'news', label: '뉴스', hint: '구글 뉴스·연합뉴스·전자신문' },
   { value: 'blogs', label: '기술 블로그', hint: '구글·딥마인드·OpenAI 등 10곳 최근 60일' },
   { value: 'repos', label: '저장소', hint: 'GitHub 최근 30일 갱신 · 스타 순' },

@@ -11,6 +11,7 @@ afterEach(cleanup);
 const SOURCES = [
   { sourceId: 'P1', title: 'Sparse MoE for retrieval', source: 'arXiv (cs.CL)', url: 'https://arxiv.org/abs/2611.00001', publishedAt: '2026-11-02T00:00:00.000Z', collectedAt: '2026-11-09T00:00:00.000Z', type: 'paper' },
   { sourceId: 'G1', title: 'example/tiny-rag', source: 'GitHub', url: 'https://github.com/example/tiny-rag', publishedAt: '2026-11-06T00:00:00.000Z', collectedAt: '2026-11-09T00:00:00.000Z', type: 'repo' },
+  { sourceId: 'Q1', title: 'RAG retriever returns irrelevant chunks', source: 'Stack Overflow · devops · CC BY-SA', url: 'https://stackoverflow.com/questions/79923286/rag-retriever', publishedAt: '2026-10-20T00:00:00.000Z', type: 'question', collectedAt: '2026-11-09T00:00:00.000Z', relevance: 0 },
 ];
 
 const FULL = {
@@ -21,6 +22,7 @@ const FULL = {
       evidenceLevel: '프리프린트', sourceIds: ['P1'],
     }],
     paperHighlights: [{ sourceId: 'P1', contribution: '희소 MoE 적용', method: '전문가 라우팅', limitations: '초록에 한계가 명시되지 않음' }],
+    developerPainPoints: [{ title: '검색 품질', detail: '질의와 맞지 않는 결과', sourceIds: ['Q1'] }],
     communityPulse: '구현이 단순하다는 반응 [H1].',
     openSourceSignals: [{ sourceId: 'G1', signal: '최근 갱신' }],
     openQuestions: ['분포 이동에도 유지되는가?'],
@@ -50,7 +52,7 @@ test('CS 보고서: 요약·동향·논문 하이라이트·신호·질문·출�
   assert.equal(deep[0].disabled, true);
 
   const headings = screen.getAllByRole('heading').map((h) => h.textContent);
-  const order = ['핵심 요약', '주요 동향', '논문 하이라이트', '커뮤니티 반응', '오픈소스 신호', '미해결 질문', '지켜볼 것'];
+  const order = ['핵심 요약', '주요 동향', '논문 하이라이트', '커뮤니티 반응', '개발자들이 막히는 지점', '오픈소스 신호', '미해결 질문', '지켜볼 것'];
   const positions = order.map((t) => headings.findIndex((h) => h.startsWith(t)));
   assert.ok(positions.every((p) => p >= 0), JSON.stringify(headings));
   assert.deepEqual([...positions].sort((a, b) => a - b), positions);
@@ -66,7 +68,7 @@ test('CS 보고서: 빈 자료는 자료 없음으로 표시한다', () => {
     sources: [], meta: {},
   }} onNewSearch={() => {}} />);
 
-  assert.ok(screen.getAllByText('자료 없음').length >= 6);
+  assert.ok(screen.getAllByText('자료 없음').length >= 7);
   assert.equal(screen.queryByRole('button', { name: '전문 분석 (준비 중)' }), null);
 });
 
@@ -109,4 +111,11 @@ test('App: CS 분석이 끝나면 CS 보고서 화면을 보인다', async () =>
   // 새 검색으로 돌아가도 CS 탭이 유지된다.
   fireEvent.click(screen.getByRole('button', { name: '새 검색' }));
   await waitFor(() => assert.equal(screen.getByRole('tab', { name: 'CS 동향' }).getAttribute('aria-selected'), 'true'));
+});
+
+test('CS 보고서: 개발자들이 막히는 지점과 SO 출처 표기', () => {
+  render(<CsReportPage report={FULL} onNewSearch={() => {}} />);
+  assert.ok(screen.getByRole('heading', { name: '개발자들이 막히는 지점' }));
+  assert.ok(screen.getByText('검색 품질'));
+  assert.ok(screen.getAllByText(/Stack Overflow · devops · CC BY-SA/).length > 0);
 });

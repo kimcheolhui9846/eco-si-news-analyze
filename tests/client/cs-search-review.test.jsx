@@ -49,7 +49,8 @@ test('CS 검색은 mode: cs로 수집하고 CS 검토 화면을 보인다', asyn
   await waitFor(() => assert.ok(screen.getByText('Sparse MoE for retrieval')));
   assert.equal(sent.mode, 'cs');
   assert.equal(sent.query, 'rag');
-  assert.deepEqual(sent.include, ['papers', 'community', 'news', 'blogs', 'repos']);
+  assert.deepEqual(sent.include, ['papers', 'community', 'questions', 'news', 'blogs', 'repos']);
+  assert.deepEqual(CS_SCOPES.map((x) => x.value), ['papers', 'community', 'questions', 'news', 'blogs', 'repos']);
 });
 
 test('CS 범위는 마지막 하나를 끌 수 없다', () => {
@@ -77,7 +78,7 @@ test('CS 검토 화면: 출처 종류별 묶음·사유·승인 값', () => {
   fireEvent.click(screen.getByRole('button', { name: /분석 시작/ }));
   assert.deepEqual(approved, {
     mode: 'cs', newsList: [], papers: CS_COLLECT.papers, community: CS_COLLECT.community,
-    blogs: CS_COLLECT.blogs, repos: [], confirmToken: 'ct_cs',
+    questions: CS_COLLECT.questions, blogs: CS_COLLECT.blogs, repos: [], confirmToken: 'ct_cs',
   });
 });
 
@@ -100,10 +101,27 @@ test('api: CS 수집 본문은 mode·query·lang·include만 담는다', async (
 test('api: CS 분석 본문은 비어 있지 않은 배열만 담고 확인 토큰을 헤더로 보낸다', async () => {
   const f = makeFetch();
   await createApiClient({ fetchImpl: f }).analyze({
-    mode: 'cs', newsList: [], papers: [{ title: 'p' }], community: [{ title: 'h' }], blogs: [], repos: undefined,
+    mode: 'cs', newsList: [], papers: [{ title: 'p' }], community: [{ title: 'h' }], questions: [{ title: 'q' }], blogs: [], repos: undefined,
     confirmToken: 'ct_cs',
   });
   assert.equal(f.calls[0].url, '/api/analyze/news');
-  assert.deepEqual(JSON.parse(f.calls[0].opts.body), { mode: 'cs', papers: [{ title: 'p' }], community: [{ title: 'h' }] });
+  assert.deepEqual(JSON.parse(f.calls[0].opts.body), { mode: 'cs', papers: [{ title: 'p' }], community: [{ title: 'h' }], questions: [{ title: 'q' }] });
   assert.equal(f.calls[0].opts.headers['X-Confirm-Token'], 'ct_cs');
+});
+
+test('CS 검토: 개발자 질문과 커뮤니티 사이트 배지를 보인다', () => {
+  render(<CsReviewPage collected={CS_COLLECT} onApprove={() => {}} onBack={() => {}} busy={false} />);
+  assert.ok(screen.getByRole('heading', { name: /개발자 질문 \(Stack Overflow\) \(1건\)/ }));
+  assert.ok(screen.getByText('RAG retriever returns irrelevant chunks'));
+  assert.ok(screen.getByText(/점수 7 · 답변 0 · 답 없음 · 조회 605/));
+  assert.ok(screen.getByText('python · rag'));
+  assert.ok(screen.getByText('Lobsters'));
+  assert.ok(screen.getByText('HN'));
+});
+
+test('CS 검토: 승인 본문에 질문을 싣는다', () => {
+  let payload;
+  render(<CsReviewPage collected={CS_COLLECT} onApprove={(p) => { payload = p; }} onBack={() => {}} busy={false} />);
+  fireEvent.click(screen.getByRole('button', { name: /분석 시작/ }));
+  assert.equal(payload.questions.length, 1);
 });
