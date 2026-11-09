@@ -6,6 +6,21 @@ Phase 1 기준. 모든 응답은 `application/json`이며, 모든 응답에 `X-R
 
 ---
 
+## 분석 모드
+
+수집(`/api/research/collect`)·견적(`/api/analyze/estimate`)·분석(`/api/analyze/news`) 세 엔드포인트는 요청 본문의 `mode`로 동작을 고른다.
+
+| `mode` | 설명 |
+|---|---|
+| `'invest'` (기본) | 투자 뉴스 분석. `mode`를 생략하면 이 모드이므로 기존 클라이언트는 그대로 동작한다. |
+| `'cs'` | CS 기술 동향 브리핑. 아래 "CS 기술 동향 브리핑" 절을 본다. |
+
+- 모르는 값은 `400 INVALID_REQUEST` `"지원하지 않는 분석 모드입니다."`로 거부한다.
+- 확인 토큰은 **모드에 묶인다.** 견적 때 모드가 요청 해시에 들어가므로 투자 견적의 토큰으로 CS 분석을 실행하면 `428 CONFIRMATION_REQUIRED`다. 반대도 같다.
+- `mode`를 뺀 나머지 본문은 모드별 스키마가 검사한다(모르는 필드는 거부).
+
+---
+
 ## 공통 에러 형식
 
 모든 오류는 동일한 형태로 반환된다.
@@ -655,6 +670,8 @@ curl -X POST http://localhost:3000/api/analyze/news   -H 'Content-Type: applicat
 
 `score = max(0, 100 - 10·fixed - 5·warnings)`. 캐시 히트도 같은 값을 돌려준다.
 
+CS 모드(`mode: 'cs'`)는 검사 항목이 다르다. [CS 품질 검사](#cs-품질-검사-metaquality)를 본다.
+
 ### `degraded: true`일 때의 응답 형태
 
 구조화 출력이 두 번 실패하면 `analysis`의 모양이 바뀐다.
@@ -738,6 +755,170 @@ curl -X POST http://localhost:3000/api/analyze/news \
 </details>
 
 전체 시나리오는 `scripts/verify.sh`가 자동으로 검증한다.
+
+---
+
+## CS 기술 동향 브리핑
+
+본문에 `"mode": "cs"`를 넣으면 같은 세 엔드포인트가 CS 기술 동향 브리핑으로 동작한다. 흐름은 투자 모드와 같다(수집 → 확인 토큰 → 분석). 수집은 LLM을 호출하지 않고, 분석에서만 비용이 든다. 투자 분석 필드(시세·재무·종목 등)는 쓰지 않는다.
+
+### CS 수집 — `POST /api/research/collect`
+
+인증이 필요하다. LLM을 호출하지 않는다.
+
+#### 요청
+
+```json
+{ "mode": "cs", "query": "retrieval augmented generation", "lang": "en", "include": ["papers", "community", "repos"] }
+```
+
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `mode` | 예 | `"cs"` |
+| `query` | 예 | 검색어. 1~200자. **영어를 권장한다**(arXiv·Hacker News·GitHub가 영어 중심이다). |
+| `lang` | 아니오 | `ko`(기본) \| `en`. 뉴스 검색에만 쓴다. |
+| `include` | 아니오 | `papers` \| `community` \| `news` \| `blogs` \| `repos`. 비우거나 생략하면 전부. 중복은 합치고 응답에서는 이 순서로 정렬한다. |
+
+모르는 필드나 `include` 값은 `400 INVALID_REQUEST`다.
+
+#### 출처별 상한과 기간
+
+| `include` | 출처 | 상한 | 기간 |
+|---|---|---|---|
+| `papers` | arXiv `cs.*` 분야, 제출일 최신순 | 8 | 제한 없음(최신순) |
+| `community` | Hacker News (hn.algolia.com) | 10 | 최근 30일 |
+| `news` | Google News RSS | 8 | 뉴스 수집 기본 동작 |
+| `blogs` | 기업·연구 블로그 RSS 10곳(Google Research, Google DeepMind, OpenAI, Hugging Face, Microsoft Research, NVIDIA Developer, AWS Machine Learning, Meta Engineering, BAIR, 토스 기술 블로그) | 8 | 최근 60일 |
+| `repos` | GitHub 저장소 검색 | 8 | 최근 30일 |
+
+기업 블로그는 공식 발표라 홍보 성격이 있다. 분석 프롬프트가 이 점을 알린다.
+
+#### 응답 `200`
+
+```json
+{
+  "requestId": "0f8b2c1a-...",
+  "mode": "cs",
+  "papers": [ { "...": "..." } ],
+  "community": [ { "...": "..." } ],
+  "newsList": [ { "title": "...", "content": "...", "source": "...", "url": "...", "publishedAt": "...", "contentKind": "..." } ],
+  "blogs": [ { "...": "..." } ],
+  "repos": [ { "...": "..." } ],
+  "collected": {
+    "collectedAt": "2026-11-09T01:00:00.000Z",
+    "included": ["papers", "community", "news", "blogs", "repos"],
+    "degraded": [ { "provider": "repos", "source": "GitHub", "reason": "GitHub 검색 한도를 넘었습니다." } ],
+    "counts": { "papers": 8, "community": 10, "news": 8, "blogs": 3, "repos": 0 },
+    "total": 29,
+    "duplicatesRemoved": 0
+  },
+  "estimate": {
+    "estimatedInputTokens": 5200,
+    "assumedOutputTokens": 2000,
+    "estimatedCostUsd": 0.033,
+    "budget": { "calls": { "...": "..." }, "cost": { "...": "..." } }
+  },
+  "confirmToken": "ct_...",
+  "confirmTokenExpiresAt": "2026-11-09T01:05:00.000Z"
+}
+```
+
+- 자료 배열의 키 이름(`papers`·`community`·`newsList`·`blogs`·`repos`)은 **분석 요청과 같다.** 클라이언트는 비어 있지 않은 배열만 분석 요청에 되돌려 보낸다(빈 배열은 보내지 않는다. 그래야 견적과 분석의 `cacheKey`가 일치해 확인 토큰이 통한다).
+- `collected.counts`는 뉴스 중복 제거 뒤의 개수이고 `total`은 그 합계다.
+- `degraded[]`는 `{ provider, source, reason }`이다. `provider`는 `papers`·`community`·`news`·`blogs`·`repos` 중 하나다. 일부 출처가 실패해도 나머지로 진행한다. 실패 사유는 `자료를 가져오지 못했습니다.` 또는 `일시적으로 사용할 수 없습니다.`(회로 차단기)이고, GitHub이 403·429로 답하면 `GitHub 검색 한도를 넘었습니다.`다. 상류의 원본 오류 메시지는 담지 않는다.
+
+#### 오류
+
+| 상태 | 코드 | 상황 |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | 스키마 위반, 모르는 `mode` |
+| 502 | `COLLECTION_FAILED` | 수집한 자료 합계가 3건 미만이거나, 뉴스 중복을 제거한 뒤 3건 미만 |
+
+두 경우 모두 메시지는 `"CS 동향 분석에 필요한 자료를 3건 이상 모으지 못했습니다. 검색어를 영어로 바꾸거나 범위를 넓혀 다시 시도해 주세요."`다. 중복 제거 뒤 부족한 경우에도 분석 단계의 422가 아니라 수집 단계의 502로 통일한다.
+
+### CS 견적·분석 — `POST /api/analyze/estimate`, `POST /api/analyze/news`
+
+두 엔드포인트의 본문은 같다. 견적은 LLM을 호출하지 않고, 분석은 `X-Confirm-Token` 헤더가 필요하다(캐시 히트는 예외). 응답 형태는 투자 모드와 같되 `analysis`, `sources`, `meta.counts`가 CS용이다.
+
+#### 요청
+
+```json
+{
+  "mode": "cs",
+  "newsList": [ ],
+  "papers": [ ],
+  "community": [ ],
+  "blogs": [ ],
+  "repos": [ ]
+}
+```
+
+다섯 배열은 모두 선택이다. 수집 응답의 배열을 그대로 넣는다. 모르는 필드는 거부한다.
+
+| 필드 | 상한 | 항목 필드 |
+|---|---|---|
+| `newsList` | `MAX_NEWS_ITEMS` | 투자 모드 `newsList`와 같다 |
+| `papers` | 8 | 투자 모드 논문 항목 필드 + `category`(문자열 또는 `null`, 40자) |
+| `community` | 10 | `title`(1~300자), `url`, `discussionUrl`, `points`(0 이상 정수), `numComments`(0 이상 정수), `publishedAt`, `text`(1500자 이하) |
+| `blogs` | 8 | `title`(1~300자), `url`, `blog`(1~100자), `summary`(1500자 이하), `publishedAt` |
+| `repos` | 8 | `fullName`(1~200자), `url`, `description`(500자 이하), `stars`(0 이상 정수), `language`(60자 또는 `null`), `license`(60자 또는 `null`), `pushedAt`, `createdAt`(64자 이하 또는 `null`) |
+
+`url`·`discussionUrl`은 `http(s)`만 받는다(2048자 이하). 항목 값에는 trim 같은 변환을 하지 않는다. 변환이 있으면 수집 때와 분석 때 자료가 달라져 확인 토큰이 어긋난다.
+
+자료 합계(뉴스 중복 제거 뒤)가 3건 미만이면 `422 INSUFFICIENT_DATA` `"CS 동향 분석에는 자료가 3건 이상 필요합니다."`다.
+
+#### 출처 ID와 타입
+
+서버가 종류별로 받은 순서대로 붙인다. 수집과 분석이 같은 배열을 보므로 같은 ID가 나온다.
+
+| 접두사 | `sources[].type` | 자료 | `sources[].source` |
+|---|---|---|---|
+| `P` | `paper` | arXiv 논문 | `arXiv (cs.CL)`처럼 분야를 붙인다(분야가 없으면 `arXiv`) |
+| `H` | `community` | Hacker News | `Hacker News`. `url`은 원문이 아니라 **토론 페이지**(`discussionUrl`)다 |
+| `S` | `news` | 뉴스 | 기사의 출처명 |
+| `B` | `blog` | 기업·연구 블로그 | 블로그 이름 |
+| `G` | `repo` | GitHub 저장소 | `GitHub` (제목은 `owner/name`) |
+
+보고서 본문의 URL이 위 자료의 URL(HN은 원문과 토론 두 가지) 밖이면 `[출처 미확인]`으로 치환된다.
+
+#### 응답 `analysis` (`cs_trend_briefing`)
+
+| 필드 | 형식 | 설명 |
+|---|---|---|
+| `summary` | 문자열 | 전체 요약 |
+| `keyDevelopments[]` | 객체 배열 | `title`, `whatIsNew`, `whyItMatters`, `evidenceLevel`, `sourceIds[]` |
+| `paperHighlights[]` | 객체 배열 | `sourceId`, `contribution`, `method`, `limitations` |
+| `communityPulse` | 문자열 | 커뮤니티 반응 |
+| `openSourceSignals[]` | 객체 배열 | `sourceId`, `signal` |
+| `openQuestions` | 문자열 배열 | 미해결 질문 |
+| `whatToWatch` | 문자열 배열 | 지켜볼 것 |
+| `sourceCoverage` | 객체 | `level`(`충분` \| `부분적` \| `부족`), `note` |
+
+`evidenceLevel`은 `동료 심사 논문` \| `프리프린트` \| `공식 발표·블로그` \| `코드 공개` \| `커뮤니티 화제` \| `언론 보도` 중 하나다.
+
+`meta`는 투자 모드와 같은 공통 필드에 더해 종류별 개수를 싣는다. `sourceCount`는 합계다.
+
+```json
+"meta": {
+  "sourceCount": 29,
+  "duplicatesRemoved": 0,
+  "counts": { "papers": 8, "community": 10, "news": 8, "blogs": 3, "repos": 0 }
+}
+```
+
+#### CS 품질 검사 (`meta.quality`)
+
+형태와 점수 계산은 [품질 검사](#품질-검사-metaquality)와 같고, 검사 항목이 다음 다섯 가지다. 이 순서로 돈다.
+
+| check | 동작 |
+|---|---|
+| `citations` | 본문에 인용된 없는 출처 ID(`[P9]` 등)를 `출처 미확인`으로 바꾼다(투자 모드와 같은 검사). |
+| `sourceRefs` | `keyDevelopments[].sourceIds`에서 제공되지 않은 ID를 빼고(교정 `주요 동향에서 제공되지 않은 출처 ID N개를 뺐습니다.`), 중복은 조용히 합친다. 남은 ID가 없으면 경고 `근거 출처가 없는 동향입니다. 직접 확인해 주세요.` `paperHighlights`·`openSourceSignals`의 `sourceId`가 제공된 출처에 없으면 그 항목을 제거한다(교정 `논문 하이라이트 항목의 출처 ID(P9)가 제공된 출처에 없어 항목을 제거했습니다.`, 오픈소스 신호는 `오픈소스 신호 항목의 ...`). |
+| `evidence` | 근거가 전부 `P`(arXiv)인데 `동료 심사 논문`이면 `프리프린트`로 교정한다(`근거가 arXiv 프리프린트뿐이라 근거 수준을 '프리프린트'로 바로잡았습니다.`). `코드 공개`인데 근거에 `G`가 없으면 경고(`'코드 공개'로 표시됐지만 근거에 GitHub 저장소가 없습니다.`). |
+| `coverage` | `sourceCoverage.level`이 `충분`인데 수집 자료가 5건 미만이면 `부족`으로 교정한다(`수집 자료가 N건뿐이라 자료 충분도를 '부족'으로 바로잡았습니다.`). |
+| `investmentLanguage` | `매수`·`매도`·`주가`·`목표 주가`·`투자 권유` 같은 투자 표현이 있으면 경고만 한다(`CS 브리핑에 투자 관련 표현이 있습니다.`). 앞에 한글이 붙은 `외주가` 같은 낱말은 거르지 않는다. |
+
+투자 모드의 `availability`·`disclaimer`·`scenarios`·`comparison`은 CS에서 돌지 않는다.
 
 ---
 

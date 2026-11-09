@@ -33,6 +33,15 @@
 **검토 화면이 돈을 쓸지 정하는 유일한 지점이다.** 하단 고정 바에 예상 비용, 남은 예산,
 그리고 제목만 확보된 자료 수가 함께 표시된다. 승인 전에는 LLM이 호출되지 않는다.
 
+### CS 기술 동향 브리핑
+
+검색 화면의 **"CS 동향" 탭**에서 컴퓨터과학 기술 동향을 브리핑받는다. 투자 모드와 같은
+수집 → 검토(비용 승인) → 보고서 흐름이며, 다섯 출처를 모은다: arXiv 논문, Hacker News,
+뉴스, 기업·연구 블로그, GitHub 저장소. 보고서는 주요 동향(근거 수준 표시), 논문 하이라이트,
+커뮤니티 반응, 오픈소스 신호, 미해결 질문, 지켜볼 것, 자료 충분도로 구성된다.
+**검색어는 영어를 권장한다**(arXiv·Hacker News·GitHub가 영어 중심이다). 논문은 초록만 분석하며
+**논문 전문 분석은 준비 중이다.** 요청·응답 형태는 [`docs/api.md`](docs/api.md)의 "CS 기술 동향 브리핑"을 본다.
+
 ---
 
 ## 시스템 구성
@@ -140,6 +149,8 @@ OPENAI_API_KEY=sk-...
 | `MAX_EXPERIMENT_ITEMS` | `5` | 수집할 임상시험 수 상한 |
 | `KCI_API_KEY` | (빈 값) | **선택.** 국내 논문 검색용. 아래 설명 참고 |
 | `RESEARCH_CONTACT_EMAIL` | (빈 값) | **선택.** Crossref polite pool 연락 이메일 |
+| `GITHUB_TOKEN` | (빈 값) | **선택.** CS 브리핑의 GitHub 저장소 검색용. 없으면 GitHub 검색이 분당 10회로 제한되고, 넘으면 해당 출처만 사유와 함께 빠진다 |
+| `CS_CACHE_TTL_MS` | `21600000` | CS 브리핑 수집 캐시(6시간) |
 
 **키 없는 논문 검색.** 한국어·영문 논문은 OpenAlex를 기본으로 조회하고, 결과가 부족하면 Crossref를 보조로 조회한다. 두 소스 모두 API 키 없이 사용할 수 있다. Crossref polite pool을 사용하려면 선택적으로 `RESEARCH_CONTACT_EMAIL`을 설정한다.
 
@@ -419,6 +430,12 @@ Task 6의 새 소스는 완료된 일봉 종가를 사용한다. Coinbase 가격
 `api.stock.naver.com`, `m.stock.naver.com`, `api.exchange.coinbase.com`을 포함해야 한다.
 환경변수를 생략하면 코드 기본 허용목록을 사용한다.
 
+CS 기술 동향 브리핑은 다음 호스트를 더 쓴다: `hn.algolia.com`, `api.github.com`,
+`research.google`, `deepmind.google`, `openai.com`, `huggingface.co`, `www.microsoft.com`,
+`developer.nvidia.com`, `aws.amazon.com`, `engineering.fb.com`, `bair.berkeley.edu`, `toss.tech`.
+코드 기본 허용목록에는 들어 있다. **로컬 `.env`에 `EXTERNAL_ALLOWLIST`를 직접 둔 경우 이 호스트를 더해야 한다**
+(없으면 해당 출처가 요청 자체가 나가지 않아 수집에서 빠진다). `.env.example`에 전체 목록이 있다.
+
 ### 피드 추가·변경
 
 `lib/providers/feeds.js`의 `FEEDS` 배열에 항목을 추가한다.
@@ -484,7 +501,7 @@ Task 6의 새 소스는 완료된 일봉 종가를 사용한다. Coinbase 가격
 npm test
 ```
 
-**707개 테스트가 실제 API 키와 외부 네트워크 없이 전부 통과한다.** `LLM_MODE=mock`, 주입된 시계, 주입된 http 클라이언트와 `tests/fixtures/`의 실제 API 응답을 쓴다.
+**816개 테스트 중 1개(KCI 키 발급 후 해제할 픽스처 테스트)는 건너뛰고 나머지 815개가 실제 API 키와 외부 네트워크 없이 통과한다.** `LLM_MODE=mock`, 주입된 시계, 주입된 http 클라이언트와 `tests/fixtures/`의 실제 API 응답을 쓴다.
 
 | 파일 | 범위 |
 |---|---|
@@ -505,6 +522,13 @@ npm test
 | `tests/market-provider.test.js` | 시세 조회 |
 | `tests/research.test.js` | 수집 엔드포인트 통합 |
 | `tests/static.test.js` | 정적 서빙, SPA 폴백이 API를 삼키지 않는지 |
+| `tests/modes.test.js` | 분석 모드 선택, 알 수 없는 모드 거부 |
+| `tests/cs-profile.test.js` | CS 프로필: 정규화, 출처 ID, 3건 미만 거부, 해시의 모드 분리 |
+| `tests/cs-providers.test.js` | Hacker News·GitHub 수집, 한도 사유 |
+| `tests/cs-blogs-arxiv.test.js` | 기업 블로그 RSS/Atom, arXiv CS 수집 |
+| `tests/cs-collect.test.js` | CS 수집 엔드포인트, 부분 실패, 502 |
+| `tests/cs-analyze.test.js` | CS 견적·분석, 모드 간 확인 토큰 분리 |
+| `tests/quality-cs.test.js` | CS 품질 검사 5종 |
 | `tests/client/errors.test.js` | 에러 코드 → 메시지·다음 화면 매핑 |
 | `tests/client/format.test.js` | 날짜·통화·비용 표기 |
 | `tests/client/chart.test.js` | 차트 좌표 계산, 이동평균 |
@@ -512,6 +536,8 @@ npm test
 | `tests/client/components.test.jsx` | 컴포넌트 렌더링, **XSS 방어** |
 | `tests/client/pages.test.jsx` | 화면별 동작 |
 | `tests/client/app-flow.test.jsx` | 전체 흐름과 오류 복구 |
+| `tests/client/cs-search-review.test.jsx` | CS 동향 탭, 검색 폼, 검토 화면 |
+| `tests/client/cs-report.test.jsx` | CS 브리핑 보고서 화면 |
 
 실행 중인 서버에 대한 종단 검증:
 
@@ -526,6 +552,8 @@ npm run eval
 ```
 
 LLM을 부르지 않는다. `eval/cases/*.json`의 고정 응답에 품질 게이트(`lib/quality/`)를 돌려 기대와 대조하고, 케이스별 통과 여부·검사기별 적중·평균 점수를 출력한다. 실패가 있으면 종료 코드 1이다. `npm test`도 같은 케이스를 돌린다(`tests/eval.test.js`).
+
+CS 케이스는 `eval/cases/cs-*.json`이고 `"mode": "cs"`를 가진다. 이 케이스는 투자 검사 대신 CS 검사 5종(`citations`·`sourceRefs`·`evidence`·`coverage`·`investmentLanguage`)을 돌리며, `context`는 `sources`와 수집 합계(`total`)만 쓴다. 고정 응답은 `eval/responses/cs.json`, 출처는 `eval/contexts/cs.json`이다.
 
 `LLM_MODE=mock`의 서버 응답은 입력과 무관한 고정 보고서라 품질 점수가 100점 아래로 나오는 것이 정상이다. 평가 세트는 이와 별개로 고정 응답을 검사한다.
 
