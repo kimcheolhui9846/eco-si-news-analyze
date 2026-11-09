@@ -1,0 +1,7 @@
+[
+  { "tag": "ai", "description": "Artificial Intelligence", "active": true, "category": "field" },
+  { "tag": "databases", "description": "Databases", "active": true, "category": "field" },
+  { "tag": "rust", "description": "Rust programming", "active": true, "category": "languages" },
+  { "tag": "go", "description": "Golang programming", "active": true, "category": "languages" },
+  { "tag": "retired", "description": "old", "active": false, "category": "meta" }
+]
