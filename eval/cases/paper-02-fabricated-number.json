@@ -1,0 +1,13 @@
+{
+  "name": "논문: 본문에 없는 수치를 지어냄",
+  "mode": "paper",
+  "context": "paper",
+  "base": "paper",
+  "override": {
+    "keyResults": [
+      { "claim": "재현율이 크게 올랐다.", "numbers": ["92.7"], "sourceIds": ["S3"] },
+      { "claim": "BM25 대비 재현율이 높다.", "numbers": ["85.3", "88.0"], "sourceIds": ["S3"] }
+    ]
+  },
+  "expect": { "mustFix": ["numbers"], "maxScore": 80 }
+}

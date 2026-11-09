@@ -1,0 +1,16 @@
+{
+  "summary": "TinyMoE는 긴 문서용 희소 검색기로, BEIR에서 BM25보다 높은 재현율을 보고한다 [S0][S3].",
+  "problem": { "statement": "긴 문서에서 밀집 검색기는 비용이 크다.", "sourceIds": ["S1"] },
+  "method": { "overview": "질의마다 전문가 일부만 고르는 선형 라우터를 쓴다.", "keyIdeas": ["희소 라우팅"], "sourceIds": ["S2"] },
+  "experimentalSetup": { "datasets": ["BEIR"], "baselines": ["BM25"], "metrics": ["Recall@10"], "sourceIds": ["S3"] },
+  "keyResults": [
+    { "claim": "BM25 대비 재현율이 높다.", "numbers": ["85.3", "71.2"], "sourceIds": ["S3"] },
+    { "claim": "연산량이 줄었다.", "numbers": ["3.2×"], "sourceIds": ["S3"] }
+  ],
+  "authorStatedLimitations": [],
+  "reviewerConcerns": [
+    { "concern": "평가 데이터셋이 BEIR 하나다.", "why": "다른 도메인 일반화 근거가 없다.", "severity": "중요", "sourceIds": ["S3"] }
+  ],
+  "reproducibility": { "code": "언급 없음", "data": "공개", "note": "BEIR는 공개 벤치마크다.", "sourceIds": ["S3"] },
+  "openQuestions": ["전문가 수를 늘리면 재현율이 어떻게 변하는가?"]
+}
