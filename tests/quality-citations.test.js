@@ -98,3 +98,12 @@ test('newsBriefing이 없으면 건너뛴다', () => {
   assert.deepEqual(out, { summary: '요약[S1]' });
   assert.deepEqual(issues, []);
 });
+
+test('투자 모드: [H100 공급]과 [S1, G7]은 그대로 둔다', () => {
+  const ctx = { sources: SOURCES, idPrefixes: 'SPTFM' };
+  for (const c of [ctx, { sources: SOURCES }]) {
+    const { analysis, issues } = checkCitations({ summary: '[H100 공급] 근거 [S1, G7]' }, c);
+    assert.equal(analysis.summary, '[H100 공급] 근거 [S1, G7]');
+    assert.deepEqual(issues, []);
+  }
+});

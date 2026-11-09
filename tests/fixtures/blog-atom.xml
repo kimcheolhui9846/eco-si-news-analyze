@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<title type="text">NVIDIA Technical Blog</title>
+<entry>
+<title type="html"><![CDATA[Accelerating RAG Pipelines on GPUs]]></title>
+<link rel="alternate" type="text/html" href="https://developer.nvidia.com/blog/accelerating-rag/" />
+<published>2026-11-04T17:00:00Z</published>
+<updated>2026-11-05T10:00:00Z</updated>
+<summary type="html"><![CDATA[<p>How to speed up retrieval &amp; generation.</p>]]></summary>
+</entry>
+<entry>
+<title>Entry without link</title>
+<published>2026-11-03T00:00:00Z</published>
+</entry>
+</feed>

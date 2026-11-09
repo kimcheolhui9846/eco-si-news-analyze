@@ -1,0 +1,5 @@
+{
+  "name": "CS: 투자 권유 표현", "mode": "cs", "context": "cs", "base": "cs",
+  "override": { "summary": "RAG 수혜주로 엔비디아 매수를 고려할 만하다 [P1]." },
+  "expect": { "maxScore": 95, "mustWarn": ["investmentLanguage"] }
+}

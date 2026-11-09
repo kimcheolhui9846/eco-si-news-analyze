@@ -1,0 +1,7 @@
+{
+  "name": "CS: 저장소 없이 코드 공개", "mode": "cs", "context": "cs", "base": "cs",
+  "override": { "keyDevelopments": [
+    { "title": "작은 RAG 서버", "whatIsNew": "HN에서 소개 [H1].", "whyItMatters": "참고 구현.", "evidenceLevel": "코드 공개", "sourceIds": ["H1"] }
+  ] },
+  "expect": { "maxScore": 95, "mustWarn": ["evidence"], "mustNotFlag": ["sourceRefs"] }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "CS: 자료 4건인데 충분", "mode": "cs", "context": "cs", "base": "cs",
+  "contextOverride": { "total": 4 },
+  "expect": { "maxScore": 90, "mustFix": ["coverage"] }
+}

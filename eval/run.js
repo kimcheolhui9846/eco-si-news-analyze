@@ -1,7 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
-import { assessQuality } from '../lib/quality/index.js';
+import { assessQuality, CHECKS } from '../lib/quality/index.js';
+import { CS_CHECKS } from '../lib/quality/cs.js';
 
 // ─── 오프라인 품질 평가 ───
 //
@@ -24,21 +25,27 @@ export function resolveCase(c) {
     : (c.context ?? {});
   const ctx = { ...baseContext, ...(c.contextOverride ?? {}) };
   const baseResponse = c.base ? readJson(join(ROOT, 'responses', `${c.base}.json`)) : c.response;
+  const sources = new Map(Object.entries(ctx.sources ?? {}));
+  const cs = c.mode === 'cs';
   return {
-    context: {
-      sources: new Map(Object.entries(ctx.sources ?? {})),
-      instruments: ctx.instruments ?? [],
-      sector: ctx.sector,
-      has: { ...NO_DATA, ...(ctx.has ?? {}) },
-    },
+    // CS 검사는 출처와 수집 합계만 본다.
+    context: cs
+      ? { sources, total: ctx.total ?? sources.size, idPrefixes: 'PHSBG' }
+      : {
+          sources,
+          instruments: ctx.instruments ?? [],
+          sector: ctx.sector,
+          has: { ...NO_DATA, ...(ctx.has ?? {}) },
+        },
     response: { ...baseResponse, ...(c.override ?? {}) },
     degraded: Boolean(c.degraded),
+    checks: cs ? CS_CHECKS : CHECKS,
   };
 }
 
 export function evaluateCase(c) {
-  const { context, response, degraded } = resolveCase(c);
-  const { quality } = assessQuality(response, context, { degraded });
+  const { context, response, degraded, checks } = resolveCase(c);
+  const { quality } = assessQuality(response, context, { degraded, checks });
   const expect = c.expect ?? {};
   const hit = (check, severity) =>
     quality.issues.some((i) => i.check === check && (!severity || i.severity === severity));
@@ -71,7 +78,7 @@ function main() {
   }
   console.log('\n검사기별 적중');
   for (const [check, row] of [...byCheck].sort()) {
-    console.log(`  ${check.padEnd(13)} 교정 ${row.fixed}  경고 ${row.warning}`);
+    console.log(`  ${check.padEnd(18)} 교정 ${row.fixed}  경고 ${row.warning}`);
   }
   const avg = results.reduce((s, r) => s + r.quality.score, 0) / (results.length || 1);
   const failed = results.filter((r) => !r.pass).length;

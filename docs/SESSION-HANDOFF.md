@@ -9,7 +9,22 @@
 
 ---
 
-## 2026-11-09 B: 분석 품질 게이트 (구현·리뷰·실호출 검증 완료, PR #13 리뷰·병합 대기)
+## 2026-11-09 C1: CS 기술 동향 브리핑 (완료, PR 리뷰·병합 대기)
+
+- 브랜치 `feature/cs-briefing` — `feature/analysis-quality-gate`에서 땄다. PR #13 병합(8b8c397) 뒤 main을 병합해 기준을 main으로 맞췄다.
+- 설계: `docs/superpowers/specs/2026-11-09-cs-briefing-design.md`. `mode: 'cs'` 프로필 구조(분석 실행부 `lib/analysis-runner.js` 추출 + `lib/modes/{invest,cs}.js`), 출처 5종(arXiv cs.*, HN Algolia, 기존 뉴스, 연구 블로그 RSS 9~10개, GitHub 검색), CS 응답 스키마·품질 검사·`CsReportPage`.
+- 후속 C2: 논문 한 편 전문 분석(`mode: 'paper'`). 사용자가 "좀 더 딥하게 세부 분석"으로 요청, "논문 한 편 전문 분석"을 선택.
+- 설계 승인됨. 계획: `docs/superpowers/plans/2026-11-09-cs-briefing.md` (10 태스크: 실행부 추출 → mode 라우팅 → HN·GitHub → 블로그·arXiv CS → 스키마·품질·평가 → CS 프로필 → CS 수집 라우트 → 클라이언트 검색·검토 → 보고서 화면 → 문서). 설계 대비 결정 6개는 계획 머리말에 있다(arXiv CS 별도 파일, NVIDIA Atom, 토스 블로그, `baseMeta`, 라우트가 `mode` 분리, `http.get` 헤더 옵션).
+- 진행 기록은 `.superpowers/sdd/2026-11-09-cs-briefing/progress.md`(실행 시작 후). 완료된 태스크는 다시 보내지 않는다.
+- 서브에이전트 주도로 실행. Task 1~10 모두 태스크 리뷰 통과(e0b08d1). `npm test` 816/815 pass/1 skip, eval 25/0, 클라이언트 빌드 성공. 수정 라운드: Task 4(RSS 블로그 URL 2048자 상한), Task 7(중복 제거 후 3건 미만도 502), Task 10(뉴스 degraded 항목은 `feedId`).
+- 사소한 지적은 원장 `.superpowers/sdd/2026-11-09-cs-briefing/progress.md`의 `minor (deferred)` 줄에 있다. 최종 리뷰가 분류한다.
+- 최종 리뷰(opus): 수정 후 병합 가능 판정 → 수정 4건(f9cdae1 잘못된 200 응답 캐시 금지·degraded, 6e9456a 인용 ID 접두사를 모드별로(투자 SPTFM·CS PHSBG — 투자 출력 불변), 0dc4c8f 하이라이트 P·신호 G만, 69f4731 뉴스 출처 문서) → 재검토 통과. `npm test` 827/826 pass/1 skip, eval 25/0, 빌드 성공(컨트롤러 직접 확인).
+- 남은 사소한 지적은 원장에 있고 최종 리뷰가 병합 전 수정 불필요로 판정했다.
+- 실호출 1회 완료(2026-11-09, gpt-4o, 'retrieval augmented generation', lang en, 실제 $0.011): 커뮤니티 1·뉴스 8·블로그 8·저장소 8, 품질 100점(교정·경고 0), 위조 URL 0, 자료 충분도 '충분'. 확인 토큰 그대로 통과(428 없음).
+  - arXiv는 429 `Rate exceeded`로 degraded("자료를 가져오지 못했습니다"). 단순 질의(`all:battery`)도 429라 IP 단위 제한이며 코드 문제 아님. 후속 개선 후보: arXiv 429에 GitHub처럼 한도 사유 문구.
+  - 실호출은 `.env.example` 값을 명령행 `EXTERNAL_ALLOWLIST`로 넘겨 실행했다(dotenv는 기존 환경변수를 덮지 않는다). 로컬 `.env`는 main의 `.env.example`(17개 호스트)과 같고, CS 호스트 12개는 이 브랜치 병합 후 다시 맞춰야 한다.
+
+## 2026-11-09 B: 분석 품질 게이트 (완료 — PR #13 병합 8b8c397)
 
 - 브랜치 `feature/analysis-quality-gate`, PR #13. PR #12 병합(2026-11-09, 165663a) 뒤 기준을 main으로 바꾸고 main을 병합해 핸드오프 충돌을 풀었다.
 - 설계: `docs/superpowers/specs/2026-11-09-analysis-quality-gate-design.md`, 계획: `docs/superpowers/plans/2026-11-09-analysis-quality-gate.md`.

@@ -8,6 +8,9 @@ export class ApiCallError extends Error {
   }
 }
 
+/** CS 분석 요청의 자료 키. 서버 lib/validation.js의 buildCsAnalyzeSchema와 같다. */
+const CS_ANALYSIS_KEYS = ['newsList', 'papers', 'community', 'blogs', 'repos'];
+
 /**
  * 백엔드 호출을 감싼다.
  *
@@ -59,7 +62,16 @@ export function createApiClient({ fetchImpl = fetch } = {}) {
     session: () => call('/api/auth/session'),
     budget: () => call('/api/budget'),
 
-    collect: ({ query, symbol, assetType, lang, range, maxNews, include }) => {
+    collect: (form) => {
+      // CS 수집은 투자 전용 필드(symbol·range 등)를 보내지 않는다. 서버 스키마가 strict다.
+      if (form.mode === 'cs') {
+        const body = { mode: 'cs', query: form.query };
+        if (form.lang) body.lang = form.lang;
+        if (Array.isArray(form.include) && form.include.length > 0) body.include = form.include;
+        return call('/api/research/collect', { method: 'POST', body });
+      }
+
+      const { query, symbol, assetType, lang, range, maxNews, include } = form;
       // 빈 문자열을 보내면 zod의 min(1)에서 400이 난다. 아예 뺀다.
       const body = { query };
       if (symbol) body.symbol = symbol;
@@ -71,7 +83,18 @@ export function createApiClient({ fetchImpl = fetch } = {}) {
       return call('/api/research/collect', { method: 'POST', body });
     },
 
-    analyze: ({ newsList, instruments, sector, research, experiments, confirmToken }) => {
+    analyze: (payload) => {
+      // CS: 받은 배열을 그대로 되돌려 보낸다. 빈 배열은 넣지 않는다.
+      // 서버 수집 라우트가 같은 규칙으로 cacheKey를 만든다.
+      if (payload.mode === 'cs') {
+        const body = { mode: 'cs' };
+        for (const key of CS_ANALYSIS_KEYS) if (payload[key]?.length) body[key] = payload[key];
+        return call('/api/analyze/news', {
+          method: 'POST', body, headers: { 'X-Confirm-Token': payload.confirmToken },
+        });
+      }
+
+      const { newsList, instruments, sector, research, experiments, confirmToken } = payload;
       // 받은 자료를 그대로 되돌려 보낸다. 서버 lib/instruments.js의 toAnalysisInstruments와
       // 같은 규칙이어야 cacheKey가 일치한다: 시세·재무가 모두 없는 종목은 빼고 series는 지운다.
       // 빈 자료는 필드를 아예 넣지 않는다.

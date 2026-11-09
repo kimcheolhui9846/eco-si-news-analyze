@@ -1,0 +1,9 @@
+{
+  "total_count": 3,
+  "incomplete_results": false,
+  "items": [
+    { "full_name": "example/tiny-rag", "html_url": "https://github.com/example/tiny-rag", "description": "A tiny RAG server in 300 lines", "stargazers_count": 1520, "language": "Python", "license": { "spdx_id": "MIT" }, "pushed_at": "2026-11-06T00:00:00Z", "created_at": "2026-10-20T00:00:00Z" },
+    { "full_name": "lab/rag-bench", "html_url": "https://github.com/lab/rag-bench", "description": null, "stargazers_count": 230, "language": null, "license": { "spdx_id": "NOASSERTION" }, "pushed_at": "2026-11-01T12:00:00Z", "created_at": "2025-03-01T00:00:00Z" },
+    { "full_name": "evil/redirect", "html_url": "https://evil.example.com/evil/redirect", "description": "x", "stargazers_count": 5, "language": "Go", "license": null, "pushed_at": "2026-11-01T00:00:00Z", "created_at": "2026-01-01T00:00:00Z" }
+  ]
+}

@@ -49,5 +49,8 @@ services:
       # Render 대시보드에서 입력한다. 저장소에 넣지 않는다.
       - key: OPENDART_API_KEY
         sync: false
+      # CS 동향의 GitHub 검색 한도를 늘린다. 선택이다. Render 대시보드에서 입력한다.
+      - key: GITHUB_TOKEN
+        sync: false
 
     # PORT는 설정하지 않는다. Render가 주입하고 config.port가 읽는다.

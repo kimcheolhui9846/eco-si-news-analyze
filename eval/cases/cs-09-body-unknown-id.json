@@ -1,0 +1,5 @@
+{
+  "name": "CS: 본문의 없는 출처 ID", "mode": "cs", "context": "cs", "base": "cs",
+  "override": { "whatToWatch": ["후속 벤치마크 [P9]"] },
+  "expect": { "maxScore": 90, "mustFix": ["citations"] }
+}

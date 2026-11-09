@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -14,21 +14,16 @@ import { loadConfig } from './lib/config.js';
 import { createLogger } from './lib/logger.js';
 import { createSessionStore, safeCompare } from './lib/session.js';
 import {
-  buildAnalyzeSchema, buildResearchSchema, formatZodError, normalizeInclude,
+  buildResearchSchema, buildCsResearchSchema, formatZodError, normalizeInclude, normalizeCsInclude,
 } from './lib/validation.js';
-import { normalizeNewsList } from './lib/normalize.js';
-import { SYSTEM_PROMPT, buildUserPrompt, estimateTokens } from './lib/prompt.js';
 import {
-  createLlmClient, createMockLlmClient, callWithResilience, createCircuitBreaker,
+  createLlmClient, createMockLlmClient, createCircuitBreaker,
 } from './lib/llm.js';
 import {
-  stripFabricatedUrls, parseAnalysis, buildSources, buildExtraSources, collectUrlWhitelist,
-} from './lib/postprocess.js';
-import {
-  createTtlCache, createSemaphore, createInflightMap, hashRequest,
+  createTtlCache, createSemaphore, createInflightMap,
   makeLoginLimiter, makeAnalyzeLimiter, makeSessionLimiter, makeResearchLimiter,
 } from './lib/cost-defense.js';
-import { createBudgetTracker, estimateCostUsd } from './lib/budget.js';
+import { createBudgetTracker } from './lib/budget.js';
 import { createHttpClient } from './lib/http.js';
 import { createRssNewsProvider } from './lib/providers/news.js';
 import { createMarketProvider } from './lib/providers/market.js';
@@ -36,14 +31,21 @@ import { createFinancialProvider } from './lib/providers/financial.js';
 import { createResearchProvider } from './lib/providers/papers.js';
 import { createKciProvider } from './lib/providers/kci.js';
 import { createExperimentProvider } from './lib/providers/experiments.js';
-import { assignResearchIds, assignExperimentIds } from './lib/sections.js';
-import { assessQuality, buildQualityContext } from './lib/quality/index.js';
+import { createHackerNewsProvider } from './lib/providers/hackernews.js';
+import { createGithubProvider } from './lib/providers/github.js';
+import { createTechBlogProvider } from './lib/providers/tech-blogs.js';
+import { createArxivCsProvider } from './lib/providers/arxiv-cs.js';
+import { CS_MAX } from './lib/providers/cs-common.js';
 import { loadDirectory } from './lib/providers/directory.js';
 import { createResolver } from './lib/resolve.js';
 import { createDartFinancialProvider } from './lib/providers/dart-financial.js';
 import {
-  collectInstruments, toAnalysisInstruments, relevanceName, UNRESOLVED_REASON,
+  collectInstruments, toAnalysisInstruments, UNRESOLVED_REASON,
 } from './lib/instruments.js';
+import { createAnalysisRunner } from './lib/analysis-runner.js';
+import { getProfile, splitMode } from './lib/modes/index.js';
+import { investProfile } from './lib/modes/invest.js';
+import { csProfile } from './lib/modes/cs.js';
 
 // 기존 테스트가 '../server.js'에서 import하던 심볼을 그대로 유지한다.
 export { ApiError } from './lib/errors.js';
@@ -116,7 +118,11 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
   const logger = createLogger(config);
 
   // 주입된 llm이 있으면 그것을 쓴다. 없으면 모드에 따라 실제/mock 클라이언트를 만든다.
-  const llmClient = llm ?? (config.llmMode === 'mock' ? createMockLlmClient() : createLlmClient(config));
+  // 주입된 llm이 있으면 그것을 쓴다. 없으면 모드에 따라 실제/mock 클라이언트를 만든다.
+  // mock은 응답 스키마 이름으로 투자·CS 보고서를 고른다.
+  const llmClient = llm ?? (config.llmMode === 'mock'
+    ? createMockLlmClient({ [csProfile.jsonSchema.name]: csProfile.mockReport })
+    : createLlmClient(config));
   const breaker = createCircuitBreaker({
     threshold: config.breakerThreshold,
     cooldownMs: config.breakerCooldownMs,
@@ -254,6 +260,12 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     ttlMs: config.confirmTokenTtlMs, maxEntries: 200, clock: now,
   });
 
+  // 견적·분석 실행부. 수집 라우트도 견적과 확인 토큰을 여기서 받는다.
+  const runner = createAnalysisRunner({
+    config, now, llmClient, breaker, analysisCache, analysisSemaphore, inflight,
+    budget, confirmTokens, sessions,
+  });
+
   app.get('/api/budget', requireAuth, (req, res) => {
     res.json(budget.snapshot());
   });
@@ -329,9 +341,97 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     makeBreaker: makeProviderBreaker,
   });
 
+  // ─── CS 기술 동향 수집기 ───
+  // 출처마다 캐시를 따로 둔다. 한 출처의 항목이 다른 출처의 캐시를 밀어내지 않는다.
+  const csCache = () => createTtlCache({ ttlMs: config.csCacheTtlMs, maxEntries: 100, clock: now });
+  const csDeps = () => ({ http: httpClient, cache: csCache(), clock: now, makeBreaker: makeProviderBreaker });
+  const arxivCsProvider = createArxivCsProvider(csDeps());
+  const hnProvider = createHackerNewsProvider(csDeps());
+  const blogProvider = createTechBlogProvider(csDeps());
+  const githubProvider = createGithubProvider({ ...csDeps(), token: config.githubToken });
+
   // ─── 수집 엔드포인트 ───
 
   const researchSchema = buildResearchSchema(config);
+
+  const csResearchSchema = buildCsResearchSchema();
+
+  /** CS 수집. 선택한 출처만 부르고, 하나가 실패해도 나머지로 진행한다. */
+  const collectCs = async (req, res, body) => {
+    const parsed = csResearchSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
+    }
+
+    const { query, lang = 'ko' } = parsed.data;
+    const included = normalizeCsInclude(parsed.data.include);
+    const wanted = (scope) => included.includes(scope);
+
+    const [papers, community, news, blogs, repos] = await Promise.all([
+      wanted('papers') ? arxivCsProvider.search({ query, limit: CS_MAX.papers }) : null,
+      wanted('community') ? hnProvider.search({ query, limit: CS_MAX.community }) : null,
+      wanted('news') ? newsProvider.search({ query, lang, limit: CS_MAX.news }) : null,
+      wanted('blogs') ? blogProvider.search({ query, limit: CS_MAX.blogs }) : null,
+      wanted('repos') ? githubProvider.search({ query, limit: CS_MAX.repos }) : null,
+    ]);
+
+    const degraded = [
+      ['papers', papers], ['community', community], ['news', news], ['blogs', blogs], ['repos', repos],
+    ].flatMap(([provider, result]) => (result?.degraded ?? []).map((d) => ({ provider, ...d })));
+
+    // 분석 요청과 같은 키 이름으로 싣는다. 클라이언트는 비어 있지 않은 배열만 되돌려 보낸다.
+    const lists = {
+      papers: papers?.items ?? [],
+      community: community?.items ?? [],
+      newsList: (news?.items ?? []).map((i) => ({
+        title: i.title, content: i.content, source: i.source,
+        url: i.url, publishedAt: i.publishedAt, contentKind: i.contentKind,
+      })),
+      blogs: blogs?.items ?? [],
+      repos: repos?.items ?? [],
+    };
+
+    const rawTotal = Object.values(lists).reduce((sum, list) => sum + list.length, 0);
+    const tooFew = () => {
+      req.log.warn({ degraded, included, rawTotal }, 'CS 수집 결과가 3건 미만이다');
+      return new ApiError(502, 'COLLECTION_FAILED',
+        'CS 동향 분석에 필요한 자료를 3건 이상 모으지 못했습니다. 검색어를 영어로 바꾸거나 범위를 넓혀 다시 시도해 주세요.');
+    };
+    if (rawTotal < 3) throw tooFew();
+
+    // 견적은 분석과 같은 프로필 함수로 만든다. cacheKey가 일치해야 확인 토큰이 통한다.
+    // 중복 제거 뒤 3건 미만이면 normalize가 422를 던진다. 수집 단계에서는 502로 통일한다.
+    let normalized;
+    try {
+      normalized = csProfile.normalize(lists);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'INSUFFICIENT_DATA') throw tooFew();
+      throw err;
+    }
+    const { collectedAt, estimatedInputTokens, estimatedCostUsd, cacheKey } =
+      runner.quote(csProfile, normalized);
+
+    res.json({
+      requestId: req.requestId,
+      mode: 'cs',
+      ...lists,
+      collected: {
+        collectedAt,
+        included,
+        degraded,
+        counts: csProfile.baseMeta(normalized).counts,
+        total: normalized.total,
+        duplicatesRemoved: normalized.duplicatesRemoved,
+      },
+      estimate: {
+        estimatedInputTokens,
+        assumedOutputTokens: config.assumedOutputTokens,
+        estimatedCostUsd: Number(estimatedCostUsd.toFixed(6)),
+        budget: budget.snapshot(),
+      },
+      ...runner.issueConfirmToken(cacheKey, req.session.token),
+    });
+  };
 
   app.post(
     '/api/research/collect',
@@ -339,7 +439,10 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     jsonBody,
     requireAuth,
     async (req, res) => {
-      const parsed = researchSchema.safeParse(req.body);
+      const { mode, body } = splitMode(req.body);
+      // 모르는 모드는 getProfile이 400으로 거부한다.
+      if (getProfile(mode).mode === 'cs') return collectCs(req, res, body);
+      const parsed = researchSchema.safeParse(body);
       if (!parsed.success) {
         throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
       }
@@ -421,31 +524,13 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
       const instruments = analysisInstruments.length > 0 ? analysisInstruments : undefined;
       const sector = resolution.kind === 'sector' ? resolution.sector : undefined;
 
-      // 견적을 내려면 분석과 똑같이 정규화·조립해야 한다.
-      // cacheKey가 일치해야 확인 토큰이 통하기 때문이다.
-      const { items, duplicatesRemoved } =
-        normalizeNewsList(newsList, { assetName: relevanceName(analysisInstruments) });
-      const collectedAt = new Date(now.now()).toISOString();
-      const userPrompt = buildUserPrompt({
-        items, instruments, sector, collectedAt,
-        research: assignResearchIds(research ?? []),
-        experiments: assignExperimentIds(experiments ?? []),
-      });
-
-      const estimatedInputTokens = estimateTokens(SYSTEM_PROMPT) + estimateTokens(userPrompt);
-      const estimatedCostUsd = estimateCostUsd(
-        { inputTokens: estimatedInputTokens, outputTokens: config.assumedOutputTokens },
-        { inputPer1M: config.priceInputPer1M, outputPer1M: config.priceOutputPer1M },
-      );
-
-      const cacheKey = hashRequest({
-        items, instruments, sector, analysisPeriod: undefined,
-        research, experiments,
-        model: config.openaiModel,
-      });
-
-      const confirmToken = `ct_${randomBytes(24).toString('base64url')}`;
-      confirmTokens.set(confirmToken, { cacheKey, sessionToken: req.session.token });
+      // 견적은 분석과 같은 프로필 함수로 만든다. cacheKey가 일치해야 확인 토큰이 통한다.
+      const normalized = investProfile.normalize({ newsList, instruments, sector, research, experiments });
+      const { items, duplicatesRemoved } = normalized;
+      const { collectedAt, estimatedInputTokens, estimatedCostUsd, cacheKey } =
+        runner.quote(investProfile, normalized);
+      const { confirmToken, confirmTokenExpiresAt } =
+        runner.issueConfirmToken(cacheKey, req.session.token);
 
       res.json({
         requestId: req.requestId,
@@ -479,114 +564,20 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
           budget: budget.snapshot(),
         },
         confirmToken,
-        confirmTokenExpiresAt: new Date(now.now() + config.confirmTokenTtlMs).toISOString(),
+        confirmTokenExpiresAt,
       });
     },
   );
 
   // ─── 분석 엔드포인트 ───
 
-  const analyzeSchema = buildAnalyzeSchema(config);
-
-  /**
-   * 검증부터 프롬프트 조립·비용 추정까지, 견적과 실행이 똑같이 밟는 단계.
-   * 두 경로가 같은 계산을 하므로 견적과 실제 요청이 어긋날 수 없다.
-   */
-  const prepare = (req) => {
-    const parsed = analyzeSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
-    }
-
-    const { newsList, instruments, sector, analysisPeriod, research, experiments } = parsed.data;
-    const { items, duplicatesRemoved } =
-      normalizeNewsList(newsList, { assetName: relevanceName(instruments) });
-
-    if (items.length === 0) {
-      throw new ApiError(422, 'INSUFFICIENT_DATA', '중복 제거 후 분석할 자료가 남지 않았습니다.');
-    }
-
-    // 출처 ID는 순서로 결정된다. collect와 analyze가 같은 배열을 보므로 같은 ID가 나온다.
-    const researchItems = assignResearchIds(research ?? []);
-    const experimentItems = assignExperimentIds(experiments ?? []);
-
-    // 논문·실험·재무 URL을 넣지 않으면 진짜 출처가 위조로 판정돼 지워진다.
-    const urlWhitelist = collectUrlWhitelist({
-      items, research: researchItems, experiments: experimentItems, instruments,
-    });
-
-    const collectedAt = new Date(now.now()).toISOString();
-    const userPrompt = buildUserPrompt({
-      items, instruments, sector, collectedAt, analysisPeriod,
-      research: researchItems, experiments: experimentItems,
-    });
-
-    // 프롬프트 길이와 토큰 예산을 LLM 호출 전에 확인한다.
-    const estimatedInputTokens = estimateTokens(SYSTEM_PROMPT) + estimateTokens(userPrompt);
-    if (userPrompt.length > config.maxPromptChars || estimatedInputTokens > config.maxInputTokens) {
-      throw new ApiError(413, 'INPUT_TOO_LARGE', '분석 요청이 너무 큽니다. 기사 수나 본문 길이를 줄여 주세요.');
-    }
-
-    const estimatedCostUsd = estimateCostUsd(
-      { inputTokens: estimatedInputTokens, outputTokens: config.assumedOutputTokens },
-      { inputPer1M: config.priceInputPer1M, outputPer1M: config.priceOutputPer1M },
-    );
-
-    return {
-      items, instruments, sector, analysisPeriod, duplicatesRemoved, urlWhitelist,
-      researchItems, experimentItems,
-      collectedAt, userPrompt, estimatedInputTokens, estimatedCostUsd,
-      // 캐시 키는 정규화된 자료 기준이다. 순서만 다른 요청도 같은 키가 된다.
-      // 새 자료를 넣지 않으면 작은 견적으로 큰 요청을 실행할 수 있다.
-      cacheKey: hashRequest({
-        items, instruments, sector, analysisPeriod,
-        research, experiments,
-        model: config.openaiModel,
-      }),
-    };
-  };
-
   /**
    * 견적. LLM을 호출하지 않으므로 비용이 들지 않는다.
    * 예산이 부족하면 여기서 막아 사용자가 확인 단계로 넘어가지 못하게 한다.
    */
   app.post('/api/analyze/estimate', makeAnalyzeLimiter(config), jsonBody, requireAuth, (req, res) => {
-    const prepared = prepare(req);
-    const cached = Boolean(analysisCache.get(prepared.cacheKey));
-
-    // 캐시 히트는 LLM을 부르지 않으므로 예산을 쓰지 않는다.
-    if (!cached) {
-      const verdict = budget.canSpend(prepared.estimatedCostUsd);
-      if (!verdict.ok) {
-        req.log.warn({ reason: verdict.reason }, '예산 한도로 분석을 거부했다');
-        throw new ApiError(429, 'BUDGET_EXCEEDED',
-          verdict.reason === 'DAILY_CALL_LIMIT'
-            ? '오늘 사용할 수 있는 분석 횟수를 모두 썼습니다.'
-            : '이번 달 비용 한도에 도달했습니다.');
-      }
-    }
-
-    const confirmToken = `ct_${randomBytes(24).toString('base64url')}`;
-    confirmTokens.set(confirmToken, {
-      cacheKey: prepared.cacheKey,
-      sessionToken: req.session.token,
-    });
-
-    res.json({
-      estimatedInputTokens: prepared.estimatedInputTokens,
-      assumedOutputTokens: config.assumedOutputTokens,
-      estimatedCostUsd: Number(prepared.estimatedCostUsd.toFixed(6)),
-      sourceCount: prepared.items.length,
-      duplicatesRemoved: prepared.duplicatesRemoved,
-      cached,
-      budget: budget.snapshot(),
-      confirmToken,
-      confirmTokenExpiresAt: new Date(now.now() + config.confirmTokenTtlMs).toISOString(),
-      model: config.openaiModel,
-      note: cached
-        ? '이 요청은 캐시된 결과가 있어 추가 비용이 발생하지 않습니다.'
-        : '실제 비용은 응답 길이에 따라 추정치와 달라질 수 있습니다.',
-    });
+    const { mode, body } = splitMode(req.body);
+    res.json(runner.estimate(getProfile(mode), body, req));
   });
 
   app.post(
@@ -596,149 +587,8 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     requireAuth,                  // [3] 인증 — 여기를 통과해야만 LLM 경로에 진입한다
     makeSessionLimiter(config),   // [4] 세션 한도 — req.session이 필요하므로 인증 뒤
     async (req, res) => {
-      const {
-        items, duplicatesRemoved, urlWhitelist, collectedAt,
-        instruments, sector, researchItems, experimentItems,
-        userPrompt, estimatedInputTokens, estimatedCostUsd, cacheKey,
-      } = prepare(req);
-
-      const sources = [
-        ...buildSources(items, collectedAt),
-        ...buildExtraSources({
-          research: researchItems, experiments: experimentItems, instruments, collectedAt,
-        }),
-      ];
-      // 품질 검사 기준. 서버가 만든 출처 목록과 종목만 쓴다.
-      const qualityContext = buildQualityContext({ sources, instruments, sector });
-      const baseMeta = {
-        collectedAt,
-        sourceCount: items.length,
-        researchCount: researchItems.length,
-        experimentCount: experimentItems.length,
-        duplicatesRemoved,
-        estimatedInputTokens,
-      };
-
-      // 캐시 히트는 LLM을 부르지 않는다. 비용이 0이므로 확인도 예산 차감도 필요 없다.
-      const cached = analysisCache.get(cacheKey);
-      if (cached) {
-        sessions.touch(req.session);
-        return res.json({
-          requestId: req.requestId,
-          analysis: cached.analysis,
-          sources,
-          meta: { ...baseMeta, ...cached.meta, cached: true, actualCostUsd: 0, budget: budget.snapshot() },
-        });
-      }
-
-      // 여기부터는 실제 비용이 발생한다. 사용자의 명시적 승인을 요구한다.
-      const confirmToken = req.get('x-confirm-token');
-      const grant = confirmToken ? confirmTokens.get(confirmToken) : undefined;
-
-      // 토큰은 이 세션의 것이어야 하고, 견적을 낸 그 요청 내용이어야 한다.
-      // 그렇지 않으면 작은 요청으로 견적을 받고 큰 요청을 실행할 수 있다.
-      if (!grant || grant.sessionToken !== req.session.token || grant.cacheKey !== cacheKey) {
-        throw new ApiError(428, 'CONFIRMATION_REQUIRED',
-          '먼저 /api/analyze/estimate로 예상 비용을 확인한 뒤, 발급된 확인 토큰을 X-Confirm-Token 헤더에 담아 다시 요청해 주세요.');
-      }
-      confirmTokens.delete(confirmToken);   // 일회용
-
-      const verdict = budget.canSpend(estimatedCostUsd);
-      if (!verdict.ok) {
-        req.log.warn({ reason: verdict.reason }, '예산 한도로 분석을 거부했다');
-        throw new ApiError(429, 'BUDGET_EXCEEDED',
-          verdict.reason === 'DAILY_CALL_LIMIT'
-            ? '오늘 사용할 수 있는 분석 횟수를 모두 썼습니다.'
-            : '이번 달 비용 한도에 도달했습니다.');
-      }
-
-      const release = analysisSemaphore.tryAcquire();
-      if (!release) {
-        throw new ApiError(429, 'TOO_MANY_CONCURRENT', '동시 분석 요청이 많습니다. 잠시 후 다시 시도해 주세요.');
-      }
-
-      let produced;
-      try {
-        // 같은 키로 동시에 들어온 요청은 하나의 LLM 호출을 공유한다.
-        produced = await inflight.run(cacheKey, async () => {
-          const call = (useJsonSchema) => callWithResilience(
-            llmClient,
-            { system: SYSTEM_PROMPT, user: userPrompt, useJsonSchema },
-            { config, breaker, clock: now, log: req.log },
-          );
-
-          let outputTokens = 0;
-          // 구조화 출력 2회 시도 → Markdown 폴백 1회.
-          for (let attempt = 0; attempt < 2; attempt += 1) {
-            const result = await call(true);
-            outputTokens += estimateTokens(result.content);
-            const analysis = parseAnalysis(result.content);
-            if (analysis) return { analysis, model: result.model, degraded: false, outputTokens };
-            req.log.warn({ attempt: attempt + 1 }, '구조화 응답 파싱 실패');
-          }
-
-          const fallback = await call(false);
-          outputTokens += estimateTokens(fallback.content);
-          if (!fallback.content?.trim()) {
-            throw new ApiError(502, 'PARSE_FAILED', '분석 결과를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
-          }
-          return {
-            analysis: { report: fallback.content },
-            model: fallback.model, degraded: true, outputTokens,
-          };
-        });
-      } finally {
-        release();
-      }
-
-      // 실제 응답 길이로 비용을 다시 계산해 기록한다. 견적은 가정치일 뿐이다.
-      const actualCostUsd = estimateCostUsd(
-        { inputTokens: estimatedInputTokens, outputTokens: produced.outputTokens },
-        { inputPer1M: config.priceInputPer1M, outputPer1M: config.priceOutputPer1M },
-      );
-      budget.record({ costUsd: actualCostUsd });
-
-      // 결정적 품질 게이트. 출처 ID·자료 유무·면책 문구·종목 비교를 교정하거나 경고한다.
-      const assessed = assessQuality(produced.analysis, qualityContext, { degraded: produced.degraded });
-      const { quality } = assessed;
-      // 로그에는 개수와 검사 이름만 남긴다. 모델 출력 본문은 남기지 않는다.
-      req.log.info({
-        qualityScore: quality.score, fixed: quality.fixed, warnings: quality.warnings,
-        checks: [...new Set(quality.issues.map((i) => i.check))],
-      }, '분석 품질 검사');
-
-      // LLM이 지어낸 URL을 제거한다. 프롬프트 지시만으로는 보장되지 않는다.
-      const { value: analysis, removed: fabricatedUrlsRemoved } =
-        stripFabricatedUrls(assessed.analysis, urlWhitelist);
-
-      if (fabricatedUrlsRemoved > 0) {
-        req.log.warn({ fabricatedUrlsRemoved }, '출처에 없는 URL을 제거했다');
-      }
-
-      analysisCache.set(cacheKey, {
-        analysis,
-        meta: { fabricatedUrlsRemoved, quality, degraded: produced.degraded, model: produced.model },
-      });
-
-      // 여기가 세션을 연장하는 유일한 지점이다.
-      // 위의 어떤 실패 경로도 여기에 도달하지 못한다.
-      sessions.touch(req.session);
-
-      return res.json({
-        requestId: req.requestId,
-        analysis,
-        sources,
-        meta: {
-          ...baseMeta,
-          fabricatedUrlsRemoved,
-          quality,
-          cached: false,
-          degraded: produced.degraded,
-          model: produced.model,
-          actualCostUsd: Number(actualCostUsd.toFixed(6)),
-          budget: budget.snapshot(),
-        },
-      });
+      const { mode, body } = splitMode(req.body);
+      res.json(await runner.run(getProfile(mode), body, req));
     },
   );
 

@@ -1,0 +1,11 @@
+{
+  "sources": {
+    "P1": { "title": "Sparse Mixture-of-Experts for Long-Context Retrieval", "source": "arXiv (cs.CL)", "publishedAt": "2026-11-02T17:00:00.000Z", "type": "paper" },
+    "P2": { "title": "Benchmarking Retrieval-Augmented Generation under Distribution Shift", "source": "arXiv (cs.LG)", "publishedAt": "2026-10-28T12:00:00.000Z", "type": "paper" },
+    "H1": { "title": "Show HN: A tiny RAG server in 300 lines", "source": "Hacker News", "publishedAt": "2026-11-05T08:00:00.000Z", "type": "community" },
+    "S1": { "title": "검색 증강 생성(RAG) 도입 기업 늘어", "source": "전자신문", "publishedAt": "2026-11-04T01:00:00.000Z", "type": "news" },
+    "B1": { "title": "Improving retrieval quality with hybrid search", "source": "Hugging Face", "publishedAt": "2026-11-01T00:00:00.000Z", "type": "blog" },
+    "G1": { "title": "example/tiny-rag", "source": "GitHub", "publishedAt": "2026-11-06T00:00:00.000Z", "type": "repo" }
+  },
+  "total": 6
+}
