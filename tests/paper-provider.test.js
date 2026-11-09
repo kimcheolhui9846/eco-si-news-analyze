@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseArxivId, parseArxivHtml } from '../lib/providers/arxiv-html.js';
+import { parseArxivId, parseArxivHtml, createArxivHtmlProvider, PAPER_MAX_BYTES } from '../lib/providers/arxiv-html.js';
+import { createTtlCache } from '../lib/cost-defense.js';
 import { MalformedUpstream } from '../lib/providers/cs-common.js';
 
 const SHORT = readFileSync(new URL('./fixtures/arxiv-html-short.html', import.meta.url), 'utf8');
@@ -109,4 +110,67 @@ test('parseArxivHtml: 문단과 표 셀의 NBSP(&nbsp;)는 일반 공백으로 �
   assert.ok(text.includes('alpha beta Filler'), text.slice(0, 80));
   assert.ok(text.includes('gamma delta\teps'), text);
   assert.ok(!text.includes(' '));
+});
+
+const breaker = () => {
+  const state = { failures: 0, successes: 0, open: false };
+  return Object.assign(state, {
+    canPass: () => !state.open,
+    recordSuccess: () => { state.successes += 1; },
+    recordFailure: () => { state.failures += 1; },
+  });
+};
+const makeProvider = (get) => {
+  const calls = [];
+  const b = breaker();
+  const http = { get: async (url, opts) => { calls.push({ url, opts }); return get(url, opts); } };
+  const cache = createTtlCache({ ttlMs: 60_000, maxEntries: 10, clock: { now: () => 0 } });
+  return { provider: createArxivHtmlProvider({ http, cache, makeBreaker: () => b }), calls, b };
+};
+const httpError = (status) => Object.assign(new Error('x'), { upstreamStatus: status });
+
+test('fetchPaper: arxiv.org/html을 8MB 상한으로 부르고 결과를 캐시한다', async () => {
+  const { provider, calls } = makeProvider(async () => ({ status: 200, text: SHORT }));
+  const a = await provider.fetchPaper('2611.00001');
+  const b = await provider.fetchPaper('2611.00001');
+  assert.equal(a.title, 'Tiny MoE Retrieval');
+  assert.deepEqual(b, a);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://arxiv.org/html/2611.00001');
+  assert.equal(calls[0].opts.maxBytes, PAPER_MAX_BYTES);
+});
+
+test('fetchPaper: 404는 422 FULLTEXT_UNAVAILABLE, 캐시하지 않는다', async () => {
+  const { provider, calls, b } = makeProvider(async () => { throw httpError(404); });
+  for (let i = 0; i < 2; i += 1) {
+    await assert.rejects(() => provider.fetchPaper('2401.99999'), (e) => e.status === 422
+      && e.code === 'FULLTEXT_UNAVAILABLE'
+      && e.message === '이 논문은 arXiv HTML 판이 없어 전문 분석을 할 수 없습니다.');
+  }
+  assert.equal(calls.length, 2);
+  assert.equal(b.failures, 0);
+});
+
+test('fetchPaper: 본문 없는 200 응답도 422이고 캐시하지 않는다', async () => {
+  const { provider, calls } = makeProvider(async () => ({ status: 200, text: '<html><body>No HTML</body></html>' }));
+  await assert.rejects(() => provider.fetchPaper('hep-th/9901001'), (e) => e.code === 'FULLTEXT_UNAVAILABLE');
+  await assert.rejects(() => provider.fetchPaper('hep-th/9901001'), (e) => e.code === 'FULLTEXT_UNAVAILABLE');
+  assert.equal(calls.length, 2);
+});
+
+test('fetchPaper: 그 밖의 실패는 502 COLLECTION_FAILED, 차단기에 실패를 센다', async () => {
+  for (const err of [httpError(500), httpError(429), new Error('network')]) {
+    const { provider, b } = makeProvider(async () => { throw err; });
+    await assert.rejects(() => provider.fetchPaper('2611.00001'), (e) => e.status === 502
+      && e.code === 'COLLECTION_FAILED'
+      && e.message === 'arXiv에서 논문 본문을 가져오지 못했습니다. 잠시 뒤 다시 시도해 주세요.');
+    assert.equal(b.failures, 1);
+  }
+});
+
+test('fetchPaper: 차단기가 열려 있으면 부르지 않고 502', async () => {
+  const { provider, calls, b } = makeProvider(async () => ({ status: 200, text: SHORT }));
+  b.open = true;
+  await assert.rejects(() => provider.fetchPaper('2611.00001'), (e) => e.code === 'COLLECTION_FAILED');
+  assert.equal(calls.length, 0);
 });
