@@ -40,6 +40,7 @@ import {
 import { createAnalysisRunner } from './lib/analysis-runner.js';
 import { getProfile, splitMode } from './lib/modes/index.js';
 import { investProfile } from './lib/modes/invest.js';
+import { csProfile } from './lib/modes/cs.js';
 
 // 기존 테스트가 '../server.js'에서 import하던 심볼을 그대로 유지한다.
 export { ApiError } from './lib/errors.js';
@@ -112,7 +113,11 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
   const logger = createLogger(config);
 
   // 주입된 llm이 있으면 그것을 쓴다. 없으면 모드에 따라 실제/mock 클라이언트를 만든다.
-  const llmClient = llm ?? (config.llmMode === 'mock' ? createMockLlmClient() : createLlmClient(config));
+  // 주입된 llm이 있으면 그것을 쓴다. 없으면 모드에 따라 실제/mock 클라이언트를 만든다.
+  // mock은 응답 스키마 이름으로 투자·CS 보고서를 고른다.
+  const llmClient = llm ?? (config.llmMode === 'mock'
+    ? createMockLlmClient({ [csProfile.jsonSchema.name]: csProfile.mockReport })
+    : createLlmClient(config));
   const breaker = createCircuitBreaker({
     threshold: config.breakerThreshold,
     cooldownMs: config.breakerCooldownMs,
