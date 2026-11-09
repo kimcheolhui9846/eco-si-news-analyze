@@ -97,3 +97,16 @@ test('parseArxivHtml: 제목이나 장이 없거나 본문이 너무 짧으면 M
     assert.throws(() => parseArxivHtml(html, { id: '2611.00001' }), MalformedUpstream);
   }
 });
+
+test('parseArxivHtml: 문단과 표 셀의 NBSP(&nbsp;)는 일반 공백으로 접힌다', () => {
+  const filler = 'Filler words keep the body above the minimum length threshold for parsing. '.repeat(5);
+  const html = '<html><body><h1 class="ltx_title ltx_title_document">T</h1>'
+    + '<section id="S1" class="ltx_section"><h2 class="ltx_title ltx_title_section">1 Intro</h2>'
+    + `<div class="ltx_para"><p class="ltx_p">alpha&nbsp;beta ${filler}</p></div>`
+    + '<table><tr><td>gamma&nbsp;delta</td><td>eps</td></tr></table>'
+    + '</section></body></html>';
+  const text = parseArxivHtml(html, { id: '2611.00001' }).sections[0].text;
+  assert.ok(text.includes('alpha beta Filler'), text.slice(0, 80));
+  assert.ok(text.includes('gamma delta\teps'), text);
+  assert.ok(!text.includes(' '));
+});
