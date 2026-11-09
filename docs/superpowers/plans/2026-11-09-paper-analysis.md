@@ -289,7 +289,7 @@ const SKIP_CLASSES = ['ltx_note', 'ltx_tag_note'];
 const BLOCK_TAGS = new Set(['P', 'DIV', 'SECTION', 'FIGURE', 'TABLE', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'THEAD', 'TBODY']);
 const DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'IMG', 'SVG', 'svg', 'NAV', 'BUTTON']);
 
-const collapse = (s) => s.replace(/[ \t \r\n]+/g, ' ').trim();
+const collapse = (s) => s.replace(/[ \t\u00a0\r\n]+/g, ' ').trim();
 const hasClass = (el, c) => Boolean(el.classList?.contains(c));
 const innerText = (node) => {
   const out = [];
@@ -332,7 +332,7 @@ function toText(node, out) {
 
 // 줄마다 공백을 접고 빈 줄을 버린다. 표의 탭은 남긴다.
 const tidy = (s) => s.split('\n')
-  .map((line) => line.split('\t').map((cell) => cell.replace(/[  ]+/g, ' ').trim()).join('\t').trim())
+  .map((line) => line.split('\t').map((cell) => cell.replace(/[ \u00a0]+/g, ' ').trim()).join('\t').trim())
   .filter(Boolean)
   .join('\n');
 
