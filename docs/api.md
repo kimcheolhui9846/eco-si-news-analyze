@@ -807,7 +807,10 @@ curl -X POST http://localhost:3000/api/analyze/news \
   "collected": {
     "collectedAt": "2026-11-09T01:00:00.000Z",
     "included": ["papers", "community", "news", "blogs", "repos"],
-    "degraded": [ { "provider": "repos", "source": "GitHub", "reason": "GitHub 검색 한도를 넘었습니다." } ],
+    "degraded": [
+      { "provider": "repos", "source": "GitHub", "reason": "GitHub 검색 한도를 넘었습니다." },
+      { "provider": "news", "feedId": "google-news-en", "reason": "자료를 가져오지 못했습니다." }
+    ],
     "counts": { "papers": 8, "community": 10, "news": 8, "blogs": 3, "repos": 0 },
     "total": 29,
     "duplicatesRemoved": 0
@@ -825,7 +828,7 @@ curl -X POST http://localhost:3000/api/analyze/news \
 
 - 자료 배열의 키 이름(`papers`·`community`·`newsList`·`blogs`·`repos`)은 **분석 요청과 같다.** 클라이언트는 비어 있지 않은 배열만 분석 요청에 되돌려 보낸다(빈 배열은 보내지 않는다. 그래야 견적과 분석의 `cacheKey`가 일치해 확인 토큰이 통한다).
 - `collected.counts`는 뉴스 중복 제거 뒤의 개수이고 `total`은 그 합계다.
-- `degraded[]`는 `{ provider, source, reason }`이다. `provider`는 `papers`·`community`·`news`·`blogs`·`repos` 중 하나다. 일부 출처가 실패해도 나머지로 진행한다. 실패 사유는 `자료를 가져오지 못했습니다.` 또는 `일시적으로 사용할 수 없습니다.`(회로 차단기)이고, GitHub이 403·429로 답하면 `GitHub 검색 한도를 넘었습니다.`다. 상류의 원본 오류 메시지는 담지 않는다.
+- `degraded[]`의 `provider`는 `papers`·`community`·`news`·`blogs`·`repos` 중 하나다. 나머지 필드는 출처마다 다르다. `papers`·`community`·`blogs`·`repos`는 `{ provider, source, reason }`, `news`는 피드 단위라 `{ provider: 'news', feedId, reason }`이다. 일부 출처가 실패해도 나머지로 진행한다. 실패 사유는 `자료를 가져오지 못했습니다.` 또는 `일시적으로 사용할 수 없습니다.`(회로 차단기)이고, GitHub이 403·429로 답하면 `GitHub 검색 한도를 넘었습니다.`다. 상류의 원본 오류 메시지는 담지 않는다.
 
 #### 오류
 
