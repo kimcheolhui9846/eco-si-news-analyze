@@ -335,6 +335,54 @@ test('Lobsters 태그 고르기: 정확 일치·별칭·최대 2개·없는 별�
   assert.deepEqual(pickLobstersTags('kubernetes operators', TAGS), []);
 });
 
+test('Lobsters 태그 별칭: node.js는 nodejs, crypto는 cryptography, cryptography는 직접 일치', () => {
+  const tags = ['nodejs', 'javascript', 'cryptography', 'security'];
+  assert.deepEqual(pickLobstersTags('node', tags), ['nodejs']);
+  assert.deepEqual(pickLobstersTags('node.js', tags), ['nodejs']);
+  assert.deepEqual(pickLobstersTags('typescript', tags), ['javascript']);
+  assert.deepEqual(pickLobstersTags('crypto', tags), ['cryptography']);
+  assert.deepEqual(pickLobstersTags('cryptography', tags), ['cryptography']);
+  assert.deepEqual(pickLobstersTags('crypto', ['security']), []);
+});
+
+test('Lobsters provider: format 같은 비주제 카테고리 태그는 고르지 않는다', async () => {
+  const http = lobstersHttp({
+    '/tags.json': fixture('lobsters-tags.json'),
+    '/t/ai.json': fixture('lobsters-ai.json'),
+  });
+  const r = await createLobstersProvider(deps(http)).search({ query: 'video ai diffusion', limit: 10 });
+  assert.deepEqual(r.degraded, []);
+  assert.ok(r.items.length > 0);
+  const feeds = http.calls.map((c) => c.url).filter((u) => u.includes('/t/'));
+  assert.equal(feeds.length, 1);
+  assert.ok(feeds[0].endsWith('/t/ai.json'));
+});
+
+test('Lobsters provider: 태그 피드에서 질의 단어가 든 글을 점수보다 먼저 둔다', async () => {
+  const http = lobstersHttp({
+    '/tags.json': fixture('lobsters-tags.json'),
+    '/t/ai.json': fixture('lobsters-ai.json'),
+  });
+  const r = await createLobstersProvider(deps(http)).search({ query: 'llm', limit: 10 });
+  assert.equal(r.items[0].title, 'Local LLM inference on a Mac mini');
+  assert.equal(r.items[1].title, 'Retrieval for code search');
+});
+
+test('Lobsters provider: 최신 글 거르기는 통단어 일치(rag는 storage에 안 걸린다)', async () => {
+  const body = JSON.stringify([{
+    short_id: 'sto111', created_at: '2023-11-12T10:00:00.000Z',
+    title: 'Storage engines', url: 'https://example.com/s', score: 5, comment_count: 1,
+    description_plain: '', tags: ['storage'], comments_url: 'https://lobste.rs/s/sto111/storage_engines',
+  }, {
+    short_id: 'rag111', created_at: '2023-11-12T10:00:00.000Z',
+    title: 'A RAG pipeline (v2)', url: 'https://example.com/r', score: 4, comment_count: 1,
+    description_plain: '', tags: ['x'], comments_url: 'https://lobste.rs/s/rag111/rag_pipeline',
+  }]);
+  const http = lobstersHttp({ '/tags.json': new Error('down'), '/newest.json': body });
+  const r = await createLobstersProvider(deps(http)).search({ query: 'rag', limit: 10 });
+  assert.deepEqual(r.items.map((i) => i.title), ['A RAG pipeline (v2)']);
+});
+
 test('Lobsters 글 파싱: 링크 없는 글은 토론 링크, 잘못된 short_id는 버림', () => {
   const items = parseLobstersStories(fixture('lobsters-ai.json'));
   assert.equal(items.length, 3);
@@ -366,7 +414,7 @@ test('Lobsters provider: 태그 피드를 30일·점수순으로, 태그 목록�
 
   const r = await lob.search({ query: 'llm inference', limit: 10 });
   assert.deepEqual(r.degraded, []);
-  assert.deepEqual(r.items.map((i) => i.title), ['Retrieval for code search', 'Local LLM inference on a Mac mini']);
+  assert.deepEqual(r.items.map((i) => i.title), ['Local LLM inference on a Mac mini', 'Retrieval for code search']);
 
   await lob.search({ query: 'rag', limit: 10 });
   assert.equal(http.calls.filter((c) => c.url.endsWith('/tags.json')).length, 1);

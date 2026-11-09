@@ -3,5 +3,8 @@
   { "tag": "databases", "description": "Databases", "active": true, "category": "field" },
   { "tag": "rust", "description": "Rust programming", "active": true, "category": "languages" },
   { "tag": "go", "description": "Golang programming", "active": true, "category": "languages" },
+  { "tag": "video", "description": "Videos", "active": true, "category": "format" },
+  { "tag": "nodejs", "description": "Node.js", "active": true, "category": "languages" },
+  { "tag": "cryptography", "description": "Cryptography", "active": true, "category": "field" },
   { "tag": "retired", "description": "old", "active": false, "category": "meta" }
 ]
