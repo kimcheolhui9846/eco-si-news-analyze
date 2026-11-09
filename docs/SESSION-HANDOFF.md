@@ -3,19 +3,32 @@
 > 작업이 중단되어도 이어서 진행할 수 있도록 유지하는 문서다.
 > **매 태스크를 커밋할 때마다 갱신한다.** 이 문서만 읽으면 다음 사람이 바로 이어받을 수 있어야 한다.
 
-- **최종 갱신**: 2026-11-09 (CS 출처 확장: Stack Overflow·Lobsters, 최종 리뷰 수정 반영)
-- **현재 브랜치**: `feature/cs-qa-sources` (main 6e3cd04 기반, PR 전)
+- **최종 갱신**: 2026-11-09 (C2 논문 전문 분석 PR #16 병합, 운영 확인 대기)
+- **현재 브랜치**: `main` (C2 논문 전문 분석 PR #16 병합)
 - **저장소**: https://github.com/kimcheolhui9846/eco-si-news-analyze (PRIVATE)
 
 ---
 
-## 2026-11-09 CS 출처 추가: Stack Overflow·Lobsters (구현·리뷰·실호출 완료, PR 전)
+## 2026-11-09 C2: 논문 한 편 전문 분석 (PR #16 병합, 운영 확인 대기)
+
+- 브랜치 `feature/cs-paper-analysis` — main(58e976c)에서 땄다. 설계 `docs/superpowers/specs/2026-11-09-paper-analysis-design.md`, 계획 `docs/superpowers/plans/2026-11-09-paper-analysis.md`.
+- `mode: 'paper'`: arXiv HTML 판(`arxiv.org/html/<id>`)을 `node-html-parser`로 장 단위 파싱(초록 S0, 장 S1…, 참고문헌·부록 제외) → 25,000토큰 예산으로 자름 → 비판적 읽기 보고서. 수치 대조 품질 검사(`numbers`).
+- 새 허용 호스트 `arxiv.org` — 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에도 더해야 한다.
+- 검증: `npm test` 943 / 942 pass / 0 fail / 1 skip, `npm run eval` 케이스 30개 · 실패 0개 · 평균 점수 92.2, 빌드 성공 (`npm run build:client`).
+- 최종 리뷰 수정(2026-11-09): 파서가 분석 스키마 한도(저자 100·200자, 제목 500, 장 제목 300, 앵커 패턴)에 맞춰 자르고, 수집이 분석 스키마를 먼저 통과시켜 실패 시 502 `COLLECTION_FAILED`; 25k토큰급 본문 여유 테스트; CS 보고서에서 전문 분석 수집이 실패해도 보고서 유지; `docs/api.md` 정정.
+- 로컬 실호출 1회(2026-11-09, 2401.04088 Mixtral of Experts): 수집 200(장 8개 모두 full, 견적 5,994토큰 $0.035), 분석 200, 품질 100점(교정·경고 0), degraded 아님, 실제 $0.020, 출처 8개 모두 section. 확인 토큰 그대로 통과(428 없음).
+- PR #16으로 main에 병합. 남은 일: 운영 확인(Render 배포 후 논문 한 편, 약 $0.02, 승인 필요).
+
+---
+
+## 2026-11-09 CS 출처 추가: Stack Overflow·Lobsters (PR #15 병합 58e976c, 운영 확인 완료)
 
 - 브랜치 `feature/cs-qa-sources` — main(6e3cd04)에서 땄다. 설계 `docs/superpowers/specs/2026-11-09-cs-qa-sources-design.md`, 계획 `docs/superpowers/plans/2026-11-09-cs-qa-sources.md`.
 - Lobsters는 커뮤니티(H)에 HN과 6:4로 합친다(검색 API가 없어 태그 피드·최신 글을 거른다). Stack Overflow는 새 범위 `questions`(Q), 보고서 섹션 `developerPainPoints`. 인용 접두사 `PHSBGQ`.
 - 새 환경변수 `STACKEXCHANGE_KEY`(선택). 새 허용 호스트 `api.stackexchange.com`, `lobste.rs` — 로컬 `.env`의 `EXTERNAL_ALLOWLIST`에도 더해야 한다.
 - 검증: `npm test` 876 / 875 pass / 0 fail / 1 skip, `npm run eval` 케이스 27개 · 실패 0개 · 평균 점수 92.8, 빌드 성공 (`npm run build:client`). 최종 리뷰 수정(Lobsters 태그 주제 한정·통단어 일치, API 문서·README 보강) 반영.
 - 로컬 실호출 1회(2026-11-09, gpt-4o, 'llm inference', 허용목록은 `.env.example` 값을 명령행으로): 논문 8·커뮤니티 10(HN 6·Lobsters 4)·질문 1·뉴스 8·블로그 8·저장소 8, 품질 100점(교정·경고 0), 위조 URL 0, 실제 $0.022. `developerPainPoints` 1개([Q1]). SO는 이 질의에서 90일 내 질문이 1건뿐이었다.
+- 운영 확인(2026-11-09, PR #15 병합 58e976c 후, Render): 'llm inference' 논문 8·커뮤니티 10(HN 6·Lobsters 4)·질문 1·뉴스 8·블로그 8·저장소 8, 품질 100점(교정·경고 0), 위조 URL 0, 자료 충분도 '충분', 실제 $0.022. 운영은 코드 기본 허용목록이라 새 호스트 설정이 필요 없었다. `developerPainPoints` 1개([Q1]). 이번 답변은 `openSourceSignals`가 비었다(저장소 8건은 수집됨, 모델이 고르지 않음).
 - C1 운영 확인(2026-11-09, PR #14 병합 6e3cd04 후): 'retrieval augmented generation' 논문 8·커뮤니티 1·뉴스 8·블로그 8·저장소 8, 품질 100점, 실제 $0.020. 운영에서는 arXiv가 정상(로컬 IP만 429).
 
 ## 2026-11-09 C1: CS 기술 동향 브리핑 (완료, PR 리뷰·병합 대기)

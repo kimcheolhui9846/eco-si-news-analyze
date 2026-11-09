@@ -5,7 +5,9 @@ import { messageForError } from './api/errors.js';
 import LoginPage from './pages/LoginPage.jsx';
 import SearchPage from './pages/SearchPage.jsx';
 import ReviewPage from './pages/ReviewPage.jsx';
+import PaperReviewPage from './pages/PaperReviewPage.jsx';
 import CsReviewPage from './pages/CsReviewPage.jsx';
+import PaperReportPage from './pages/PaperReportPage.jsx';
 import CsReportPage from './pages/CsReportPage.jsx';
 import ReportPage from './pages/ReportPage.jsx';
 import ProgressIndicator from './components/ProgressIndicator.jsx';
@@ -28,7 +30,8 @@ export default function App({ api = defaultApi }) {
     api.budget().then(setBudget).catch(() => setBudget(null));
   }, [step, api]);
 
-  const search = async (form) => {
+  // failStep: 수집이 실패했을 때 돌아갈 화면. 없으면 오류 매핑의 nextStep을 따른다.
+  const search = async (form, { failStep } = {}) => {
     setStep('collecting');
     setError(null);
     try {
@@ -39,7 +42,7 @@ export default function App({ api = defaultApi }) {
       const mapped = messageForError(err);
       setError({ message: mapped.message, requestId: err?.requestId });
       // nextStep이 없어도 수집 중 화면에 머물면 안 된다.
-      setStep(mapped.nextStep ?? 'search');
+      setStep(failStep ?? mapped.nextStep ?? 'search');
     }
   };
 
@@ -66,6 +69,13 @@ export default function App({ api = defaultApi }) {
     setStep('search');
   };
 
+  // CS 보고서의 논문에서 바로 전문 분석으로. 수집만 하고, 비용은 검토 화면에서 승인한다.
+  const deepAnalyze = (arxiv) => {
+    setMode('paper');
+    // CS 보고서는 수집이 성공해 검토 화면으로 넘어갈 때까지 지키고, 실패하면 그 보고서로 돌아온다.
+    search({ mode: 'paper', arxiv }, { failStep: 'report' });
+  };
+
   if (step === 'login') {
     return <LoginPage api={api} onSuccess={() => { setError(null); setStep('search'); }} />;
   }
@@ -83,34 +93,31 @@ export default function App({ api = defaultApi }) {
 
       {/* analyzing일 때도 ReviewPage를 계속 렌더링한다.
           분석이 실패하면 그 자리에서 재시도할 수 있고 화면이 깜빡이지 않는다. */}
-      {(step === 'review' || step === 'analyzing') && (collected?.mode === 'cs' ? (
-        <CsReviewPage
-          collected={collected}
-          onApprove={approve}
-          onBack={newSearch}
-          busy={step === 'analyzing'}
-        />
-      ) : (
-        <ReviewPage
-          collected={collected}
-          onApprove={approve}
-          onBack={newSearch}
-          busy={step === 'analyzing'}
-        />
-      ))}
+      {(step === 'review' || step === 'analyzing') && (() => {
+        const props = { collected, onApprove: approve, onBack: newSearch, busy: step === 'analyzing' };
+        if (collected?.mode === 'paper') return <PaperReviewPage {...props} />;
+        if (collected?.mode === 'cs') return <CsReviewPage {...props} />;
+        return <ReviewPage {...props} />;
+      })()}
 
-      {step === 'report' && (collected?.mode === 'cs' ? (
-        <CsReportPage report={report} onNewSearch={newSearch} />
-      ) : (
-        <ReportPage
-          report={report}
-          instruments={collected?.instruments}
-          research={collected?.research}
-          experiments={collected?.experiments}
-          collectedMeta={collected?.collected}
-          onNewSearch={newSearch}
-        />
-      ))}
+      {step === 'report' && (() => {
+        if (collected?.mode === 'paper') {
+          return <PaperReportPage report={report} paper={collected.paper} onNewSearch={newSearch} />;
+        }
+        if (collected?.mode === 'cs') {
+          return <CsReportPage report={report} onNewSearch={newSearch} onDeepAnalyze={deepAnalyze} />;
+        }
+        return (
+          <ReportPage
+            report={report}
+            instruments={collected?.instruments}
+            research={collected?.research}
+            experiments={collected?.experiments}
+            collectedMeta={collected?.collected}
+            onNewSearch={newSearch}
+          />
+        );
+      })()}
     </>
   );
 }

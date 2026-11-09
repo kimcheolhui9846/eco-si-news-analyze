@@ -39,3 +39,11 @@ test('3xx 이상 실패에 상태 코드를 남기고 메시지는 바꾸지 않
       && e.message === '외부 자료를 가져오지 못했습니다.',
   );
 });
+
+test('호출별 maxBytes가 기본 상한을 대신한다', async () => {
+  const big = 'x'.repeat(20_000);
+  await assert.rejects(() => client(stubFetch({ body: big })).get('https://example.com/x'),
+    (e) => e.message === '외부 자료가 너무 큽니다.');
+  const res = await client(stubFetch({ body: big })).get('https://example.com/x', { maxBytes: 50_000 });
+  assert.equal(res.text.length, 20_000);
+});

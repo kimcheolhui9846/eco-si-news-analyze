@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="en">
+<head><meta charset="UTF-8"><title>Tiny MoE Retrieval</title><style>.ltx_p{color:red}</style></head>
+<body>
+<nav class="ltx_page_navbar"><a href="#S1">1 Introduction</a></nav>
+<div class="ltx_page_main"><div class="ltx_page_content">
+<article class="ltx_document">
+<h1 class="ltx_title ltx_title_document">Tiny MoE Retrieval</h1>
+<div class="ltx_authors">
+<span class="ltx_creator ltx_role_author"><span class="ltx_personname">Ada Lovelace
+</span></span><span class="ltx_author_before">  </span><span class="ltx_creator ltx_role_author"><span class="ltx_personname">Alan Turing
+</span><span class="ltx_author_notes"><span class="ltx_contact ltx_role_affiliation">Somewhere Lab</span></span></span>
+</div>
+<div id="abstract1" class="ltx_abstract"><h6 class="ltx_title ltx_title_abstract">Abstract</h6>
+<p class="ltx_p">We introduce TinyMoE, a sparse retriever for long documents. It reaches 85.3% recall@10 on BEIR while routing each query to a small set of experts.</p>
+</div>
+<section id="S1" class="ltx_section">
+<h2 class="ltx_title ltx_title_section"><span class="ltx_tag ltx_tag_section">1 </span>Introduction</h2>
+<div class="ltx_para"><p class="ltx_p">Dense retrievers are costly to run on long documents <cite class="ltx_cite">[<a href="#bib.bib1" class="ltx_ref">1</a>]</cite>. We route each query to <math alttext="k=2" class="ltx_Math"><semantics><mi>k</mi></semantics></math> experts and keep the rest idle.<span class="ltx_note ltx_role_footnote"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content">Footnote text that must not appear.</span></span></span></p></div>
+</section>
+<section id="S2" class="ltx_section">
+<h2 class="ltx_title ltx_title_section"><span class="ltx_tag ltx_tag_section">2 </span>Method</h2>
+<div class="ltx_para"><p class="ltx_p">A router selects experts for every query and the selected experts score candidate passages.</p></div>
+<section id="S2.SS1" class="ltx_subsection">
+<h3 class="ltx_title ltx_title_subsection"><span class="ltx_tag ltx_tag_subsection">2.1 </span>Router</h3>
+<div class="ltx_para"><p class="ltx_p">The router is a linear layer with 1,024 hidden units trained with a load balancing loss.</p></div>
+</section>
+</section>
+<section id="S3" class="ltx_section">
+<h2 class="ltx_title ltx_title_section"><span class="ltx_tag ltx_tag_section">3 </span>Experiments</h2>
+<figure id="S3.T1" class="ltx_table">
+<table class="ltx_tabular"><thead class="ltx_thead"><tr class="ltx_tr"><th class="ltx_td ltx_th">Model</th><th class="ltx_td ltx_th">Recall@10</th></tr></thead>
+<tbody class="ltx_tbody"><tr class="ltx_tr"><td class="ltx_td">BM25</td><td class="ltx_td">71.2</td></tr>
+<tr class="ltx_tr"><td class="ltx_td">TinyMoE</td><td class="ltx_td"><math alttext="85.3" class="ltx_Math"><mn>85.3</mn></math></td></tr></tbody></table>
+<figcaption class="ltx_caption"><span class="ltx_tag ltx_tag_table">Table 1: </span>Recall on BEIR.</figcaption>
+</figure>
+<div class="ltx_para"><p class="ltx_p">TinyMoE improves recall by 14.1 points over BM25 while using 3.2× less compute.</p></div>
+<figure id="S3.F1" class="ltx_figure"><img src="x.png" alt="Refer to caption"><figcaption class="ltx_caption"><span class="ltx_tag ltx_tag_figure">Figure 1: </span>Latency per query.</figcaption></figure>
+</section>
+<section id="Sx1" class="ltx_section">
+<h2 class="ltx_title ltx_title_section">Acknowledgements</h2>
+<div class="ltx_para"><p class="ltx_p">We thank the reviewers.</p></div>
+</section>
+<section id="bib" class="ltx_bibliography"><h2 class="ltx_title ltx_title_bibliography">References</h2>
+<ul class="ltx_biblist"><li id="bib.bib1" class="ltx_bibitem">Robertson. BM25. 2009.</li></ul></section>
+<section id="A1" class="ltx_appendix"><h2 class="ltx_title ltx_title_appendix">Appendix A Extra results</h2>
+<div class="ltx_para"><p class="ltx_p">Appendix-only number 99.9.</p></div></section>
+</article></div></div>
+<script>var leaked = 'script text';</script>
+</body></html>

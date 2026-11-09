@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import { getProfile, splitMode } from '../lib/modes/index.js';
 import { investProfile } from '../lib/modes/invest.js';
+import { paperProfile } from '../lib/modes/paper.js';
 import { createMockLlmClient } from '../server.js';
 import { bootstrap, makeClock, makeMockLlm, TEST_PASSWORD } from './helpers.js';
 
@@ -87,4 +88,9 @@ test('수집: 모르는 mode는 400', async () => {
     .set('Authorization', `Bearer ${token}`).send({ mode: 'stock', query: 'x' });
   assert.equal(res.status, 400);
   assert.equal(res.body.error.code, 'INVALID_REQUEST');
+});
+
+test("mode 'paper'는 논문 프로필이다", () => {
+  assert.equal(getProfile('paper'), paperProfile);
+  assert.equal(paperProfile.mode, 'paper');
 });

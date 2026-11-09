@@ -1,0 +1,9 @@
+{
+  "sections": [
+    { "id": "S0", "anchor": "abstract1", "heading": "Abstract", "text": "We introduce TinyMoE, a sparse retriever. It reaches 85.3% recall@10 on BEIR." },
+    { "id": "S1", "anchor": "S1", "heading": "1 Introduction", "text": "Dense retrievers are costly to run on long documents." },
+    { "id": "S2", "anchor": "S2", "heading": "2 Method", "text": "The router is a linear layer with 1,024 hidden units." },
+    { "id": "S3", "anchor": "S3", "heading": "3 Experiments", "text": "Model\tRecall@10\nBM25\t71.2\nTinyMoE\t$85.3$\nTinyMoE improves recall by 14.1 points over BM25 while using 3.2× less compute." }
+  ],
+  "truncated": []
+}

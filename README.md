@@ -39,8 +39,15 @@
 수집 → 검토(비용 승인) → 보고서 흐름이며, 일곱 출처를 모은다: arXiv 논문, Hacker News, Lobsters(커뮤니티, 태그 피드), Stack Overflow(개발자 질문, 최근 90일),
 뉴스, 기업·연구 블로그, GitHub 저장소. 보고서는 주요 동향(근거 수준 표시), 논문 하이라이트,
 커뮤니티 반응, 개발자들이 막히는 지점, 오픈소스 신호, 미해결 질문, 지켜볼 것, 자료 충분도로 구성된다.
-**검색어는 영어를 권장한다**(arXiv·Hacker News·GitHub가 영어 중심이다). 논문은 초록만 분석하며
-**논문 전문 분석은 준비 중이다.** 요청·응답 형태는 [`docs/api.md`](docs/api.md)의 "CS 기술 동향 브리핑"을 본다.
+**검색어는 영어를 권장한다**(arXiv·Hacker News·GitHub가 영어 중심이다). CS 브리핑은 논문을 초록만 읽는다.
+요청·응답 형태는 [`docs/api.md`](docs/api.md)의 "CS 기술 동향 브리핑"을 본다.
+
+### 논문 전문 분석
+
+검색 화면의 **"논문 전문" 탭**에서 arXiv ID나 링크를 넣거나, CS 브리핑의 논문에서 '전문 분석'을 누르면 본문을 장 단위로 읽어
+문제·방법·실험·결과(수치 대조)·한계·약점·재현성을 정리한다. 논문 한 편 약 $0.07~0.10.
+본문은 arXiv HTML 판(`arxiv.org/html/<id>`)이고 참고문헌·부록은 뺀다. 약 25,000토큰을 넘으면 뒤쪽 장부터 자르고 보고서에 표시한다.
+HTML 판이 없는 논문은 분석할 수 없다(`FULLTEXT_UNAVAILABLE`). 요청·응답 형태는 [`docs/api.md`](docs/api.md)의 "논문 전문 분석"을 본다.
 
 ---
 
@@ -436,6 +443,9 @@ CS 기술 동향 브리핑은 다음 호스트를 더 쓴다: `hn.algolia.com`, 
 `developer.nvidia.com`, `aws.amazon.com`, `engineering.fb.com`, `bair.berkeley.edu`, `toss.tech`.
 코드 기본 허용목록에는 들어 있다. **로컬 `.env`에 `EXTERNAL_ALLOWLIST`를 직접 둔 경우 이 호스트를 더해야 한다**
 (없으면 해당 출처가 요청 자체가 나가지 않아 수집에서 빠진다). `.env.example`에 전체 목록이 있다.
+
+논문 전문 분석은 호스트 `arxiv.org`를 더 쓴다(HTML 판). 코드 기본 허용목록에는 들어 있다.
+**로컬 `.env`의 `EXTERNAL_ALLOWLIST`를 직접 고쳤다면 `arxiv.org`를 더해야 한다.**
 
 ### 피드 추가·변경
 

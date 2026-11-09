@@ -86,3 +86,9 @@ test('OpenDART 키는 선택이고 허용 목록에 OpenDART 도메인이 있다
   assert.ok(config.externalAllowlist.includes('opendart.fss.or.kr'));
   assert.equal(loadConfig({ ...BASE_ENV, OPENDART_API_KEY: 'k' }).opendartApiKey, 'k');
 });
+
+test('기본 허용목록에 arxiv.org가 있다(논문 전문 분석)', () => {
+  // 로컬 .env의 EXTERNAL_ALLOWLIST가 기본값을 가리지 않도록 지운다.
+  const config = loadConfig({ MY_SECRET_PASSWORD: 'x'.repeat(16), EXTERNAL_ALLOWLIST: undefined });
+  assert.ok(config.externalAllowlist.includes('arxiv.org'));
+});

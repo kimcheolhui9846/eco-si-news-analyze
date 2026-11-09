@@ -1,0 +1,7 @@
+{
+  "name": "논문: 깨끗한 비판적 읽기",
+  "mode": "paper",
+  "context": "paper",
+  "base": "paper",
+  "expect": { "minScore": 100, "mustNotFlag": ["numbers", "sectionRefs", "citations"] }
+}

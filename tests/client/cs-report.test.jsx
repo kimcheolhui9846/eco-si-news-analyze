@@ -47,9 +47,8 @@ test('CS 보고서: 요약·동향·논문 하이라이트·신호·질문·출�
   assert.ok(screen.getByText('하이브리드 검색 도입'));
   assert.ok(screen.getByRole('heading', { name: /출처/ }));
 
-  const deep = screen.getAllByRole('button', { name: '전문 분석 (준비 중)' });
-  assert.equal(deep.length, 1);
-  assert.equal(deep[0].disabled, true);
+  // onDeepAnalyze가 없으면 전문 분석 버튼을 그리지 않는다(동작은 paper-report.test.jsx가 확인한다).
+  assert.equal(screen.queryByRole('button', { name: /전문 분석/ }), null);
 
   const headings = screen.getAllByRole('heading').map((h) => h.textContent);
   const order = ['핵심 요약', '주요 동향', '논문 하이라이트', '커뮤니티 반응', '개발자들이 막히는 지점', '오픈소스 신호', '미해결 질문', '지켜볼 것'];
@@ -69,7 +68,7 @@ test('CS 보고서: 빈 자료는 자료 없음으로 표시한다', () => {
   }} onNewSearch={() => {}} />);
 
   assert.ok(screen.getAllByText('자료 없음').length >= 7);
-  assert.equal(screen.queryByRole('button', { name: '전문 분석 (준비 중)' }), null);
+  assert.equal(screen.queryByRole('button', { name: /전문 분석/ }), null);
 });
 
 test('CS 보고서: 모델 문자열을 HTML로 해석하지 않는다', () => {

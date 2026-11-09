@@ -1,0 +1,13 @@
+{
+  "name": "논문: 길이 제한으로 빠진 장을 인용",
+  "mode": "paper",
+  "context": "paper",
+  "base": "paper",
+  "contextOverride": { "truncated": [{ "id": "S4", "heading": "4 Ablation", "partial": false }] },
+  "override": {
+    "reviewerConcerns": [
+      { "concern": "절제 실험이 약하다.", "why": "빠진 장을 근거로 함", "severity": "경미", "sourceIds": ["S4"] }
+    ]
+  },
+  "expect": { "mustFix": ["sectionRefs"], "mustWarn": ["coverage"] }
+}

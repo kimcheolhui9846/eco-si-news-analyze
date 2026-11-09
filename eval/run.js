@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 import { assessQuality, CHECKS } from '../lib/quality/index.js';
 import { CS_CHECKS, CS_ID_PREFIXES } from '../lib/quality/cs.js';
+import { PAPER_CHECKS, buildPaperQualityContext } from '../lib/quality/paper.js';
 
 // ─── 오프라인 품질 평가 ───
 //
@@ -25,6 +26,20 @@ export function resolveCase(c) {
     : (c.context ?? {});
   const ctx = { ...baseContext, ...(c.contextOverride ?? {}) };
   const baseResponse = c.base ? readJson(join(ROOT, 'responses', `${c.base}.json`)) : c.response;
+  // 논문 케이스는 출처 대신 장 본문을 저장한다. 서버와 같은 함수로 검사 기준을 만든다.
+  if (c.mode === 'paper') {
+    const sections = ctx.sections ?? [];
+    return {
+      context: buildPaperQualityContext({
+        sources: sections.map((s) => ({ sourceId: s.id, title: s.heading, source: 'arXiv eval', type: 'section' })),
+        sections,
+        truncated: ctx.truncated ?? [],
+      }),
+      response: { ...baseResponse, ...(c.override ?? {}) },
+      degraded: Boolean(c.degraded),
+      checks: PAPER_CHECKS,
+    };
+  }
   const sources = new Map(Object.entries(ctx.sources ?? {}));
   const cs = c.mode === 'cs';
   return {
