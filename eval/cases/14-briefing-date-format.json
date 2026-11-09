@@ -1,0 +1,34 @@
+{
+  "name": "브리핑 날짜 형식만 다름",
+  "context": "single",
+  "base": "single",
+  "override": {
+    "newsBriefing": [
+      {
+        "sourceId": "S1",
+        "title": "엔비디아 3분기 실적 발표",
+        "source": "연합뉴스",
+        "publishedAt": "2026-08-30",
+        "keyPoints": "데이터센터 부문 매출 증가",
+        "marketImplication": "AI 가속기 수요가 실적에 반영되고 있음을 시사한다",
+        "needsVerification": "부문별 이익률은 기사에 없다"
+      },
+      {
+        "sourceId": "S2",
+        "title": "데이터센터 수요 확대 전망",
+        "source": "전자신문",
+        "publishedAt": "2026-08-31",
+        "keyPoints": "클라우드 업체 투자 확대 전망",
+        "marketImplication": "수요가 이어질 가능성을 보여 준다",
+        "needsVerification": "전망의 근거 수치가 제목만 확보됐다"
+      }
+    ]
+  },
+  "expect": {
+    "mustNotFlag": [
+      "citations"
+    ],
+    "minScore": 100,
+    "maxScore": 100
+  }
+}

@@ -37,6 +37,7 @@ import { createResearchProvider } from './lib/providers/papers.js';
 import { createKciProvider } from './lib/providers/kci.js';
 import { createExperimentProvider } from './lib/providers/experiments.js';
 import { assignResearchIds, assignExperimentIds } from './lib/sections.js';
+import { assessQuality, buildQualityContext } from './lib/quality/index.js';
 import { loadDirectory } from './lib/providers/directory.js';
 import { createResolver } from './lib/resolve.js';
 import { createDartFinancialProvider } from './lib/providers/dart-financial.js';
@@ -532,7 +533,7 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     );
 
     return {
-      items, instruments, analysisPeriod, duplicatesRemoved, urlWhitelist,
+      items, instruments, sector, analysisPeriod, duplicatesRemoved, urlWhitelist,
       researchItems, experimentItems,
       collectedAt, userPrompt, estimatedInputTokens, estimatedCostUsd,
       // 캐시 키는 정규화된 자료 기준이다. 순서만 다른 요청도 같은 키가 된다.
@@ -597,7 +598,7 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     async (req, res) => {
       const {
         items, duplicatesRemoved, urlWhitelist, collectedAt,
-        instruments, researchItems, experimentItems,
+        instruments, sector, researchItems, experimentItems,
         userPrompt, estimatedInputTokens, estimatedCostUsd, cacheKey,
       } = prepare(req);
 
@@ -607,6 +608,8 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
           research: researchItems, experiments: experimentItems, instruments, collectedAt,
         }),
       ];
+      // 품질 검사 기준. 서버가 만든 출처 목록과 종목만 쓴다.
+      const qualityContext = buildQualityContext({ sources, instruments, sector });
       const baseMeta = {
         collectedAt,
         sourceCount: items.length,
@@ -695,9 +698,18 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
       );
       budget.record({ costUsd: actualCostUsd });
 
+      // 결정적 품질 게이트. 출처 ID·자료 유무·면책 문구·종목 비교를 교정하거나 경고한다.
+      const assessed = assessQuality(produced.analysis, qualityContext, { degraded: produced.degraded });
+      const { quality } = assessed;
+      // 로그에는 개수와 검사 이름만 남긴다. 모델 출력 본문은 남기지 않는다.
+      req.log.info({
+        qualityScore: quality.score, fixed: quality.fixed, warnings: quality.warnings,
+        checks: [...new Set(quality.issues.map((i) => i.check))],
+      }, '분석 품질 검사');
+
       // LLM이 지어낸 URL을 제거한다. 프롬프트 지시만으로는 보장되지 않는다.
       const { value: analysis, removed: fabricatedUrlsRemoved } =
-        stripFabricatedUrls(produced.analysis, urlWhitelist);
+        stripFabricatedUrls(assessed.analysis, urlWhitelist);
 
       if (fabricatedUrlsRemoved > 0) {
         req.log.warn({ fabricatedUrlsRemoved }, '출처에 없는 URL을 제거했다');
@@ -705,7 +717,7 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
 
       analysisCache.set(cacheKey, {
         analysis,
-        meta: { fabricatedUrlsRemoved, degraded: produced.degraded, model: produced.model },
+        meta: { fabricatedUrlsRemoved, quality, degraded: produced.degraded, model: produced.model },
       });
 
       // 여기가 세션을 연장하는 유일한 지점이다.
@@ -719,6 +731,7 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
         meta: {
           ...baseMeta,
           fabricatedUrlsRemoved,
+          quality,
           cached: false,
           degraded: produced.degraded,
           model: produced.model,

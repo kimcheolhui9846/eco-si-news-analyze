@@ -1,0 +1,8 @@
+{ "name": "없는 출처의 브리핑 항목", "context": "single", "base": "single",
+  "override": { "newsBriefing": [
+    { "sourceId": "S1", "title": "엔비디아 3분기 실적 발표", "source": "연합뉴스", "publishedAt": "2026-08-30T09:00:00.000Z",
+      "keyPoints": "매출 증가", "marketImplication": "의미", "needsVerification": "확인" },
+    { "sourceId": "S9", "title": "존재하지 않는 기사", "source": "가짜일보", "publishedAt": "2026-09-01T00:00:00.000Z",
+      "keyPoints": "지어낸 내용", "marketImplication": "의미", "needsVerification": "확인" }
+  ] },
+  "expect": { "mustFix": ["citations"], "maxScore": 90 } }

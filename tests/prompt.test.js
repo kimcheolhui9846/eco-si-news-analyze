@@ -359,6 +359,19 @@ test('buildUserPrompt: 분야 묶음 안내는 데이터 구획 밖에 둔다', 
   const afterData = user.slice(user.indexOf(DATA_END));
   assert.ok(afterData.includes("'반도체' 분야 대표 종목 2개"));
   assert.ok(afterData.includes('종목 간 비교'));
+  assert.ok(afterData.includes('instrumentComparison'));
+});
+
+test('buildUserPrompt: 분야가 아니어도 종목이 2개 이상이면 비교를 요구한다', () => {
+  const user = buildUserPrompt({
+    items: ITEMS, collectedAt: '2026-11-08T00:00:00Z', instruments: [sectorInst('A'), sectorInst('B')],
+  });
+  const afterData = user.slice(user.indexOf(DATA_END));
+  assert.ok(afterData.includes('instrumentComparison'));
+  assert.ok(afterData.includes('종목 간 비교'));
+  assert.ok(!user.includes('분야 묶음:'));
+  const single = buildUserPrompt({ items: ITEMS, collectedAt: '2026-11-08T00:00:00Z', instruments: [sectorInst('A')] });
+  assert.ok(!single.includes('종목 간 비교'));
 });
 
 test('buildUserPrompt: 분야 묶음이라도 종목이 2개 미만이면 비교를 요구하지 않는다', () => {
@@ -373,4 +386,10 @@ test('buildUserPrompt: 종목이 없으면 시장·재무가 자료 부족', () 
   const user = buildUserPrompt({ items: ITEMS, collectedAt: '2026-11-08T00:00:00Z' });
   assert.ok(user.includes('자료 부족 — 시장 데이터가 제공되지 않았습니다'));
   assert.ok(user.includes('자료 부족 — 이번 요청에 재무지표가 포함되지 않았습니다'));
+});
+
+test('시스템 프롬프트에 종목 비교 규칙과 시장 데이터 인용 규칙이 있다', () => {
+  assert.ok(SYSTEM_PROMPT.includes('instrumentComparison'));
+  assert.ok(SYSTEM_PROMPT.includes('종목이 하나 이하면 빈 배열'));
+  assert.ok(SYSTEM_PROMPT.includes('시장 데이터에는 출처 ID가 없습니다'));
 });

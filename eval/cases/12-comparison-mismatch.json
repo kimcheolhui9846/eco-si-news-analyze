@@ -1,0 +1,8 @@
+{ "name": "입력에 없는 종목과 누락 종목", "context": "sector", "base": "sector",
+  "override": { "instrumentComparison": [
+    { "symbol": "NVDA", "name": "NVIDIA", "positioning": "AI 가속기", "keyDifference": "차이" },
+    { "symbol": "TSM", "name": "TSMC", "positioning": "파운드리", "keyDifference": "차이" },
+    { "symbol": "005930.KS", "name": "삼성전자", "positioning": "메모리", "keyDifference": "차이" },
+    { "symbol": "AAPL", "name": "Apple", "positioning": "기기", "keyDifference": "입력에 없다" }
+  ] },
+  "expect": { "mustFix": ["comparison"], "mustWarn": ["comparison"], "maxScore": 85 } }

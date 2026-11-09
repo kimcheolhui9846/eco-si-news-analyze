@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
+import { DISCLAIMER } from '../lib/prompt.js';
 import { bootstrap, makeClock, makeMockLlm, TEST_PASSWORD } from './helpers.js';
 
 const article = (over = {}) => ({
@@ -236,6 +237,60 @@ test('폴백까지 실패하면 502 PARSE_FAILED를 반환한다', async () => {
 
   assert.equal(res.status, 502);
   assert.equal(res.body.error.code, 'PARSE_FAILED');
+});
+
+// ─── 품질 게이트 ───
+
+test('품질 게이트가 브리핑 메타데이터와 면책 문구를 바로잡고 meta.quality를 싣는다', async () => {
+  const { app } = setup();
+  const token = await login(app);
+  const res = await analyze(app, token);
+
+  assert.equal(res.status, 200);
+  // validReport의 브리핑 제목은 '제목', 입력 기사 제목은 '엔비디아 3분기 실적 발표'다.
+  assert.equal(res.body.analysis.newsBriefing[0].title, '엔비디아 3분기 실적 발표');
+  assert.equal(res.body.analysis.disclaimer, DISCLAIMER);
+  const q = res.body.meta.quality;
+  assert.equal(q.limited, false);
+  assert.ok(q.fixed >= 1);
+  const checks = q.issues.map((i) => i.check);
+  assert.ok(!checks.includes('citations'));
+  assert.ok(checks.includes('disclaimer'));
+  assert.equal(q.score, Math.max(0, 100 - 10 * q.fixed - 5 * q.warnings));
+});
+
+test('없는 출처 ID 인용은 출처 미확인으로 바뀐다', async () => {
+  const llm = makeMockLlm(() => ({ content: validReport({ summary: '근거[S9]' }), model: 'mock' }));
+  const { app } = setup({ llm });
+  const token = await login(app);
+  const res = await analyze(app, token);
+
+  assert.equal(res.body.analysis.summary, '근거[출처 미확인]');
+});
+
+test('캐시 히트에도 같은 품질 보고서가 붙는다', async () => {
+  const { app } = setup();
+  const token = await login(app);
+  const first = await analyze(app, token);
+  const second = await analyze(app, token);
+
+  assert.equal(second.body.meta.cached, true);
+  assert.deepEqual(second.body.meta.quality, first.body.meta.quality);
+});
+
+test('Markdown 폴백은 검증 제한으로 표시된다', async () => {
+  const llm = makeMockLlm((req) => ({
+    content: req.useJsonSchema ? '깨진 JSON {' : '# 보고서\n\n근거 [S1] [S9]',
+    model: 'mock',
+  }));
+  const { app } = setup({ llm });
+  const token = await login(app);
+  const res = await analyze(app, token);
+
+  assert.equal(res.body.meta.degraded, true);
+  assert.equal(res.body.meta.quality.limited, true);
+  assert.ok(res.body.analysis.report.includes('[출처 미확인]'));
+  assert.ok(res.body.meta.quality.issues.some((i) => i.check === 'structure'));
 });
 
 // ─── 캐시와 중복 병합 ───

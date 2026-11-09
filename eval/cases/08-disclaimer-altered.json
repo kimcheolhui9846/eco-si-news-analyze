@@ -1,0 +1,3 @@
+{ "name": "면책 문구 변조", "context": "single", "base": "single",
+  "override": { "disclaimer": "투자 판단은 본인 책임입니다." },
+  "expect": { "mustFix": ["disclaimer"], "maxScore": 90 } }

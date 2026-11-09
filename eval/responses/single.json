@@ -1,0 +1,35 @@
+{
+  "summary": "엔비디아는 데이터센터 매출 증가를 발표했다[S1]. 데이터센터 수요 확대 전망도 함께 보도됐다[S2].",
+  "newsBriefing": [
+    {
+      "sourceId": "S1", "title": "엔비디아 3분기 실적 발표", "source": "연합뉴스",
+      "publishedAt": "2026-08-30T09:00:00.000Z", "keyPoints": "데이터센터 부문 매출 증가",
+      "marketImplication": "AI 가속기 수요가 실적에 반영되고 있음을 시사한다", "needsVerification": "부문별 이익률은 기사에 없다"
+    },
+    {
+      "sourceId": "S2", "title": "데이터센터 수요 확대 전망", "source": "전자신문",
+      "publishedAt": "2026-08-31T09:00:00.000Z", "keyPoints": "클라우드 업체 투자 확대 전망",
+      "marketImplication": "수요가 이어질 가능성을 보여 준다", "needsVerification": "전망의 근거 수치가 제목만 확보됐다"
+    }
+  ],
+  "trendAnalysis": "발표 이후 주가가 올랐지만 실적과의 인과관계는 확인되지 않았다[S1].",
+  "scenarios": [
+    {
+      "type": "기본 시나리오", "premise": "데이터센터 수요가 유지된다", "indicatorsToWatch": "다음 분기 데이터센터 매출",
+      "possibleDirection": "실적 개선 흐름이 이어질 수 있다", "invalidationCondition": "다음 분기 데이터센터 매출이 전 분기보다 줄면 무효",
+      "cautions": "단일 분기 자료다"
+    },
+    {
+      "type": "부정 시나리오", "premise": "클라우드 업체가 투자를 줄인다", "indicatorsToWatch": "클라우드 업체 설비투자 계획",
+      "possibleDirection": "성장세가 둔화될 수 있다", "invalidationCondition": "주요 클라우드 업체가 설비투자를 늘리면 무효",
+      "cautions": "전망 기사에 근거 수치가 없다"
+    }
+  ],
+  "risks": ["데이터센터 투자 둔화 가능성[S2]"],
+  "monitoringIndicators": ["다음 분기 데이터센터 매출"],
+  "instrumentComparison": [],
+  "financialSummary": { "available": "자료 부족", "periodBasis": "자료 부족", "notes": "제공된 자료가 없습니다." },
+  "researchSummary": { "available": "자료 부족", "maturity": "자료 부족", "notes": "제공된 자료가 없습니다." },
+  "experimentSummary": { "available": "자료 부족", "evidenceLevel": "자료 부족", "notes": "제공된 자료가 없습니다." },
+  "disclaimer": "본 분석은 제공된 자료를 기반으로 한 정보 제공 목적의 분석이며, 특정 금융상품의 매수·매도 또는 투자 수익을 보장하는 투자 권유가 아닙니다."
+}

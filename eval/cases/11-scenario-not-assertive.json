@@ -1,0 +1,6 @@
+{ "name": "단정이 아닌 '반드시'와 권유 부정", "context": "single", "base": "single",
+  "override": {
+    "monitoringIndicators": ["반드시 확인해야 할 지표: 다음 분기 데이터센터 매출"],
+    "risks": ["이 보고서는 매수를 추천하지 않습니다."]
+  },
+  "expect": { "mustNotFlag": ["scenarios"], "minScore": 100 } }

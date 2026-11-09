@@ -7,6 +7,8 @@ import FinancialMetrics from '../components/FinancialMetrics.jsx';
 import ResearchList from '../components/ResearchList.jsx';
 import ExperimentStatus from '../components/ExperimentStatus.jsx';
 import Disclaimer from '../components/Disclaimer.jsx';
+import QualityBadge from '../components/QualityBadge.jsx';
+import InstrumentInsight from '../components/InstrumentInsight.jsx';
 
 export default function ReportPage({
   report, instruments = [], research, experiments, collectedMeta, onNewSearch,
@@ -28,6 +30,7 @@ export default function ReportPage({
               <MarketChart key={inst.symbol} series={inst.series} marketData={inst.marketData} />
             ))}
           </div>
+          <InstrumentInsight items={analysis?.instrumentComparison} />
         </>
       ) : collectedMeta?.resolution?.kind === 'unresolved' ? (
         // 종목을 못 찾았을 때 "가격 데이터가 없습니다"만 보이면 왜 비었는지 모른다.
@@ -38,6 +41,8 @@ export default function ReportPage({
       ) : (
         <MarketChart series={single?.series} marketData={single?.marketData} />
       )}
+
+      <QualityBadge quality={meta?.quality} />
 
       <InsightReport analysis={analysis} degraded={Boolean(meta?.degraded)} />
 

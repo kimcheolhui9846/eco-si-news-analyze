@@ -1,0 +1,3 @@
+{ "name": "Markdown 폴백 응답", "context": "single", "degraded": true,
+  "response": { "report": "# 보고서\n\n실적 개선[S1]. 전망[S9]." },
+  "expect": { "mustFix": ["citations"], "mustWarn": ["structure"], "maxScore": 85 } }

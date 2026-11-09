@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "node --import tsx --test \"tests/**/*.test.{js,jsx}\"",
+    "eval": "node eval/run.js",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "build:client": "npm --prefix client run build",

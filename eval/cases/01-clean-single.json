@@ -1,0 +1,2 @@
+{ "name": "깨끗한 단일 종목 응답", "context": "single", "base": "single",
+  "expect": { "minScore": 100, "maxScore": 100 } }
