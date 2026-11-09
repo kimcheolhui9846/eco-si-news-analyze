@@ -14,7 +14,7 @@ import { loadConfig } from './lib/config.js';
 import { createLogger } from './lib/logger.js';
 import { createSessionStore, safeCompare } from './lib/session.js';
 import {
-  buildResearchSchema, formatZodError, normalizeInclude,
+  buildResearchSchema, buildCsResearchSchema, formatZodError, normalizeInclude, normalizeCsInclude,
 } from './lib/validation.js';
 import {
   createLlmClient, createMockLlmClient, createCircuitBreaker,
@@ -31,6 +31,11 @@ import { createFinancialProvider } from './lib/providers/financial.js';
 import { createResearchProvider } from './lib/providers/papers.js';
 import { createKciProvider } from './lib/providers/kci.js';
 import { createExperimentProvider } from './lib/providers/experiments.js';
+import { createHackerNewsProvider } from './lib/providers/hackernews.js';
+import { createGithubProvider } from './lib/providers/github.js';
+import { createTechBlogProvider } from './lib/providers/tech-blogs.js';
+import { createArxivCsProvider } from './lib/providers/arxiv-cs.js';
+import { CS_MAX } from './lib/providers/cs-common.js';
 import { loadDirectory } from './lib/providers/directory.js';
 import { createResolver } from './lib/resolve.js';
 import { createDartFinancialProvider } from './lib/providers/dart-financial.js';
@@ -336,9 +341,89 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     makeBreaker: makeProviderBreaker,
   });
 
+  // ─── CS 기술 동향 수집기 ───
+  // 출처마다 캐시를 따로 둔다. 한 출처의 항목이 다른 출처의 캐시를 밀어내지 않는다.
+  const csCache = () => createTtlCache({ ttlMs: config.csCacheTtlMs, maxEntries: 100, clock: now });
+  const csDeps = () => ({ http: httpClient, cache: csCache(), clock: now, makeBreaker: makeProviderBreaker });
+  const arxivCsProvider = createArxivCsProvider(csDeps());
+  const hnProvider = createHackerNewsProvider(csDeps());
+  const blogProvider = createTechBlogProvider(csDeps());
+  const githubProvider = createGithubProvider({ ...csDeps(), token: config.githubToken });
+
   // ─── 수집 엔드포인트 ───
 
   const researchSchema = buildResearchSchema(config);
+
+  const csResearchSchema = buildCsResearchSchema();
+
+  /** CS 수집. 선택한 출처만 부르고, 하나가 실패해도 나머지로 진행한다. */
+  const collectCs = async (req, res, body) => {
+    const parsed = csResearchSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
+    }
+
+    const { query, lang = 'ko' } = parsed.data;
+    const included = normalizeCsInclude(parsed.data.include);
+    const wanted = (scope) => included.includes(scope);
+
+    const [papers, community, news, blogs, repos] = await Promise.all([
+      wanted('papers') ? arxivCsProvider.search({ query, limit: CS_MAX.papers }) : null,
+      wanted('community') ? hnProvider.search({ query, limit: CS_MAX.community }) : null,
+      wanted('news') ? newsProvider.search({ query, lang, limit: CS_MAX.news }) : null,
+      wanted('blogs') ? blogProvider.search({ query, limit: CS_MAX.blogs }) : null,
+      wanted('repos') ? githubProvider.search({ query, limit: CS_MAX.repos }) : null,
+    ]);
+
+    const degraded = [
+      ['papers', papers], ['community', community], ['news', news], ['blogs', blogs], ['repos', repos],
+    ].flatMap(([provider, result]) => (result?.degraded ?? []).map((d) => ({ provider, ...d })));
+
+    // 분석 요청과 같은 키 이름으로 싣는다. 클라이언트는 비어 있지 않은 배열만 되돌려 보낸다.
+    const lists = {
+      papers: papers?.items ?? [],
+      community: community?.items ?? [],
+      newsList: (news?.items ?? []).map((i) => ({
+        title: i.title, content: i.content, source: i.source,
+        url: i.url, publishedAt: i.publishedAt, contentKind: i.contentKind,
+      })),
+      blogs: blogs?.items ?? [],
+      repos: repos?.items ?? [],
+    };
+
+    const rawTotal = Object.values(lists).reduce((sum, list) => sum + list.length, 0);
+    if (rawTotal < 3) {
+      req.log.warn({ degraded, included, rawTotal }, 'CS 수집 결과가 3건 미만이다');
+      throw new ApiError(502, 'COLLECTION_FAILED',
+        'CS 동향 분석에 필요한 자료를 3건 이상 모으지 못했습니다. 검색어를 영어로 바꾸거나 범위를 넓혀 다시 시도해 주세요.');
+    }
+
+    // 견적은 분석과 같은 프로필 함수로 만든다. cacheKey가 일치해야 확인 토큰이 통한다.
+    const normalized = csProfile.normalize(lists);
+    const { collectedAt, estimatedInputTokens, estimatedCostUsd, cacheKey } =
+      runner.quote(csProfile, normalized);
+
+    res.json({
+      requestId: req.requestId,
+      mode: 'cs',
+      ...lists,
+      collected: {
+        collectedAt,
+        included,
+        degraded,
+        counts: csProfile.baseMeta(normalized).counts,
+        total: normalized.total,
+        duplicatesRemoved: normalized.duplicatesRemoved,
+      },
+      estimate: {
+        estimatedInputTokens,
+        assumedOutputTokens: config.assumedOutputTokens,
+        estimatedCostUsd: Number(estimatedCostUsd.toFixed(6)),
+        budget: budget.snapshot(),
+      },
+      ...runner.issueConfirmToken(cacheKey, req.session.token),
+    });
+  };
 
   app.post(
     '/api/research/collect',
@@ -347,8 +432,8 @@ export function createApp({ env = {}, clock, llm, http, extraRoutes, directory }
     requireAuth,
     async (req, res) => {
       const { mode, body } = splitMode(req.body);
-      // 모르는 모드는 여기서 400. CS 수집은 Task 7에서 이 자리에 분기한다.
-      getProfile(mode);
+      // 모르는 모드는 getProfile이 400으로 거부한다.
+      if (getProfile(mode).mode === 'cs') return collectCs(req, res, body);
       const parsed = researchSchema.safeParse(body);
       if (!parsed.success) {
         throw new ApiError(400, 'INVALID_REQUEST', formatZodError(parsed.error));
