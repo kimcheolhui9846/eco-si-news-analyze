@@ -1,4 +1,4 @@
-const MODES = [['invest', '투자'], ['cs', 'CS 동향']];
+const MODES = [['invest', '투자'], ['cs', 'CS 동향'], ['paper', '논문 전문']];
 
 export default function ModeTabs({ mode, onChange }) {
   return (

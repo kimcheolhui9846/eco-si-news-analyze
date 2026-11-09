@@ -5,6 +5,7 @@ import { messageForError } from './api/errors.js';
 import LoginPage from './pages/LoginPage.jsx';
 import SearchPage from './pages/SearchPage.jsx';
 import ReviewPage from './pages/ReviewPage.jsx';
+import PaperReviewPage from './pages/PaperReviewPage.jsx';
 import CsReviewPage from './pages/CsReviewPage.jsx';
 import CsReportPage from './pages/CsReportPage.jsx';
 import ReportPage from './pages/ReportPage.jsx';
@@ -83,21 +84,12 @@ export default function App({ api = defaultApi }) {
 
       {/* analyzing일 때도 ReviewPage를 계속 렌더링한다.
           분석이 실패하면 그 자리에서 재시도할 수 있고 화면이 깜빡이지 않는다. */}
-      {(step === 'review' || step === 'analyzing') && (collected?.mode === 'cs' ? (
-        <CsReviewPage
-          collected={collected}
-          onApprove={approve}
-          onBack={newSearch}
-          busy={step === 'analyzing'}
-        />
-      ) : (
-        <ReviewPage
-          collected={collected}
-          onApprove={approve}
-          onBack={newSearch}
-          busy={step === 'analyzing'}
-        />
-      ))}
+      {(step === 'review' || step === 'analyzing') && (() => {
+        const props = { collected, onApprove: approve, onBack: newSearch, busy: step === 'analyzing' };
+        if (collected?.mode === 'paper') return <PaperReviewPage {...props} />;
+        if (collected?.mode === 'cs') return <CsReviewPage {...props} />;
+        return <ReviewPage {...props} />;
+      })()}
 
       {step === 'report' && (collected?.mode === 'cs' ? (
         <CsReportPage report={report} onNewSearch={newSearch} />

@@ -63,6 +63,11 @@ export function createApiClient({ fetchImpl = fetch } = {}) {
     budget: () => call('/api/budget'),
 
     collect: (form) => {
+      // 논문 수집은 ID 하나만 보낸다. 서버 스키마가 strict다.
+      if (form.mode === 'paper') {
+        return call('/api/research/collect', { method: 'POST', body: { mode: 'paper', arxiv: form.arxiv } });
+      }
+
       // CS 수집은 투자 전용 필드(symbol·range 등)를 보내지 않는다. 서버 스키마가 strict다.
       if (form.mode === 'cs') {
         const body = { mode: 'cs', query: form.query };
@@ -84,6 +89,15 @@ export function createApiClient({ fetchImpl = fetch } = {}) {
     },
 
     analyze: (payload) => {
+      // 논문: 수집 응답의 paper를 손대지 않고 되돌려 보낸다. 한 글자만 바뀌어도 확인 토큰이 428로 거부된다.
+      if (payload.mode === 'paper') {
+        return call('/api/analyze/news', {
+          method: 'POST',
+          body: { mode: 'paper', paper: payload.paper },
+          headers: { 'X-Confirm-Token': payload.confirmToken },
+        });
+      }
+
       // CS: 받은 배열을 그대로 되돌려 보낸다. 빈 배열은 넣지 않는다.
       // 서버 수집 라우트가 같은 규칙으로 cacheKey를 만든다.
       if (payload.mode === 'cs') {

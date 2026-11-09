@@ -13,6 +13,7 @@ const TABLE = {
   BUDGET_EXCEEDED: { message: null, nextStep: 'search' },
   CONFIRMATION_REQUIRED: { message: '수집 결과가 변경되었습니다. 다시 수집해 주세요.', nextStep: 'search' },
   COLLECTION_FAILED: { message: null, nextStep: 'search' },
+  FULLTEXT_UNAVAILABLE: { message: null, nextStep: 'search' },
   INPUT_TOO_LARGE: { message: '요청이 너무 큽니다. 기사 수를 줄여 주세요.', nextStep: 'search' },
   PAYLOAD_TOO_LARGE: { message: '요청이 너무 큽니다.', nextStep: 'search' },
   INVALID_REQUEST: { message: null, nextStep: null },
