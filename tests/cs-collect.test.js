@@ -57,7 +57,7 @@ test('CS 수집: 다섯 출처를 모으고 견적·확인 토큰을 준다', as
 
   assert.equal(res.status, 200);
   assert.equal(res.body.mode, 'cs');
-  assert.deepEqual(res.body.collected.included, ['papers', 'community', 'news', 'blogs', 'repos']);
+  assert.deepEqual(res.body.collected.included, ['papers', 'community', 'questions', 'news', 'blogs', 'repos']);
   assert.equal(res.body.papers.length, 3);
   assert.equal(res.body.community.length, 2);
   assert.ok(res.body.newsList.length > 0);

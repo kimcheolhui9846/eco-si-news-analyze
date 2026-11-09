@@ -14,6 +14,7 @@ export const CS_COLLECT = {
     sourceName: 'arXiv', language: 'en', category: 'cs.CL',
   }],
   community: [{
+    site: 'hackernews',
     title: 'Show HN: tiny RAG', url: 'https://github.com/example/tiny-rag',
     discussionUrl: 'https://news.ycombinator.com/item?id=1', points: 312, numComments: 87,
     publishedAt: '2026-11-05T08:00:00.000Z', text: '',
