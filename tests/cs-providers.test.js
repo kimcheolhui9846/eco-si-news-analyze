@@ -6,7 +6,10 @@ import { buildHnUrl, parseHnSearch, createHackerNewsProvider } from '../lib/prov
 import {
   buildGithubUrl, parseGithubSearch, createGithubProvider, GITHUB_LIMIT_REASON,
 } from '../lib/providers/github.js';
-import { cleanText, httpUrlOrNull, CS_LIMITS } from '../lib/providers/cs-common.js';
+import {
+  buildSoUrl, parseSoSearch, createStackOverflowProvider, SO_LIMIT_REASON,
+} from '../lib/providers/stackoverflow.js';
+import { cleanText, httpUrlOrNull, CS_LIMITS, CS_MAX } from '../lib/providers/cs-common.js';
 import { makeClock } from './helpers.js';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -218,4 +221,99 @@ test('GitHub provider: 200인데 HTML이면 degraded이고 캐시하지 않는�
   assert.deepEqual(r, { items: [], degraded: [{ source: 'GitHub', reason: FETCH_FAILED_REASON }] });
   await gh.search({ query: 'rag', limit: 10 });
   assert.equal(http.calls.length, 2);
+});
+
+// ─── Stack Overflow ───
+
+test('SO 검색 URL: 90일·투표순·본문 포함, 키는 있을 때만', () => {
+  assert.equal(
+    buildSoUrl({ query: 'rag agents', fromEpochSec: 1_692_224_000, limit: 8, key: '' }),
+    'https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=votes&q=rag+agents&site=stackoverflow&fromdate=1692224000&pagesize=8&filter=withbody',
+  );
+  assert.ok(buildSoUrl({ query: 'x', fromEpochSec: 1, limit: 8, key: 'k1' }).endsWith('&key=k1'));
+});
+
+test('SO 응답 파싱', () => {
+  const items = parseSoSearch(fixture('so-search.json'));
+  // stackoverflow.com이 아닌 링크는 버린다.
+  assert.equal(items.length, 2);
+  assert.deepEqual(items[0], {
+    title: 'RAG retriever returns irrelevant chunks "sometimes"',
+    url: 'https://stackoverflow.com/questions/79923286/rag-retriever-returns-irrelevant-chunks',
+    author: 'dev&ops',
+    tags: ['python', 'langchain', 'rag'],
+    score: 7,
+    answerCount: 2,
+    isAnswered: true,
+    hasAcceptedAnswer: true,
+    viewCount: 605,
+    publishedAt: new Date(1792074068 * 1000).toISOString(),
+    text: 'My retriever returns unrelated chunks.',
+  });
+  // 음수 점수는 그대로, 작성자가 없으면 빈 문자열, 태그는 5개까지.
+  assert.equal(items[1].score, -1);
+  assert.equal(items[1].author, '');
+  assert.equal(items[1].tags.length, 5);
+  assert.equal(items[1].hasAcceptedAnswer, false);
+});
+
+test('SO 파서는 깨진 JSON에 빈 배열', () => {
+  assert.deepEqual(parseSoSearch('{'), []);
+});
+
+test('SO provider: 90일 전 기준으로 부르고 결과를 캐시한다', async () => {
+  const http = makeHttp(() => fixture('so-search.json'));
+  const so = createStackOverflowProvider({ ...deps(http), key: '' });
+
+  const first = await so.search({ query: 'rag', limit: CS_MAX.questions });
+  await so.search({ query: 'rag', limit: CS_MAX.questions });
+
+  assert.equal(first.items.length, 2);
+  assert.deepEqual(first.degraded, []);
+  assert.equal(http.calls.length, 1);
+  // makeClock 기본 시각 1_700_000_000_000ms → 90일 전 1_692_224_000초
+  assert.ok(http.calls[0].url.includes('fromdate=1692224000'));
+});
+
+test('SO provider: 400·429는 한도 사유, 그 밖은 일반 사유, 캐시하지 않는다', async () => {
+  for (const [status, reason] of [[400, SO_LIMIT_REASON], [429, SO_LIMIT_REASON], [500, '자료를 가져오지 못했습니다.']]) {
+    const http = makeHttp(() => upstream(status));
+    const so = createStackOverflowProvider({ ...deps(http), key: '' });
+    const r = await so.search({ query: 'rag', limit: 8 });
+    assert.deepEqual(r, { items: [], degraded: [{ source: 'Stack Overflow', reason }] });
+    await so.search({ query: 'rag', limit: 8 });
+    assert.equal(http.calls.length, 2);
+  }
+});
+
+test('SO provider: 200인데 HTML이거나 items가 없으면 degraded', async () => {
+  for (const body of ['<html>blocked</html>', '{"quota_max":300}']) {
+    const so = createStackOverflowProvider({ ...deps(makeHttp(() => body)), key: '' });
+    const r = await so.search({ query: 'rag', limit: 8 });
+    assert.equal(r.items.length, 0);
+    assert.equal(r.degraded[0].source, 'Stack Overflow');
+  }
+});
+
+test('SO provider: 키는 URL에만 싣고 사유·캐시 키에 남기지 않는다', async () => {
+  const KEY = 'se-key-SECRET123';
+  const http = makeHttp(() => upstream(400));
+  const cacheKeys = [];
+  const d = deps(http);
+  const cache = { get: (k) => { cacheKeys.push(k); return undefined; }, set: (k) => cacheKeys.push(k) };
+  const so = createStackOverflowProvider({ ...d, cache, key: KEY });
+  const r = await so.search({ query: 'rag', limit: 8 });
+  assert.ok(http.calls[0].url.includes(`key=${KEY}`));
+  assert.ok(!JSON.stringify(r).includes(KEY));
+  assert.ok(cacheKeys.every((k) => !k.includes(KEY)));
+});
+
+test('기본 허용 목록에 Stack Exchange·Lobsters가 있고 SE 키 기본값은 빈 문자열', () => {
+  const config = loadConfig({
+    MY_SECRET_PASSWORD: 'x', LLM_MODE: 'mock', EXTERNAL_ALLOWLIST: undefined, STACKEXCHANGE_KEY: undefined,
+  });
+  for (const host of ['api.stackexchange.com', 'lobste.rs']) {
+    assert.ok(config.externalAllowlist.includes(host), host);
+  }
+  assert.equal(config.stackexchangeKey, '');
 });
